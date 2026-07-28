@@ -30,23 +30,13 @@ tokens with values supplied by the cluster platform; do not commit them.
 5. Check default-deny NetworkPolicies allow only broker messaging,
    replication, management, monitoring, DNS, Vault, Keycloak, and ZooKeeper
    paths.
-6. Run both protocol smoke tests with the validation client. Use a disposable
-   queue and credentials injected by the job, not command-line secrets.
-
-```sh
-make test
-java -cp 'client.jar:lib/*' org.example.artemis.validation.Main send \
-  --protocol openwire --url OPENWIRE_URL --destination VALIDATION_QUEUE \
-  --count 1000 --output send-openwire.json
-java -cp 'client.jar:lib/*' org.example.artemis.validation.Main consume \
-  --protocol openwire --url OPENWIRE_URL --destination VALIDATION_QUEUE \
-  --expected-count 1000 --output consume-openwire.json
-```
-
-Repeat the send/consume pair with `--protocol amqp` and the AMQP URL. The
-reports must show `status: PASS`, no missing or unexpected sequences, and
-`rpoStatus: PASS`. Attach Argo, pod placement, active/passive, replication,
-ZooKeeper, policy, and client reports to the change record.
+6. Run every required protocol case from the
+   [`acceptance plan`](../../tests/e2e/acceptance-plan.yaml) with the validation
+   client. Use disposable destinations and credentials injected by the approved
+   runner, not command-line secrets. Reports must satisfy their declared
+   message-accounting claims.
+7. Attach Argo, pod placement, active/passive, replication, ZooKeeper, policy,
+   identity, and client reports to the change record.
 
 Chart lint/render and unit tests are locally runnable. Scheduling, EBS,
 ZooKeeper quorum, Argo health, Vault injection, Keycloak, and failover checks

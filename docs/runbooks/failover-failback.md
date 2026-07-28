@@ -24,8 +24,9 @@ disruption while it is rejoining.
    failure. Duplicate and redelivered IDs are expected observations when a
    consumer or producer was in flight.
 
-The initial liveness target is 30 seconds from failure to recovered client
-service. Record the measured value; do not silently change the target.
+Record the measured recovery time against the current target in
+[`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml); do
+not silently change the target in an execution record.
 
 ## Manual failback
 

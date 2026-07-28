@@ -6,124 +6,75 @@
 
 ## Context
 
-Each EKS cluster hosts the ArkMQ operator, a ZooKeeper coordination service,
-and the Artemis workload namespaces assigned to that cluster. `TEST` contains
-`SKY` and `SKY2`; `Nonprod` contains `smktest` (`EUT`), `TRN`, `TRN2`, and
-`PT`; and `Prod` contains `PE`, `PP`, `DM`, and `PR`. An Artemis HA pair needs
-a distributed lock so that only one broker can become active. The coordination
-identity must be isolated per pair even when several pairs use one ZooKeeper
-ensemble.
-
-The repository must remain generic. Cluster names, namespaces, ECR locations,
-Vault paths, domains, and account identifiers are supplied by deployment
-configuration and are represented here only by `PLACEHOLDER_*` values.
+Each Artemis HA pair needs a distributed activation lock, while each EKS
+cluster hosts multiple independent pairs. Coordination can be shared to reduce
+operational overhead only if pair identities remain isolated and quorum failure
+cannot permit dual activation.
 
 ## Decision
 
-Use one independent three-member Apache ZooKeeper 3.9.5 ensemble per EKS
-cluster in `PLACEHOLDER_PLATFORM_NAMESPACE` by default. The repository-owned
-chart provides:
+Use one independent three-voter ZooKeeper ensemble per EKS cluster by default.
+Every Artemis pair connects to that ensemble with:
 
-- one StatefulSet with three pods and one persistent `ReadWriteOnce` gp3-
-  compatible PVC per pod;
-- a headless peer-discovery Service and a separate client Service;
-- required zone spread and host anti-affinity;
-- a one-member `maxUnavailable` PodDisruptionBudget;
-- probes that accept leader, follower, or standalone ZooKeeper modes without
-  restarting passive or follower members;
-- restricted four-letter commands, disabled admin server, Prometheus metrics,
-  default-deny NetworkPolicies, and non-root security settings; and
-- an image reference built from the Docker Official Image
-  `docker.io/library/zookeeper:3.9.5` source,
-  mirrored to ECR and pinned by digest.
+1. one coordination ID shared only by its two peers; and
+2. one Curator namespace never reused by another pair.
 
-Every Artemis HA pair uses the shared client Service but receives two unique
-coordination values:
+The Curator namespace is a ZooKeeper path, not a Kubernetes namespace. Sharing
+the ensemble does not share broker journals, persistent volumes, services,
+credentials, policies, addresses, or queues.
 
-1. The pair's two brokers use the same `coordination.id`, so they compete for
-   one activation lock.
-2. The pair uses a unique Curator namespace, for example
-   `/artemis/PLACEHOLDER_ENVIRONMENT/PLACEHOLDER_WORKLOAD_KEY`.
+ZooKeeper members use separate persistent volumes and placement intended to
+preserve quorum across a member or zone loss. Network access is restricted to
+approved brokers, monitoring, and required platform services. Current image,
+storage, security, probe, policy, and monitoring behavior is authoritative in
+[`charts/zookeeper`](../charts/zookeeper); generated service names and workload
+connections are authoritative in [`argocd/applications`](../argocd/applications).
 
-The namespace is an opaque coordination path, not a Kubernetes namespace. It
-must never be reused by another HA pair in the same ensemble. ZooKeeper
-sharing does not share broker journals, EBS volumes, credentials, queue data,
-or broker services.
+The operator, ZooKeeper, and broker layers must be bootstrapped in dependency
+order with health gates. Sync-wave annotations communicate intent but do not,
+by themselves, guarantee that separately generated Applications wait for one
+another.
 
-Argo CD applies resources in waves: operator CRDs and deployment at `-20`,
-the shared ZooKeeper ensemble at `-10`, and Artemis workloads at `0`. The
-operator chart is consumed from a mirrored ECR OCI repository at a pinned
-version, while ZooKeeper and workload values are promoted through Git with
-the exact image digest retained across test, nonprod, and prod.
+## Dedicated-ensemble option
 
-## Dedicated-ensemble override
+A workload may use a separate release of the same ZooKeeper chart when
+coordination blast radius or upgrade cadence justifies three additional pods,
+volumes, policies, and an independent maintenance lifecycle. Its Artemis
+configuration must point to that release and retain a unique coordination ID
+and Curator namespace.
 
-A workload may use a dedicated ensemble when its coordination failure blast
-radius, upgrade cadence, or isolation requirement justifies the additional
-three pods and PVCs. The workload overlay must explicitly set:
+This is an approved architecture option, not a currently implemented
+`ensembleMode` values switch. Enabling it requires explicit environment and
+Argo composition changes, review of the generated endpoint and policies, and
+the same destructive acceptance suite as the shared topology.
 
-```yaml
-coordination:
-  zookeeper:
-    ensembleMode: dedicated
-    dedicatedEnsemble:
-      enabled: true
-    serviceName: PLACEHOLDER_DEDICATED_ZOOKEEPER_SERVICE
-    serviceNamespace: PLACEHOLDER_DEDICATED_ZOOKEEPER_NAMESPACE
-    curatorNamespace: /artemis/PLACEHOLDER_ENVIRONMENT/PLACEHOLDER_WORKLOAD_KEY
-```
-
-The dedicated ensemble is deployed as a separate release of the same chart,
-with its own ECR image digest, values, PVCs, PDB, NetworkPolicies, and
-three-zone placement. The Artemis Application then points to that release's
-client Service. `curatorNamespace` remains unique even though the ensemble is
-dedicated; this keeps the coordination identity explicit and makes a later
-move back to the shared ensemble safe.
-
-The shared per-cluster ensemble remains the default baseline. A dedicated
-ensemble for `PR` is the recommended stronger coordination-isolation option
-inside the existing `Prod` EKS cluster. Enabling it is an explicit,
-environment-approved composition and requires the same destructive validation
-as the shared topology; this ADR does not silently mandate or provision a new
-infrastructure boundary.
-
-A dedicated ensemble still shares the `Prod` EKS control plane, networking,
-cluster-wide capacity, and upgrade lifecycle. If `PR` must be independent of
-those failure domains, the hard-isolation option is a separate EKS cluster
-with its own operator and ZooKeeper ensemble. That option requires a separate
-infrastructure decision and is outside the default three-cluster composition.
+Dedicated ZooKeeper and broker nodes still share the EKS control plane,
+networking, and cluster-wide capacity. Independence from those failures
+requires a separate EKS cluster with its own operator, ensemble, integrations,
+and Argo destination. That is an infrastructure decision outside the default
+composition.
 
 ## Consequences
 
-Positive consequences:
+The default gives each EKS cluster one predictable coordination dependency and
+allows one voter loss while retaining quorum. Unique paths prevent unrelated
+pairs from contending for the same lock.
 
-- Each EKS cluster has one predictable coordination dependency to operate and
-  monitor.
-- Unique Curator namespaces prevent unrelated HA pairs from contending for a
-  lock path.
-- Three voters tolerate one member loss while preserving quorum.
-- The dedicated option is available without modifying chart templates or
-  weakening the promotion topology.
-
-Trade-offs:
-
-- A shared ensemble is a cluster-level failure domain for coordination. Loss
-  of quorum prevents safe broker activation, although it must not permit split
-  brain.
-- All three members require zone capacity and persistent storage.
-- A dedicated ensemble consumes more resources and adds another coordination
-  dependency to monitor and upgrade.
+The trade-off is a shared coordination failure domain: quorum loss may prevent
+safe activation for every pair using the ensemble, though it must never allow
+split brain. A dedicated ensemble narrows that coupling at the cost of
+capacity, monitoring, upgrades, and recovery work.
 
 ## Validation and operational constraints
 
-Before production promotion, test at least one member loss, quorum loss,
-broker-to-ZooKeeper network isolation, node drain, pod rescheduling, and an
-Argo CD resync. Acceptance requires exactly one active broker in every
-isolation case and no dual activation when ZooKeeper quorum is unavailable.
+Before production, test member loss, quorum loss, broker-to-ZooKeeper
+isolation, node drain, pod rescheduling, and Argo reconciliation on the exact
+artifacts. Acceptance requires exactly one active broker during every isolation
+case and no dual activation without ZooKeeper quorum.
 
-The initial session timeout is 18 seconds through the chart's configurable
-`maxSessionTimeout` value. Tune it from measured GC pauses and network
-behavior; do not reduce it solely to make a failure detector appear faster.
+Session and connection timeouts must be tuned from measured GC and network
+behavior. The configured values live in chart values and environment overlays;
+do not reduce them merely to make failure detection appear faster.
 
-No credentials, certificates, cluster identifiers, account identifiers, or
-real service domains belong in this ADR or in the shared chart defaults.
+No credentials, certificates, account identifiers, real cluster names, or
+service domains belong in this ADR or shared defaults.

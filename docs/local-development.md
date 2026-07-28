@@ -1,145 +1,60 @@
 # Local Artemis development
 
-This repository includes a small Docker Compose topology for application and
-microservice development. It runs one durable, standalone Apache ActiveMQ
-Artemis broker using the ArkMQ broker image at Artemis `2.53.0`:
+[`compose.yaml`](../compose.yaml) runs one durable standalone Artemis broker for
+application wiring and validation-client smoke tests. It is independent of the
+EKS design: there is no operator, ZooKeeper, second broker, replication,
+failover, Vault, Keycloak, ingress, or production authorization.
 
-```text
-host applications  ── published ports ──>  broker
-Compose smoke test ── broker:61616/5672 ─>  named volume: /home/jboss/broker
-```
+Use the canonical local commands in the root
+[`README`](../README.md#develop-locally). Docker Engine with Compose v2 is
+required. The Compose file is authoritative for the image, published ports,
+health check, volume, and smoke workflow; [`.env.example`](../.env.example) is
+authoritative for local credentials and supported host-port overrides.
 
-The local broker is intentionally independent from the EKS deployment model.
-It does not run the operator, ZooKeeper, Keycloak, Vault, a second broker,
-replication, or failover.
+## Persistence and reset
 
-## Start and stop
+Normal stop/start preserves the named volume. The first start creates the broker
+instance in that volume, so changing creation-time credentials does not
+reconfigure an existing instance. Use the destructive `make local-reset` target
+when a new local broker instance is intended; it removes this Compose project's
+broker volume and all retained queues and messages.
 
-Docker Desktop or another Docker Engine with Compose v2 is required. Defaults
-are usable without creating an environment file:
+The volume initializer only grants the image runtime user access to a new
+volume. It does not run another broker. The startup wrapper regenerates broker
+configuration only when the broker executable is absent, preserving normal
+restart behavior.
 
-```sh
-make local-up
-make local-status
-make local-logs
-make local-down
-```
+## Security limitation
 
-`local-up` waits for the broker health check before returning. `local-down`
-stops and removes the Compose container but keeps the named volume. To remove
-the local broker instance, journal, queues, and messages as well:
+The upstream standalone image's launcher creates the local instance with
+anonymous access enabled even when explicit client credentials are supplied.
+The values in `.env.example` are the supported local client and console
+credentials, but this stack does not demonstrate strict authentication. Never
+reuse them outside local development.
 
-```sh
-make local-reset
-```
+The relevant upstream behavior is documented in the
+[ArkMQ basic image tutorial](https://arkmq.org/docs/tutorials/deploybasicimage/)
+and [standalone launch script](https://github.com/arkmq-org/arkmq-org-broker-image/blob/main/modules/apache-artemis-install/added/launch.sh).
 
-The reset target is intentionally destructive, but is limited to this
-Compose project's named volume. Copy `.env.example` to `.env` only when you
-want to override the defaults; `.env` is ignored by Git.
+## Smoke test and application connections
 
-## Endpoints and credentials
+The smoke profile builds the repository's Java client in a temporary local
+image and sends uniquely identified persistent traffic through the protocols
+defined in `compose.yaml`. Host Java and Maven are not required.
 
-All published endpoints bind to `localhost` by default:
+Host applications connect through the published localhost ports. Applications
+added to the Compose project connect to the `broker` service and its container
+ports. Use the current Compose configuration rather than copying endpoints from
+this guide.
 
-| Protocol or UI | Host endpoint | Container endpoint |
-| --- | --- | --- |
-| OpenWire | `tcp://localhost:61616` | `61616` |
-| AMQP 1.0 | `amqp://localhost:5672` | `5672` |
-| STOMP | `localhost:61613` | `61613` |
-| MQTT | `localhost:1883` | `1883` |
-| Hawtio console | [http://localhost:8161/console](http://localhost:8161/console) | `8161` |
+## What this proves
 
-The default local-only credentials are `localdev` / `localdev`. They are
-passed to the broker as `AMQ_USER` and `AMQ_PASSWORD`; applications should use
-those values when they connect. Do not reuse them outside this local stack.
+The stack demonstrates that the pinned local image starts with durable local
+state and that the validation client can exchange messages through the
+configured smoke protocols. It is useful for application wiring, message
+format checks, and persistence across normal restarts.
 
-The standalone ArkMQ launch script creates the broker instance in
-`/home/jboss/broker`, and a first run stores the generated security and broker
-configuration in the named volume. Changing `ARTEMIS_USER` or
-`ARTEMIS_PASSWORD` in `.env` therefore requires `make local-reset` before the
-new credentials take effect. Compose invokes that launcher through a small
-startup wrapper: because an empty volume mounted at `/home/jboss/broker`
-already creates the mount directory, the wrapper sets `AMQ_RESET_CONFIG=true`
-only when `broker/bin/artemis` is absent. Existing broker configuration is
-therefore not regenerated on normal restarts. A one-shot root-owned Compose
-initializer grants the image's runtime UID 185 access to the new named volume;
-it does not run a second broker.
-
-The standalone image does not expose the Kubernetes image's `AMQ_REQUIRE_LOGIN`
-or `AMQ_DATA_DIR` controls in its launcher. The requested protocol listeners
-come from the standard Artemis `create` acceptors, while Compose publishes
-their local ports; this file does not rely on an unsupported transport or data
-directory variable.
-
-The standalone image's documented launch behavior always includes
-`--allow-anonymous` when it creates the instance, even when `AMQ_USER` and
-`AMQ_PASSWORD` are supplied. The credentials above are therefore the
-supported, explicit local client and console credentials, but this stack does
-not claim strict authentication enforcement. `AMQ_REQUIRE_LOGIN` is exposed
-by the Kubernetes image metadata, not by the standalone image's launcher, so
-it is deliberately not set here. The health check uses the credentialed
-Artemis CLI `check node` command over OpenWire and verifies that the broker's
-management view reports the node as started.
-
-This behavior is documented by [ArkMQ's basic broker image tutorial](https://arkmq.org/docs/tutorials/deploybasicimage/)
-and the standalone image's [launch script](https://github.com/arkmq-org/arkmq-org-broker-image/blob/main/modules/apache-artemis-install/added/launch.sh).
-
-## Smoke test
-
-The repeatable smoke test builds the existing Java validation client inside a
-temporary, local-only Compose image, so host Maven and Java are not required:
-
-```sh
-make local-smoke
-```
-
-It waits for broker readiness, then sends and consumes ten persistent messages
-over OpenWire and ten over AMQP 1.0. Each run uses unique destinations and ID
-prefixes so retained data from earlier runs cannot be mistaken for new test
-messages. The production validation-client image remains separately
-digest-pinned; `Dockerfile.local` is only for this developer smoke path.
-
-## Connecting applications
-
-An application running on the host uses `localhost` and the published host
-port, for example:
-
-```text
-OpenWire: tcp://localhost:61616
-AMQP:     amqp://localhost:5672
-User:     localdev
-Password: localdev
-```
-
-An application added as another Compose service uses the broker service name
-and the container port, not `localhost`:
-
-```text
-OpenWire: tcp://broker:61616
-AMQP:     amqp://broker:5672
-```
-
-The service must join this Compose project's default network. Published host
-ports are not needed for service-to-service traffic.
-
-## Apple Silicon
-
-No `platform` override is set. The pinned broker reference resolves to a
-Linux `amd64` or `arm64` image on Docker Desktop, so Apple Silicon can use the
-same Compose file. The local smoke-test build also uses multi-architecture
-Maven and Temurin images. If another local process already owns one of the
-default ports, set the corresponding `ARTEMIS_*_PORT` variable in `.env`.
-
-## Scope and limitations
-
-This stack proves that the pinned Artemis runtime can start with a durable
-local instance and that the repository's validation client can send and
-receive over OpenWire and AMQP. It is useful for local application wiring,
-message format checks, persistence across a normal stop/start, and basic
-developer workflows.
-
-It does not prove EKS scheduling, EBS behavior, operator reconciliation,
-ZooKeeper locking, synchronous replication, active/passive failover,
-network-policy behavior, Vault injection, Keycloak authorization, ingress TLS,
-Prometheus integration, or production performance. Use the Helm and EKS
-scenario validation for those claims.
+It does not prove EKS placement, EBS behavior, operator reconciliation,
+ZooKeeper locking, synchronous replication, failover, NetworkPolicy, Vault,
+Keycloak authorization, ingress TLS, monitoring, backup, or production
+performance. Use chart validation and approved EKS scenarios for those claims.
