@@ -1,14 +1,13 @@
 # Environment composition
 
-The `test`, `nonprod`, and `prod` ZooKeeper overlays deliberately keep the
-three-member quorum, persistent gp3-compatible volumes, zone spread, network
-policies, and observability resources in parity. They vary capacity and
-environment placeholders only. The same ZooKeeper image digest is shown in
-each overlay to make immutable promotion explicit.
+The ZooKeeper chart itself enforces the shared three-member quorum, persistent
+volumes, disruption budget, zone and host scheduling, network policy, and
+metrics defaults. The `test`, `nonprod`, and `prod` overlays contain only
+environment capacity, infrastructure selectors, observability integration,
+and the explicit image digest used for independent promotion.
 
-The `sandbox` overlay is the sole exception. It sets `enabled: false`,
-`haMode: none`, and `replicaCount: 1` as an environment composition. It is for
-rendering and developer iteration only and is not a promotion profile.
+Local Docker Compose is the developer sandbox. There is no Kubernetes
+ZooKeeper sandbox overlay or disabled-chart composition.
 
 Before use, replace the `PLACEHOLDER_*` values through the environment or Argo
 CD deployment configuration. Do not commit credentials, account IDs, real
