@@ -17,6 +17,10 @@ import java.util.List;
 
 /** JMS adapters: ActiveMQ Classic's OpenWire client and Apache Qpid JMS AMQP 1.0. */
 public final class JmsTransport implements Transport {
+    private static final String VALIDATION_ID_PROPERTY = "validation_id";
+    private static final String VALIDATION_SEQUENCE_PROPERTY = "validation_sequence";
+    private static final String DUPLICATE_ID_PROPERTY = "_AMQ_DUPL_ID";
+
     private final Connection connection;
 
     private JmsTransport(Connection connection) throws Exception {
@@ -105,10 +109,10 @@ public final class JmsTransport implements Transport {
         @Override
         public void send(long sequence, String id, String duplicateId, String body) throws Exception {
             TextMessage message = session.createTextMessage(body);
-            message.setStringProperty("validation.id", id);
-            message.setLongProperty("validation.sequence", sequence);
+            message.setStringProperty(VALIDATION_ID_PROPERTY, id);
+            message.setLongProperty(VALIDATION_SEQUENCE_PROPERTY, sequence);
             // Artemis duplicate detection uses this stable broker-visible property.
-            message.setStringProperty("_AMQ_DUPL_ID", duplicateId);
+            message.setStringProperty(DUPLICATE_ID_PROPERTY, duplicateId);
             producer.send(message);
         }
 
@@ -141,9 +145,9 @@ public final class JmsTransport implements Transport {
             if (message == null) {
                 return null;
             }
-            String id = message.getStringProperty("validation.id");
-            long sequence = message.getLongProperty("validation.sequence");
-            String duplicateId = message.getStringProperty("_AMQ_DUPL_ID");
+            String id = message.getStringProperty(VALIDATION_ID_PROPERTY);
+            long sequence = message.getLongProperty(VALIDATION_SEQUENCE_PROPERTY);
+            String duplicateId = message.getStringProperty(DUPLICATE_ID_PROPERTY);
             return new JmsReceived(message, sequence, id, duplicateId, message.getJMSRedelivered());
         }
 

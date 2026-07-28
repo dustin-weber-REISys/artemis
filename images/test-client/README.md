@@ -5,10 +5,12 @@ It uses ActiveMQ Classic `6.2.6` for OpenWire and Apache Qpid JMS `2.7.0` for
 AMQP 1.0. Both are Jakarta Messaging clients; no protocol frames are built by
 hand.
 
-The client sends persistent messages synchronously. Each message contains a
-deterministic `validation.id`, `validation.sequence`, and `_AMQ_DUPL_ID`. The
-consumer uses `CLIENT_ACKNOWLEDGE`, can close its delivery session before ack,
-and reports missing, duplicate, redelivered, reordered, unexpected, and
+The client sends persistent messages synchronously. Each message contains
+deterministic `validation_id`, `validation_sequence`, and `_AMQ_DUPL_ID`
+properties. The underscore-form validation names are valid across both
+OpenWire and AMQP JMS clients. The consumer uses `CLIENT_ACKNOWLEDGE`, can
+close its delivery session before ack, and reports missing, duplicate,
+redelivered, reordered, unexpected, and
 unacknowledged sequence numbers.
 Reports include both sequence-number arrays and literal deterministic ID arrays
 (`missingIds`, `duplicateIds`, `redeliveredIds`, `reorderedIds`,

@@ -50,7 +50,7 @@ services:
         - CMD-SHELL
         - >-
           /home/jboss/broker/bin/artemis check node
-          --url tcp://127.0.0.1:61616
+          --url tcp://broker:61616
           --user "$$AMQ_USER"
           --password "$$AMQ_PASSWORD"
           --up
