@@ -35,7 +35,7 @@ fi
 if command -v kubeconform >/dev/null 2>&1; then
   kubeconform -strict -summary -ignore-missing-schemas \
     "$repo_root/tests/e2e/manifests/replication-isolation-deny.yaml" \
-    "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml" >/dev/null || {
+    "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml" || {
       printf '%s\n' 'temporary isolation manifests failed kubeconform' >&2
       errors=$((errors + 1))
     }

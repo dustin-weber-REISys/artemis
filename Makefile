@@ -18,7 +18,7 @@ help:
 		'test              Run the deterministic client unit tests' \
 		'test-topology     Exercise topology validation regression cases' \
 		'package           Build the client jar and runtime dependency directory' \
-		'validate          Run repository, scenario, and chart/static checks' \
+		'validate          Run the complete repository validation suite' \
 		'validate-static   Check owned implementation invariants' \
 		'validate-scenarios Validate declarative EKS scenario definitions' \
 		'validate-topology Validate the generated 2/4/4 workload topology' \
@@ -43,24 +43,26 @@ package:
 	$(MAVEN) -B -ntp -f $(CLIENT_DIR)/pom.xml package
 
 validate-static:
-	./scripts/validate-static.sh --report $(REPORT_DIR)/static-validation.json
+	./scripts/validate-static.sh --report "$(REPORT_DIR)/static-validation.json"
 
 validate-scenarios:
-	./scripts/validate-scenarios.sh --report $(REPORT_DIR)/scenario-validation.json
+	./scripts/validate-scenarios.sh --report "$(REPORT_DIR)/scenario-validation.json"
 
 validate-topology:
-	./scripts/validate-topology.sh --report $(REPORT_DIR)/topology-validation.json
+	./scripts/validate-topology.sh --report "$(REPORT_DIR)/topology-validation.json"
 
 validate-charts:
-	./scripts/validate-charts.sh --report $(REPORT_DIR)/chart-validation.json
+	./scripts/validate-charts.sh --report "$(REPORT_DIR)/chart-validation.json"
 
 validate-operator-schema:
 	./scripts/validate-operator-schema.sh
 
 validate-compose:
-	./scripts/validate-compose.sh --report $(REPORT_DIR)/compose-validation.json
+	./scripts/validate-compose.sh --report "$(REPORT_DIR)/compose-validation.json"
 
-validate: validate-static validate-scenarios validate-topology test-topology validate-charts validate-operator-schema validate-compose test
+validate:
+	CLIENT_DIR="$(CLIENT_DIR)" MAVEN="$(MAVEN)" REPORT_DIR="$(REPORT_DIR)" \
+		./scripts/validate-repository.sh
 
 local-up:
 	$(COMPOSE) -f $(COMPOSE_FILE) up -d --wait broker
