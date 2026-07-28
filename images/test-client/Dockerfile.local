@@ -1,0 +1,17 @@
+# Local-only image used by the Compose smoke test. The production image remains
+# Dockerfile, which requires digest-pinned base images for promotion builds.
+FROM maven:3.9.16-eclipse-temurin-17 AS build
+
+WORKDIR /src
+COPY pom.xml .
+RUN mvn -B -ntp dependency:go-offline
+COPY src ./src
+RUN mvn -B -ntp -DskipTests package
+
+FROM eclipse-temurin:17-jre
+
+WORKDIR /opt/validation-client
+COPY --from=build /src/target/deterministic-validation-client-*.jar /opt/validation-client/client.jar
+COPY --from=build /src/target/lib /opt/validation-client/lib
+
+ENTRYPOINT ["java", "-cp", "/opt/validation-client/client.jar:/opt/validation-client/lib/*", "org.example.artemis.validation.Main"]

@@ -47,8 +47,11 @@ inventory proves they can be removed.
 - `argocd`: operator, platform, and nine-workload ApplicationSets.
 - `environments`: promotion overlays and the optional sandbox composition.
 - `images/test-client`: deterministic OpenWire/AMQP validation client.
+- `compose.yaml`: local standalone broker and optional validation smoke test.
 - `tests`: compatibility inventory, load profile, and failure scenarios.
 - `docs/runbooks`: install, failover, upgrade, backup, and incident guidance.
+
+For local application development, see [the local Artemis development guide](docs/local-development.md).
 
 ## Local validation
 
@@ -60,7 +63,8 @@ make package
 `make validate` lints and renders both charts and all promotion overlays,
 checks Kubernetes schemas, validates each broker CR against the checksum-pinned
 ArkMQ 2.2.0 CRD, renders the official operator chart with every operator
-overlay, verifies the scenario catalog, and runs the Java unit tests. The
+overlay, verifies the scenario catalog, validates `compose.yaml` when Docker
+Compose is available, and runs the Java unit tests. The
 operator manifest and chart can be redirected to internal artifact mirrors
 with `ARKMQ_OPERATOR_MANIFEST_URL` and `ARKMQ_OPERATOR_CHART`; the expected
 manifest digest remains mandatory.

@@ -1,0 +1,110 @@
+services:
+  broker-volume-init:
+    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0@sha256:060d9a2d3f7f2505873d58075c2066b3255757aa067235a754d04c18dece6a8c}
+    user: "0:0"
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - >-
+        mkdir -p /home/jboss/broker;
+        chown 185:0 /home/jboss/broker;
+        chmod 0770 /home/jboss/broker
+    volumes:
+      - artemis-data:/home/jboss/broker
+
+  broker:
+    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0@sha256:060d9a2d3f7f2505873d58075c2066b3255757aa067235a754d04c18dece6a8c}
+    hostname: broker
+    environment:
+      AMQ_NAME: ${ARTEMIS_BROKER_NAME:-local-broker}
+      AMQ_USER: ${ARTEMIS_USER:-localdev}
+      AMQ_PASSWORD: ${ARTEMIS_PASSWORD:-localdev}
+      AMQ_ROLE: admin
+      AMQ_CLUSTERED: "false"
+      AMQ_RESET_CONFIG: "false"
+      AMQ_EXTRA_ARGS: ""
+    depends_on:
+      broker-volume-init:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - >-
+        cd /home/jboss;
+        if [ ! -x /home/jboss/broker/bin/artemis ]; then
+        export AMQ_RESET_CONFIG=true;
+        fi;
+        exec /opt/amq/bin/launch.sh
+    ports:
+      - "${ARTEMIS_OPENWIRE_PORT:-61616}:61616"
+      - "${ARTEMIS_AMQP_PORT:-5672}:5672"
+      - "${ARTEMIS_STOMP_PORT:-61613}:61613"
+      - "${ARTEMIS_MQTT_PORT:-1883}:1883"
+      - "${ARTEMIS_HAWTIO_PORT:-8161}:8161"
+    volumes:
+      - artemis-data:/home/jboss/broker
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          /home/jboss/broker/bin/artemis check node
+          --url tcp://127.0.0.1:61616
+          --user "$$AMQ_USER"
+          --password "$$AMQ_PASSWORD"
+          --up
+          --timeout 5000 >/dev/null 2>&1
+      interval: 5s
+      timeout: 10s
+      retries: 24
+      start_period: 20s
+    stop_grace_period: 30s
+
+  validation-smoke:
+    profiles:
+      - smoke
+    build:
+      context: ./images/test-client
+      dockerfile: Dockerfile.local
+    depends_on:
+      broker:
+        condition: service_healthy
+    environment:
+      ARTEMIS_USER: ${ARTEMIS_USER:-localdev}
+      ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:-localdev}
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - >-
+        run_id="local-smoke-$$(date +%s)-$$HOSTNAME";
+        openwire_destination="local.smoke.openwire.$$run_id";
+        amqp_destination="local.smoke.amqp.$$run_id";
+        java -cp "/opt/validation-client/client.jar:/opt/validation-client/lib/*"
+        org.example.artemis.validation.Main send
+        --protocol openwire --url tcp://broker:61616
+        --username "$$ARTEMIS_USER" --password "$$ARTEMIS_PASSWORD"
+        --destination "$$openwire_destination" --count 10 --run-id "$$run_id"
+        --id-prefix "$$run_id-openwire-";
+        java -cp "/opt/validation-client/client.jar:/opt/validation-client/lib/*"
+        org.example.artemis.validation.Main consume
+        --protocol openwire --url tcp://broker:61616
+        --username "$$ARTEMIS_USER" --password "$$ARTEMIS_PASSWORD"
+        --destination "$$openwire_destination" --expected-count 10 --run-id "$$run_id"
+        --id-prefix "$$run_id-openwire-";
+        java -cp "/opt/validation-client/client.jar:/opt/validation-client/lib/*"
+        org.example.artemis.validation.Main send
+        --protocol amqp --url amqp://broker:5672
+        --username "$$ARTEMIS_USER" --password "$$ARTEMIS_PASSWORD"
+        --destination "$$amqp_destination" --count 10 --run-id "$$run_id"
+        --id-prefix "$$run_id-amqp-";
+        java -cp "/opt/validation-client/client.jar:/opt/validation-client/lib/*"
+        org.example.artemis.validation.Main consume
+        --protocol amqp --url amqp://broker:5672
+        --username "$$ARTEMIS_USER" --password "$$ARTEMIS_PASSWORD"
+        --destination "$$amqp_destination" --expected-count 10 --run-id "$$run_id"
+        --id-prefix "$$run_id-amqp-";
+
+volumes:
+  artemis-data:

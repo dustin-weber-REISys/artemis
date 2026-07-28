@@ -3,13 +3,15 @@ SHELL := /bin/sh
 CLIENT_DIR ?= images/test-client
 MAVEN ?= mvn
 REPORT_DIR ?= reports
+COMPOSE ?= docker compose
+COMPOSE_FILE ?= compose.yaml
 IMAGE ?= validation-client:local
 BUILD_IMAGE ?= maven:3.9.16-eclipse-temurin-17
 RUNTIME_IMAGE ?= eclipse-temurin:17-jre
 BUILD_IMAGE_DIGEST ?=
 RUNTIME_IMAGE_DIGEST ?=
 
-.PHONY: help test package validate validate-static validate-scenarios validate-charts validate-operator-schema build-image
+.PHONY: help test package validate validate-static validate-scenarios validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke build-image
 
 help:
 	@printf '%s\n' \
@@ -20,6 +22,13 @@ help:
 		'validate-scenarios Validate declarative EKS scenario definitions' \
 		'validate-charts   Lint/render charts when charts are present' \
 		'validate-operator-schema Validate broker CRs against ArkMQ 2.2.0' \
+		'validate-compose  Validate the local Docker Compose configuration' \
+		'local-up          Start the local standalone broker and wait for readiness' \
+		'local-down        Stop the local broker and keep its named volume' \
+		'local-reset       Stop the local broker and remove its named volume' \
+		'local-logs        Follow local broker logs' \
+		'local-status      Show local Compose service status' \
+		'local-smoke       Run OpenWire and AMQP smoke tests in Compose' \
 		'build-image       Build an immutable client image (digest args required)'
 
 test:
@@ -40,7 +49,28 @@ validate-charts:
 validate-operator-schema:
 	./scripts/validate-operator-schema.sh
 
-validate: validate-static validate-scenarios validate-charts validate-operator-schema test
+validate-compose:
+	./scripts/validate-compose.sh --report $(REPORT_DIR)/compose-validation.json
+
+validate: validate-static validate-scenarios validate-charts validate-operator-schema validate-compose test
+
+local-up:
+	$(COMPOSE) -f $(COMPOSE_FILE) up -d --wait broker
+
+local-down:
+	$(COMPOSE) -f $(COMPOSE_FILE) down --remove-orphans
+
+local-reset:
+	$(COMPOSE) -f $(COMPOSE_FILE) down --remove-orphans --volumes
+
+local-logs:
+	$(COMPOSE) -f $(COMPOSE_FILE) logs --follow --tail=100 broker
+
+local-status:
+	$(COMPOSE) -f $(COMPOSE_FILE) ps
+
+local-smoke:
+	$(COMPOSE) -f $(COMPOSE_FILE) --profile smoke run --rm --build validation-smoke
 
 build-image:
 	@test -n "$(BUILD_IMAGE_DIGEST)" || (printf '%s\n' 'BUILD_IMAGE_DIGEST is required' >&2; exit 2)

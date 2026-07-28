@@ -13,7 +13,7 @@ while (($#)); do
 done
 
 errors=0
-required_files='Makefile images/test-client/Dockerfile images/test-client/pom.xml tests/e2e/scenarios.yaml tests/compatibility/classic-6.2.6-inventory.yaml tests/load/sustained-load.yaml tests/e2e/manifests/replication-isolation-deny.yaml tests/e2e/manifests/zookeeper-isolation-deny.yaml'
+required_files='Makefile compose.yaml .env.example images/test-client/Dockerfile images/test-client/Dockerfile.local images/test-client/pom.xml tests/e2e/scenarios.yaml tests/compatibility/classic-6.2.6-inventory.yaml tests/load/sustained-load.yaml tests/e2e/manifests/replication-isolation-deny.yaml tests/e2e/manifests/zookeeper-isolation-deny.yaml'
 for relative_file in $required_files; do
   if [[ ! -f "$repo_root/$relative_file" ]]; then
     printf 'missing required file: %s\n' "$relative_file" >&2
@@ -22,7 +22,7 @@ for relative_file in $required_files; do
 done
 
 if command -v yq >/dev/null 2>&1; then
-  for yaml_file in "$repo_root/tests/compatibility/classic-6.2.6-inventory.yaml" "$repo_root/tests/load/sustained-load.yaml" "$repo_root/tests/chart/validation-policy.yaml" "$repo_root/tests/e2e/manifests/replication-isolation-deny.yaml" "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
+  for yaml_file in "$repo_root/compose.yaml" "$repo_root/tests/compatibility/classic-6.2.6-inventory.yaml" "$repo_root/tests/load/sustained-load.yaml" "$repo_root/tests/chart/validation-policy.yaml" "$repo_root/tests/e2e/manifests/replication-isolation-deny.yaml" "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
     yq -e '.' "$yaml_file" >/dev/null || {
       printf 'invalid YAML: %s\n' "${yaml_file#"$repo_root/"}" >&2
       errors=$((errors + 1))
