@@ -1,4 +1,5 @@
 {{- $fullname := include "artemis-ha.crName" . -}}
+{{- $consolePort := include "artemis-ha.consolePort" . | int -}}
 {{- range $name, $acceptor := .Values.acceptors }}
 {{- if $acceptor.enabled }}
 ---
@@ -10,8 +11,8 @@ metadata:
     {{- include "artemis-ha.labels" $ | nindent 4 }}
     artemis.example.io/protocol: {{ $name }}
 spec:
-  type: {{ $.Values.services.type }}
-  publishNotReadyAddresses: {{ $.Values.services.publishNotReadyAddresses }}
+  type: ClusterIP
+  publishNotReadyAddresses: false
   internalTrafficPolicy: {{ $.Values.services.internalTrafficPolicy }}
   selector:
     {{- include "artemis-ha.brokerSelector" $ | nindent 4 }}
@@ -32,13 +33,13 @@ metadata:
     {{- include "artemis-ha.labels" . | nindent 4 }}
     artemis.example.io/protocol: console
 spec:
-  type: {{ .Values.services.type }}
-  publishNotReadyAddresses: {{ .Values.services.publishNotReadyAddresses }}
+  type: ClusterIP
+  publishNotReadyAddresses: false
   internalTrafficPolicy: {{ .Values.services.internalTrafficPolicy }}
   selector:
     {{- include "artemis-ha.brokerSelector" . | nindent 4 }}
   ports:
     - name: console
-      port: {{ .Values.console.port }}
-      targetPort: {{ .Values.console.port }}
+      port: {{ $consolePort }}
+      targetPort: {{ $consolePort }}
       protocol: TCP

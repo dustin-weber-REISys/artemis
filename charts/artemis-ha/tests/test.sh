@@ -6,6 +6,7 @@ temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-ha-tests.XXXXXX")
 rendered="$temp_dir/default.yaml"
 autocreate_rendered="$temp_dir/autocreate.yaml"
 expiry_rendered="$temp_dir/expiry.yaml"
+ports_rendered="$temp_dir/ports.yaml"
 trap 'rm -rf "$temp_dir"' EXIT
 
 helm_args=(
@@ -21,6 +22,26 @@ if helm template invalid "$chart_dir" \
   echo "expected missing HA identity and ZooKeeper connection to fail" >&2
   exit 1
 fi
+
+removed_values=(
+  'operator.version=2.2.0'
+  'replicas=2'
+  'ha.mode=competing-primary'
+  'ha.automaticFailback=false'
+  'zookeeper.enabled=true'
+  'persistence.enabled=true'
+  'broker.requireLogin=true'
+  'console.enabled=true'
+  'console.port=8161'
+  'services.type=ClusterIP'
+  'services.publishNotReadyAddresses=false'
+)
+for removed_value in "${removed_values[@]}"; do
+  if helm template invalid "$chart_dir" --set "$removed_value" >/dev/null 2>&1; then
+    echo "expected removed value to be rejected: $removed_value" >&2
+    exit 1
+  fi
+done
 
 helm template artemis "$chart_dir" --namespace example-messaging "${helm_args[@]}" > "$rendered"
 
@@ -57,6 +78,34 @@ rg -q 'kind: Ingress' "$rendered"
 rg -q 'kind: NetworkPolicy' "$rendered"
 rg -q 'kind: ServiceMonitor' "$rendered"
 rg -q 'kind: PrometheusRule' "$rendered"
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.size' "$rendered")" == "2" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-console") | .spec.ports[0].port' "$rendered")" == "8161" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.startupProbe.tcpSocket.port' "$rendered")" == "8161" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.livenessProbe.tcpSocket.port' "$rendered")" == "8161" ]]
+
+helm template artemis-ports "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  --set 'acceptors.amqp.port=25672' \
+  --set 'acceptors.openwire.enabled=false' \
+  --set 'networkPolicy.clientSources[0].namespaceSelector.matchLabels.test=client' \
+  --set 'networkPolicy.clientSources[0].podSelector.matchLabels.test=client' \
+  > "$ports_rendered"
+
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "amqp") | .port' "$ports_rendered")" == "25672" ]]
+[[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-ports-artemis-ha-amqp") | .spec.ports[0].port' "$ports_rendered")" == "25672" ]]
+client_ports=$(
+  yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") | .spec.ingress[] | select(.from[0].namespaceSelector.matchLabels.test == "client") | .ports[].port' "$ports_rendered" |
+    sort -n |
+    paste -sd, -
+)
+[[ "$client_ports" == "1883,25672,61613,61614" ]]
+[[ "$(yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") | .spec.ingress[] | select(.from[0].podSelector.matchLabels.application == "artemis-ports-artemis-ha-app") | .ports[].port' "$ports_rendered")" == "61616" ]]
+if rg -q 'name: artemis-ports-artemis-ha-openwire' "$ports_rendered"; then
+  echo "disabled OpenWire acceptor still rendered a client Service" >&2
+  exit 1
+fi
 
 helm template artemis-autocreate "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
