@@ -10,69 +10,20 @@ spec:
   goTemplateOptions:
     - missingkey=error
   generators:
-    # Each matrix declares an EKS cluster once and combines it with only that
-    # cluster's workloads. This generates the confirmed 2/4/4 topology without
-    # repeating cluster registration details for every Artemis HA pair.
     - matrix:
         generators:
+          - git:
+              repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+              revision: main
+              files:
+                - path: argocd/topology/catalog.yaml
           - list:
-              elements:
-                - environment: test
-                  clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
-                  clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
-          - list:
-              elements:
-                - workloadKey: test-sky
-                  workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
-                  coordinationId: test-sky-01
-                - workloadKey: test-sky2
-                  workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
-                  coordinationId: test-sky2-01
-    - matrix:
-        generators:
-          - list:
-              elements:
-                - environment: nonprod
-                  clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
-                  clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
-          - list:
-              elements:
-                - workloadKey: nonprod-smktest-eut
-                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
-                  coordinationId: np-eut-pair01
-                - workloadKey: nonprod-trn
-                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
-                  coordinationId: np-trn-pair01
-                - workloadKey: nonprod-trn2
-                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
-                  coordinationId: np-trn2-pair01
-                - workloadKey: nonprod-pt
-                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
-                  coordinationId: np-pt-pair01
-    - matrix:
-        generators:
-          - list:
-              elements:
-                - environment: prod
-                  clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
-                  clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
-          - list:
-              elements:
-                - workloadKey: prod-pe
-                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PE
-                  coordinationId: prod-pe-pair01
-                - workloadKey: prod-pp
-                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP
-                  coordinationId: prod-pp-pair01
-                - workloadKey: prod-dm
-                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_DM
-                  coordinationId: prod-dm-pair01
-                - workloadKey: prod-pr
-                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR
-                  coordinationId: prod-pr-pair01
+              # Expand broker pairs while retaining the catalog's cluster map
+              # for environment-keyed lookups in the Application template.
+              elementsYaml: '{{ .brokerPairs | toJson }}'
   template:
     metadata:
-      name: '{{.workloadKey}}-artemis'
+      name: '{{.brokerPairName}}-artemis'
       namespace: PLACEHOLDER_ARGOCD_NAMESPACE
       annotations:
         argocd.argoproj.io/sync-wave: "0"
@@ -93,21 +44,21 @@ spec:
               # chart's 8-16 character coordination ID constraint.
               value: '{{.coordinationId}}'
             - name: ha.groupName
-              value: '{{.workloadKey}}-group'
+              value: '{{.brokerPairName}}-group'
             - name: ha.clusterName
-              value: '{{.workloadKey}}-cluster'
+              value: '{{.brokerPairName}}-cluster'
             - name: zookeeper.connectString
               # The ZooKeeper Application uses the matching explicit Helm
               # release name: <environment>-shared-zookeeper.
-              value: '{{.environment}}-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181'
+              value: '{{.environment}}-shared-zookeeper-zookeeper-client.{{(index .clusters .environment).platformNamespace}}.svc.cluster.local:2181'
             - name: zookeeper.serviceNamespace
-              value: PLACEHOLDER_PLATFORM_NAMESPACE
+              value: '{{(index .clusters .environment).platformNamespace}}'
             # Curator namespaces are unique per HA pair even though the
             # ZooKeeper service is shared at cluster scope.
             - name: zookeeper.curatorNamespace
-              value: 'artemis/{{.environment}}/{{.workloadKey}}'
+              value: 'artemis/{{.environment}}/{{.brokerPairName}}'
       destination:
-        server: '{{.clusterServer}}'
+        server: '{{(index .clusters .environment).clusterServer}}'
         namespace: '{{.workloadNamespace}}'
       syncPolicy:
         automated:
@@ -117,7 +68,7 @@ spec:
           labels:
             # The shared ZooKeeper NetworkPolicy admits only broker pods in
             # workload namespaces belonging to this EKS cluster.
-            messaging.example.io/cluster: '{{.clusterName}}'
+            messaging.example.io/cluster: '{{(index .clusters .environment).clusterName}}'
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
