@@ -1,4 +1,12 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- $consolePort := include "artemis-ha.consolePort" . | int -}}
+{{- $brokerPeerPort := include "artemis-ha.brokerPeerPort" . | int -}}
+{{- $clientPorts := list -}}
+{{- range $acceptor := .Values.acceptors -}}
+{{- if $acceptor.enabled -}}
+{{- $clientPorts = append $clientPorts (int $acceptor.port) -}}
+{{- end -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,31 +35,28 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Broker peer/replication traffic stays inside this pair. The operator's
-    # generated headless Service supplies discovery for the clustered CR.
+    # The operator's internal cluster connector is separate from client
+    # acceptors. Its generated headless Service supplies peer discovery.
     - from:
         - podSelector:
             matchLabels:
               {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
       ports:
-        - port: 61616
-        - port: 61617
-        - port: 61618
-        - port: 61619
-        - port: 61620
-        - port: 8161
+        - port: {{ $brokerPeerPort }}
+          protocol: TCP
     {{- range .Values.networkPolicy.clientSources }}
+    {{- if $clientPorts }}
     - from:
         - namespaceSelector:
             {{- toYaml .namespaceSelector | nindent 12 }}
           podSelector:
             {{- toYaml .podSelector | nindent 12 }}
       ports:
-        - port: 61616
-        - port: 5672
-        - port: 61613
-        - port: 1883
-        - port: 61614
+        {{- range $clientPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+    {{- end }}
     {{- end }}
     {{- range .Values.networkPolicy.managementSources }}
     - from:
@@ -60,7 +65,8 @@ spec:
           podSelector:
             {{- toYaml .podSelector | nindent 12 }}
       ports:
-        - port: 8161
+        - port: {{ $consolePort }}
+          protocol: TCP
     {{- end }}
     {{- range .Values.networkPolicy.monitoringSources }}
     - from:
@@ -69,7 +75,8 @@ spec:
           podSelector:
             {{- toYaml .podSelector | nindent 12 }}
       ports:
-        - port: 8161
+        - port: {{ $consolePort }}
+          protocol: TCP
     {{- end }}
     {{- with .Values.networkPolicy.extraIngress }}
     {{- toYaml . | nindent 4 }}
@@ -94,12 +101,8 @@ spec:
             matchLabels:
               {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
       ports:
-        - port: 61616
-        - port: 61617
-        - port: 61618
-        - port: 61619
-        - port: 61620
-        - port: 8161
+        - port: {{ $brokerPeerPort }}
+          protocol: TCP
     - to:
         - namespaceSelector:
             matchLabels:

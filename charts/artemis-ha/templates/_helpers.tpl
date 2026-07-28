@@ -36,6 +36,22 @@ application: {{ include "artemis-ha.crName" . }}-app
 ActiveMQArtemis: {{ include "artemis-ha.crName" . }}
 {{- end -}}
 
+{{/*
+The embedded console is an always-on chart invariant. Keeping its operand port
+here makes Services, NetworkPolicies, and all probes consume the same value.
+*/}}
+{{- define "artemis-ha.consolePort" -}}
+8161
+{{- end -}}
+
+{{/*
+The operator-managed cluster connector uses its own internal acceptor on 61616.
+This is peer traffic, independent of the configurable client acceptors.
+*/}}
+{{- define "artemis-ha.brokerPeerPort" -}}
+61616
+{{- end -}}
+
 {{- define "artemis-ha.image" -}}
 {{- $image := . -}}
 {{- if $image.digest -}}

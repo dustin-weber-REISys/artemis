@@ -1,9 +1,6 @@
 # This file is intentionally generic. Environment overlays must provide the
 # external ZooKeeper connection string and a pair-unique coordination ID.
 
-operator:
-  version: "2.2.0"
-
 images:
   broker:
     # Replace this example mirror with the environment's ECR repository.
@@ -19,24 +16,16 @@ images:
     pullPolicy: IfNotPresent
   imagePullSecrets: []
 
-replicas: 2
-
 ha:
-  # The chart intentionally supports only the safe, operator-compatible pair.
-  mode: competing-primary
   coordinationId: examplepair01
   groupName: artemis-ha-pair
   clusterName: my-cluster
   initialReplicationSyncTimeoutMs: 30000
   retryReplicationWaitMs: 2000
   zookeeperSessionTimeoutMs: 18000
-  # Recovered peers are synchronized and failed back through an operational
-  # runbook; the primary lock-manager policy does not use automatic failback.
-  automaticFailback: false
 
 zookeeper:
   # The chart consumes, but does not create, the external ensemble.
-  enabled: true
   connectString: example-zookeeper-client.example-platform.svc.cluster.local:2181
   serviceNamespace: example-platform
   # Curator namespace is a ZooKeeper path and must be unique per HA pair.
@@ -46,14 +35,12 @@ zookeeper:
   port: 2181
 
 persistence:
-  enabled: true
   size: 20Gi
   storageClassName: gp3
   journalType: NIO
 
 broker:
   version: 2.53.0
-  requireLogin: true
   resources:
     requests:
       cpu: 500m
@@ -138,8 +125,6 @@ acceptors:
       httpEnabled: "true"
 
 console:
-  enabled: true
-  port: 8161
   ingress:
     enabled: true
     className: nginx
@@ -239,8 +224,6 @@ topology:
     maxUnavailable: 1
 
 services:
-  type: ClusterIP
-  publishNotReadyAddresses: false
   internalTrafficPolicy: Cluster
 
 networkPolicy:
