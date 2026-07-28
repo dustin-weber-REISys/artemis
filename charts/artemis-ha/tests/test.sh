@@ -12,7 +12,9 @@ helm_args=(
 
 helm lint "$chart_dir" "${helm_args[@]}" >/dev/null
 
-if helm template invalid "$chart_dir" >/dev/null 2>&1; then
+if helm template invalid "$chart_dir" \
+  --set 'ha.coordinationId=' \
+  --set 'zookeeper.connectString=' >/dev/null 2>&1; then
   echo "expected missing HA identity and ZooKeeper connection to fail" >&2
   exit 1
 fi
@@ -22,8 +24,12 @@ helm template artemis "$chart_dir" --namespace example-messaging "${helm_args[@]
 rg -q '^kind: ActiveMQArtemis$' "$rendered"
 rg -q 'HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER' "$rendered"
 rg -q 'HAPolicyConfiguration\.coordinationId=pair-id-test01' "$rendered"
+rg -q 'HAPolicyConfiguration\.distributedManagerConfiguration\.properties\.namespace=artemis/example/example-pair' "$rendered"
 rg -q 'console/jolokia/read/org\.apache\.activemq\.artemis:broker=%22\$\{APPLICATION_NAME\}%22/Active' "$rendered"
 rg -q 'vault.hashicorp.com/agent-pre-populate-only: "true"' "$rendered"
+rg -q -- '-Dhawtio\.oidcConfig=/amq/extra/configmaps/artemis-artemis-ha-hawtio-oidc/hawtio-oidc\.properties' "$rendered"
+rg -q 'code_challenge_method = S256' "$rendered"
+rg -q 'provider = https://keycloak.example.invalid/realms/example' "$rendered"
 rg -q 'readOnlyRootFilesystem: true' "$rendered"
 rg -q 'name: artemis-artemis-ha-openwire' "$rendered"
 rg -q 'name: artemis-artemis-ha-amqp' "$rendered"

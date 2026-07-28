@@ -115,8 +115,9 @@ networkPolicy:
     matchLabels:
       messaging.example.io/cluster: PLACEHOLDER_CLUSTER_NAME
   brokerPodSelector:
-    matchLabels:
-      app.kubernetes.io/part-of: artemis
+    matchExpressions:
+      - key: ActiveMQArtemis
+        operator: Exists
   monitoringNamespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: PLACEHOLDER_MONITORING_NAMESPACE

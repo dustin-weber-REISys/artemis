@@ -103,7 +103,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.zookeeper.namespace }}
+              kubernetes.io/metadata.name: {{ .Values.zookeeper.serviceNamespace }}
           podSelector:
             matchLabels:
               {{- toYaml .Values.zookeeper.podSelector | nindent 14 }}

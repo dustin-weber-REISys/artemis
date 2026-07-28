@@ -29,6 +29,21 @@ tests:
           path: data["zoo.cfg"]
           pattern: "server\\.3=.*-2\\.RELEASE-NAME-zookeeper-headless"
         template: templates/configmap.yaml
+      - matchRegex:
+          path: spec.template.spec.containers[0].args[0]
+          pattern: "/data/data/myid"
+        template: templates/statefulset.yaml
+
+  - it: admits ArkMQ-managed broker pods to the client port
+    asserts:
+      - equal:
+          path: spec.ingress[1].from[0].podSelector.matchExpressions[0].key
+          value: ActiveMQArtemis
+        template: templates/networkpolicy.yaml
+      - equal:
+          path: spec.ingress[1].from[0].podSelector.matchExpressions[0].operator
+          value: Exists
+        template: templates/networkpolicy.yaml
 
   - it: keeps peer and client services separate
     asserts:

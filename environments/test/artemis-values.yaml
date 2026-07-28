@@ -1,21 +1,24 @@
-# Generic workload overlay consumed by the future Artemis HA chart. The
+# Generic workload overlay consumed by the Artemis HA chart. The
 # ApplicationSet supplies namespace, coordination ID, and shared-ZooKeeper
 # service parameters per generated Application.
-haMode: quorum
-replicaCount: 2
-coordination:
-  backend: zookeeper
-  zookeeper:
-    ensembleMode: shared
-    serviceName: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE
-    serviceNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
-    curatorNamespace: PLACEHOLDER_TEST_CURATOR_NAMESPACE_FROM_APPLICATIONSET
-    dedicatedEnsemble:
-      enabled: false
-resources:
-  requests:
-    cpu: 500m
-    memory: 2Gi
+images:
+  broker:
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
+  init:
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
+broker:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 3Gi
 persistence:
-  storageClass: PLACEHOLDER_TEST_GP3_STORAGE_CLASS
+  storageClassName: gp3
   size: 20Gi
+console:
+  ingress:
+    host: artemis-test.example.invalid
+keycloak:
+  redirectUri: https://artemis-test.example.invalid/console

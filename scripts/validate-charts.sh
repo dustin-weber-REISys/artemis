@@ -38,9 +38,9 @@ while IFS= read -r chart_file; do
   chart_dir=$(dirname -- "$chart_file")
   chart_count=$((chart_count + 1))
   chart_name=$(basename -- "$chart_dir")
-  helm lint "$chart_dir" "${values_args[@]}" >/dev/null || { printf 'helm lint failed: %s\n' "$chart_name" >&2; errors=$((errors + 1)); }
+  helm lint "$chart_dir" ${values_args[@]+"${values_args[@]}"} >/dev/null || { printf 'helm lint failed: %s\n' "$chart_name" >&2; errors=$((errors + 1)); }
   rendered="$temp_dir/$chart_name.yaml"
-  if ! helm template validation "$chart_dir" "${values_args[@]}" > "$rendered"; then
+  if ! helm template validation "$chart_dir" ${values_args[@]+"${values_args[@]}"} > "$rendered"; then
     printf 'helm template failed: %s\n' "$chart_name" >&2
     errors=$((errors + 1))
     continue
@@ -49,6 +49,33 @@ while IFS= read -r chart_file; do
     printf 'kubeconform failed: %s\n' "$chart_name" >&2
     errors=$((errors + 1))
   }
+  focused_test="$chart_dir/tests/test.sh"
+  if [[ -x "$focused_test" ]] && ! "$focused_test" >/dev/null; then
+    printf 'focused chart tests failed: %s\n' "$chart_name" >&2
+    errors=$((errors + 1))
+  fi
+
+  if ((${#values_args[@]} == 0)); then
+    overlay_stem=${chart_name%-ha}
+    for environment in test nonprod prod; do
+      overlay="$repo_root/environments/$environment/$overlay_stem-values.yaml"
+      [[ -f "$overlay" ]] || continue
+      rendered="$temp_dir/$chart_name-$environment.yaml"
+      helm lint "$chart_dir" --values "$overlay" >/dev/null || {
+        printf 'helm lint failed: %s (%s)\n' "$chart_name" "$environment" >&2
+        errors=$((errors + 1))
+      }
+      if ! helm template validation "$chart_dir" --values "$overlay" > "$rendered"; then
+        printf 'helm template failed: %s (%s)\n' "$chart_name" "$environment" >&2
+        errors=$((errors + 1))
+        continue
+      fi
+      kubeconform -strict -summary -ignore-missing-schemas "$rendered" >/dev/null || {
+        printf 'kubeconform failed: %s (%s)\n' "$chart_name" "$environment" >&2
+        errors=$((errors + 1))
+      }
+    done
+  fi
 done < <(find "$chart_root" -name Chart.yaml -print | sort)
 
 status=PASS

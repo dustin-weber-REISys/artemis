@@ -63,14 +63,15 @@ spec:
           args:
             - |
               ordinal="${HOSTNAME##*-}"
-              export ZOO_MY_ID="$((ordinal + 1))"
+              mkdir -p /data/data /data/datalog
+              printf '%s\n' "$((ordinal + 1))" > /data/data/myid
               if [ -n "${ZK_KEYSTORE_PASSWORD:-}" ]; then
                 export JVMFLAGS="${JVMFLAGS:-} -Dzookeeper.ssl.keyStore.password=${ZK_KEYSTORE_PASSWORD} -Dzookeeper.ssl.trustStore.password=${ZK_TRUSTSTORE_PASSWORD:-}"
               fi
               if [ -n "${ZK_JAAS_FILE:-}" ]; then
                 export JVMFLAGS="${JVMFLAGS:-} -Djava.security.auth.login.config=${ZK_JAAS_FILE}"
               fi
-              exec /docker-entrypoint.sh
+              exec zkServer.sh start-foreground
           ports:
             - name: client
               containerPort: {{ .Values.service.client.port }}
@@ -98,8 +99,6 @@ spec:
               value: /tmp/zookeeper
             - name: ZOO_4LW_COMMANDS
               value: {{ .Values.configuration.fourLetterWordWhitelist | quote }}
-            - name: ZOO_SERVERS
-              value: {{ include "zookeeper.zooServers" . | quote }}
             {{- if .Values.tls.client.enabled }}
             - name: ZK_KEYSTORE_PASSWORD
               valueFrom:

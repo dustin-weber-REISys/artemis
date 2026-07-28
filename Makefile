@@ -9,7 +9,7 @@ RUNTIME_IMAGE ?= eclipse-temurin:17-jre
 BUILD_IMAGE_DIGEST ?=
 RUNTIME_IMAGE_DIGEST ?=
 
-.PHONY: help test package validate validate-static validate-scenarios validate-charts build-image
+.PHONY: help test package validate validate-static validate-scenarios validate-charts validate-operator-schema build-image
 
 help:
 	@printf '%s\n' \
@@ -19,6 +19,7 @@ help:
 		'validate-static   Check owned implementation invariants' \
 		'validate-scenarios Validate declarative EKS scenario definitions' \
 		'validate-charts   Lint/render charts when charts are present' \
+		'validate-operator-schema Validate broker CRs against ArkMQ 2.2.0' \
 		'build-image       Build an immutable client image (digest args required)'
 
 test:
@@ -36,7 +37,10 @@ validate-scenarios:
 validate-charts:
 	./scripts/validate-charts.sh --report $(REPORT_DIR)/chart-validation.json
 
-validate: validate-static validate-scenarios validate-charts test
+validate-operator-schema:
+	./scripts/validate-operator-schema.sh
+
+validate: validate-static validate-scenarios validate-charts validate-operator-schema test
 
 build-image:
 	@test -n "$(BUILD_IMAGE_DIGEST)" || (printf '%s\n' 'BUILD_IMAGE_DIGEST is required' >&2; exit 2)

@@ -1,0 +1,26 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "artemis-ha.fullname" . }}-hawtio-oidc
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+data:
+  hawtio-oidc.properties: |
+    name = {{ .Values.keycloak.displayName }}
+    provider = {{ .Values.keycloak.issuerUrl }}
+    client_id = {{ .Values.keycloak.clientId }}
+    response_mode = fragment
+    scope = {{ .Values.keycloak.scopes }}
+    redirect_uri = {{ .Values.keycloak.redirectUri }}
+    code_challenge_method = S256
+    prompt = login
+    oidc.cacheConfig = true
+    jwks.cacheTime = 60
+    oidc.userPath = preferred_username
+    oidc.rolesPath = {{ .Values.keycloak.rolesPath }}
+    roleMapping.{{ .Values.keycloak.viewerRole }} = {{ .Values.keycloak.viewerRole }}
+    roleMapping.{{ .Values.keycloak.administratorRole }} = {{ .Values.keycloak.administratorRole }}
+    http.connectionTimeout = 5000
+    http.readTimeout = 10000
+{{- end }}

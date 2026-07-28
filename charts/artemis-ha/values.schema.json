@@ -43,11 +43,12 @@
     "zookeeper": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "connectString", "namespace", "podSelector", "port"],
+      "required": ["enabled", "connectString", "serviceNamespace", "curatorNamespace", "podSelector", "port"],
       "properties": {
         "enabled": {"const": true},
         "connectString": {"type": "string", "minLength": 1},
-        "namespace": {"type": "string", "minLength": 1},
+        "serviceNamespace": {"type": "string", "minLength": 1},
+        "curatorNamespace": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
         "podSelector": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535}
       }
@@ -98,15 +99,17 @@
     "keycloak": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "issuerUrl", "clientId", "scopes", "viewerRole", "administratorRole", "clientSecretFile", "namespace", "podSelector", "port", "extraEnv"],
+      "required": ["enabled", "displayName", "issuerUrl", "clientId", "scopes", "redirectUri", "rolesPath", "viewerRole", "administratorRole", "namespace", "podSelector", "port", "extraEnv"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "displayName": {"type": "string", "minLength": 1},
         "issuerUrl": {"type": "string", "format": "uri"},
         "clientId": {"type": "string", "minLength": 1},
         "scopes": {"type": "string", "minLength": 1},
+        "redirectUri": {"type": "string", "format": "uri"},
+        "rolesPath": {"type": "string", "minLength": 1},
         "viewerRole": {"type": "string", "minLength": 1},
         "administratorRole": {"type": "string", "minLength": 1},
-        "clientSecretFile": {"type": "string", "minLength": 1},
         "namespace": {"type": "string", "minLength": 1},
         "podSelector": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
@@ -126,7 +129,7 @@
         "namespace": {"type": "string", "minLength": 1},
         "podSelector": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-        "templates": {"type": "object", "required": ["brokerCredentials", "keycloakClientSecret"], "properties": {"brokerCredentials": {"type": "string", "minLength": 1}, "keycloakClientSecret": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+        "templates": {"type": "object", "required": ["brokerCredentials"], "properties": {"brokerCredentials": {"type": "string", "minLength": 1}}, "additionalProperties": false},
         "extraAnnotations": {"type": "object", "additionalProperties": {"type": "string"}}
       }
     },

@@ -76,24 +76,18 @@ spec:
           valueFiles:
             - environments/{{.environment}}/artemis-values.yaml
           parameters:
-            - name: global.clusterName
-              value: '{{.clusterName}}'
-            - name: global.namespace
-              value: '{{.workloadNamespace}}'
-            - name: coordination.id
-              value: '{{.clusterName}}-{{.workloadKey}}'
-            - name: coordination.zookeeper.ensembleMode
-              value: shared
-            - name: coordination.zookeeper.serviceName
-              value: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE
-            - name: coordination.zookeeper.serviceNamespace
+            - name: ha.coordinationId
+              value: '{{.workloadKey}}-pair'
+            - name: ha.groupName
+              value: '{{.workloadKey}}-group'
+            - name: zookeeper.connectString
+              value: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181
+            - name: zookeeper.serviceNamespace
               value: PLACEHOLDER_PLATFORM_NAMESPACE
             # Curator namespaces are unique per HA pair even though the
             # ZooKeeper service is shared at cluster scope.
-            - name: coordination.zookeeper.curatorNamespace
-              value: '/artemis/{{.environment}}/{{.workloadKey}}'
-            - name: coordination.zookeeper.dedicatedEnsemble.enabled
-              value: "false"
+            - name: zookeeper.curatorNamespace
+              value: 'artemis/{{.environment}}/{{.workloadKey}}'
       destination:
         server: '{{.clusterServer}}'
         namespace: '{{.workloadNamespace}}'
@@ -101,6 +95,11 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            # The shared ZooKeeper NetworkPolicy admits only broker pods in
+            # workload namespaces belonging to this EKS cluster.
+            messaging.example.io/cluster: '{{.clusterName}}'
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true

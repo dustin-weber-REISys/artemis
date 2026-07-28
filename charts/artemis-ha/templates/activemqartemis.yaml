@@ -10,9 +10,6 @@
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-secret-broker-credentials" .Values.vault.secretPath -}}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-file-broker-credentials" "broker-credentials.properties" -}}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-template-broker-credentials" .Values.vault.templates.brokerCredentials -}}
-{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-secret-keycloak-client-secret" .Values.vault.secretPath -}}
-{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-file-keycloak-client-secret" "keycloak-client-secret" -}}
-{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-template-keycloak-client-secret" .Values.vault.templates.keycloakClientSecret -}}
 {{- range $key, $value := .Values.vault.extraAnnotations }}
 {{- $_ := set $podAnnotations $key $value -}}
 {{- end }}
@@ -26,6 +23,7 @@
   (printf "HAPolicyConfiguration.retryReplicationWait=%d" (int .Values.ha.retryReplicationWaitMs))
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.className=org.apache.activemq.artemis.lockmanager.zookeeper.CuratorDistributedLockManager")
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.connect-string=%s" .Values.zookeeper.connectString)
+  (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.namespace=%s" .Values.zookeeper.curatorNamespace)
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.session-ms=%d" (int .Values.ha.zookeeperSessionTimeoutMs))
   (printf "HAPolicyConfiguration.coordinationId=%s" .Values.ha.coordinationId)
   (printf "globalMaxSize=%s" .Values.brokerProperties.globalMaxSize)
@@ -97,22 +95,10 @@ spec:
     - name: PING_SVC_NAME
       value: ping-svc
     {{- if .Values.keycloak.enabled }}
-    # These are image/application hooks. The operator does not claim these
-    # names; environments may replace or extend them through keycloak.extraEnv.
-    - name: HAWTIO_AUTH
-      value: oidc
-    - name: HAWTIO_OIDC_ISSUER
-      value: {{ .Values.keycloak.issuerUrl | quote }}
-    - name: HAWTIO_OIDC_CLIENT_ID
-      value: {{ .Values.keycloak.clientId | quote }}
-    - name: HAWTIO_OIDC_SCOPES
-      value: {{ .Values.keycloak.scopes | quote }}
-    - name: HAWTIO_OIDC_CLIENT_SECRET_FILE
-      value: {{ .Values.keycloak.clientSecretFile | quote }}
-    - name: HAWTIO_OIDC_VIEWER_ROLE
-      value: {{ .Values.keycloak.viewerRole | quote }}
-    - name: HAWTIO_OIDC_ADMINISTRATOR_ROLE
-      value: {{ .Values.keycloak.administratorRole | quote }}
+    # Hawtio documents hawtio.oidcConfig as the generic OIDC integration
+    # point for the embedded Artemis console.
+    - name: JAVA_ARGS_APPEND
+      value: {{ printf "-Dhawtio.oidcConfig=/amq/extra/configmaps/%s-hawtio-oidc/hawtio-oidc.properties" $fullname | quote }}
     {{- end }}
     {{- with .Values.keycloak.extraEnv }}
     {{- toYaml . | nindent 4 }}
@@ -161,6 +147,11 @@ spec:
       - name: {{ .name }}
         mountPath: {{ .mountPath }}
       {{- end }}
+    {{- if .Values.keycloak.enabled }}
+    extraMounts:
+      configMaps:
+        - {{ $fullname }}-hawtio-oidc
+    {{- end }}
     startupProbe:
       tcpSocket:
         port: 8161

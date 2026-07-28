@@ -6,14 +6,16 @@ operator:
 
 images:
   broker:
-    repository: quay.io/arkmq-org/activemq-artemis-broker-kubernetes
+    # Replace this example mirror with the environment's ECR repository.
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
     tag: artemis.2.53.0
-    digest: sha256:e78ff2a781f116b5b6df42f718e81c206bc0aa42f04edf2d4c764b8793c1ae1e
+    digest: sha256:6855d008e0a11b5110395ac321daaf69cfde24e36188c50e2b0291069e5a6234
     pullPolicy: IfNotPresent
   init:
-    repository: quay.io/arkmq-org/activemq-artemis-broker-init
+    # Replace this example mirror with the environment's ECR repository.
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
     tag: artemis.2.53.0
-    digest: sha256:f4bce2118750fda36d165c963629ef02483eb4ed283cd66a39b0358f19fa40b2
+    digest: sha256:97967beea913ae9f4deb84de0be71247d3c3d7cb325b7f7a45c1257521997f83
     pullPolicy: IfNotPresent
   imagePullSecrets: []
 
@@ -22,9 +24,9 @@ replicas: 2
 ha:
   # The chart intentionally supports only the safe, operator-compatible pair.
   mode: competing-primary
-  coordinationId: ""
+  coordinationId: examplepair01
   groupName: artemis-ha-pair
-  clusterName: artemis-ha-cluster
+  clusterName: my-cluster
   initialReplicationSyncTimeoutMs: 30000
   retryReplicationWaitMs: 2000
   zookeeperSessionTimeoutMs: 18000
@@ -35,8 +37,10 @@ ha:
 zookeeper:
   # The chart consumes, but does not create, the external ensemble.
   enabled: true
-  connectString: ""
-  namespace: example-platform
+  connectString: example-zookeeper-client.example-platform.svc.cluster.local:2181
+  serviceNamespace: example-platform
+  # Curator namespace is a ZooKeeper path and must be unique per HA pair.
+  curatorNamespace: artemis/example/example-pair
   podSelector:
     app.kubernetes.io/name: zookeeper
   port: 2181
@@ -149,12 +153,14 @@ console:
 
 keycloak:
   enabled: true
+  displayName: Example Keycloak
   issuerUrl: https://keycloak.example.invalid/realms/example
   clientId: example-artemis-console
   scopes: openid profile email
+  redirectUri: https://artemis.example.invalid/console
+  rolesPath: realm_access.roles
   viewerRole: messaging-viewer
   administratorRole: messaging-admin
-  clientSecretFile: /vault/secrets/keycloak-client-secret
   namespace: example-platform
   podSelector:
     app.kubernetes.io/name: keycloak
@@ -176,10 +182,6 @@ vault:
       {{- with secret "kubernetes/example/example-messaging" -}}
       username={{ .Data.data.username }}
       password={{ .Data.data.password }}
-      {{- end }}
-    keycloakClientSecret: |
-      {{- with secret "kubernetes/example/example-messaging" -}}
-      {{ .Data.data.keycloak_client_secret }}
       {{- end }}
   extraAnnotations: {}
 

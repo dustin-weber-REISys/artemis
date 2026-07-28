@@ -38,8 +38,9 @@ networkPolicy:
     matchLabels:
       messaging.example.io/cluster: PLACEHOLDER_NONPROD_EKS_CLUSTER
   brokerPodSelector:
-    matchLabels:
-      app.kubernetes.io/part-of: artemis
+    matchExpressions:
+      - key: ActiveMQArtemis
+        operator: Exists
   monitoringNamespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: PLACEHOLDER_NONPROD_MONITORING_NAMESPACE

@@ -429,7 +429,6 @@ Vault should render:
 
 - broker administrative credentials;
 - application role credentials or JAAS properties;
-- Keycloak client secret;
 - ZooKeeper credentials when enabled;
 - truststore/keystore passwords; and
 - optional TLS key material if not supplied by the ingress wildcard Secret.
@@ -441,9 +440,12 @@ environment variables or command lines.
 
 - Use the Artemis console based on Hawtio rather than a separately licensed
   management product.
-- Integrate with the existing Keycloak realm through OIDC.
-- Keep client ID, issuer URI, scopes, role mappings, and client secret
-  values-driven.
+- Integrate with the existing Keycloak realm through Hawtio 4 generic OIDC.
+- Keep client ID, issuer URI, redirect URI, scopes, and role mappings
+  values-driven in `hawtio-oidc.properties`.
+- Configure the Keycloak browser client as public with authorization code
+  flow and PKCE `S256`; do not distribute a client secret to the browser or
+  broker pod.
 - Retain separate viewer and administrator roles.
 - Route the console through `ingressClassName: nginx`.
 - Terminate TLS at nginx using the environment wildcard certificate.
@@ -673,6 +675,10 @@ These do not block a generic implementation:
   https://artemis.apache.org/components/artemis/download/
 - ArkMQ operator:
   https://arkmq.org/docs/getting-started/quick-start/
+- ArkMQ operator configuration:
+  https://arkmq.org/docs/help/operator/
+- Hawtio generic OIDC:
+  https://hawt.io/docs/oidc.html
 - Kubernetes ZooKeeper StatefulSet guidance:
   https://kubernetes.io/docs/tutorials/stateful-application/zookeeper/
 - Apache ZooKeeper releases:

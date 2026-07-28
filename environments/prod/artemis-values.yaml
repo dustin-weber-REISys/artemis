@@ -1,20 +1,23 @@
 # Production keeps the promotion topology and tested artifact references;
 # final capacity is confirmed from nonprod load results.
-haMode: quorum
-replicaCount: 2
-coordination:
-  backend: zookeeper
-  zookeeper:
-    ensembleMode: shared
-    serviceName: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE
-    serviceNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
-    curatorNamespace: PLACEHOLDER_PROD_CURATOR_NAMESPACE_FROM_APPLICATIONSET
-    dedicatedEnsemble:
-      enabled: false
-resources:
-  requests:
-    cpu: 1
-    memory: 4Gi
+images:
+  broker:
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
+  init:
+    repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
+broker:
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "2"
+      memory: 6Gi
 persistence:
-  storageClass: PLACEHOLDER_PROD_GP3_STORAGE_CLASS
+  storageClassName: gp3
   size: 100Gi
+console:
+  ingress:
+    host: artemis-prod.example.invalid
+keycloak:
+  redirectUri: https://artemis-prod.example.invalid/console

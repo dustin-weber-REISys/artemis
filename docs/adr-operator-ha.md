@@ -36,11 +36,12 @@ in the implementation baseline, is therefore not a valid operand for this
 operator release. The chart defaults to `2.53.0` and restricts the schema to
 the exact upstream matrix.
 
-The default upstream image references are immutable tag-plus-digest pairs:
-the broker image uses `sha256:e78ff2a781f116b5b6df42f718e81c206bc0aa42f04edf2d4c764b8793c1ae1e`
+The default example ECR-mirror image references preserve immutable upstream
+tag-plus-digest pairs:
+the broker image uses `sha256:6855d008e0a11b5110395ac321daaf69cfde24e36188c50e2b0291069e5a6234`
 and the init image uses
-`sha256:f4bce2118750fda36d165c963629ef02483eb4ed283cd66a39b0358f19fa40b2`.
-Mirrored ECR values should change the repository only after independently
+`sha256:97967beea913ae9f4deb84de0be71247d3c3d7cb325b7f7a45c1257521997f83`.
+Environment values should replace the example mirror repository only after independently
 verifying that the mirror preserves the upstream digest; a changed digest is
 a new artifact requiring review, scan, SBOM, and signature evidence.
 
@@ -61,6 +62,7 @@ configuration bean property names, including:
 HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER
 HAPolicyConfiguration.distributedManagerConfiguration.className=org.apache.activemq.artemis.lockmanager.zookeeper.CuratorDistributedLockManager
 HAPolicyConfiguration.distributedManagerConfiguration.properties.connect-string=<ensemble>
+HAPolicyConfiguration.distributedManagerConfiguration.properties.namespace=<pair-unique-curator-namespace>
 HAPolicyConfiguration.distributedManagerConfiguration.properties.session-ms=<timeout>
 HAPolicyConfiguration.coordinationId=<pair-unique-id>
 ```
@@ -114,11 +116,14 @@ so the chart’s active-endpoint alert is always enabled and the optional
 active/replication metric alerts are gated on environment-supplied exporter
 metric names.
 
-The Keycloak values and `HAWTIO_OIDC_*` environment hooks are deliberately
-values-driven. The operator CRD does not define a Hawtio OIDC API, so the
-issuer, client, roles, and secret-file path require an image/console
-integration test before promotion. The chart does not expose messaging ports
-through an Ingress or LoadBalancer.
+The chart renders Hawtio's documented `hawtio-oidc.properties` format into a
+ConfigMap, mounts it through the operator's `extraMounts.configMaps` API, and
+sets `-Dhawtio.oidcConfig` through `JAVA_ARGS_APPEND`. The Keycloak client is
+a public browser client using authorization code flow with PKCE `S256`, so no
+client secret is distributed to the console pod. Issuer, redirect URI, client
+ID, scopes, and role mappings still require an image/console integration test
+before promotion. The chart does not expose messaging ports through an
+Ingress or LoadBalancer.
 
 ## Consequences
 

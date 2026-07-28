@@ -17,16 +17,16 @@ spec:
       valueFiles:
         - environments/test/artemis-values.yaml
       parameters:
-        - name: global.clusterName
-          value: PLACEHOLDER_TEST_EKS_CLUSTER
-        - name: global.namespace
-          value: PLACEHOLDER_TEST_NAMESPACE_A
-        - name: coordination.id
-          value: PLACEHOLDER_TEST_EKS_CLUSTER-test-a
-        - name: coordination.zookeeper.ensembleMode
-          value: shared
-        - name: coordination.zookeeper.curatorNamespace
-          value: /artemis/test/test-a
+        - name: ha.coordinationId
+          value: test-a-pair
+        - name: ha.groupName
+          value: test-a-group
+        - name: zookeeper.connectString
+          value: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181
+        - name: zookeeper.serviceNamespace
+          value: PLACEHOLDER_PLATFORM_NAMESPACE
+        - name: zookeeper.curatorNamespace
+          value: artemis/test/test-a
   destination:
     server: https://PLACEHOLDER_TEST_EKS_API_SERVER
     namespace: PLACEHOLDER_TEST_NAMESPACE_A
@@ -34,6 +34,9 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    managedNamespaceMetadata:
+      labels:
+        messaging.example.io/cluster: PLACEHOLDER_TEST_EKS_CLUSTER
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
