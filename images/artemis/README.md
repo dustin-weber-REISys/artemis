@@ -1,19 +1,15 @@
 # Artemis image policy
 
-The chart uses the upstream ArkMQ Kubernetes broker and init images for
-Artemis `2.53.0`; it does not build a derived image. The default values retain
-the upstream tags for traceability and pin the exact Quay manifest digests.
-Deployment overlays should replace only `images.*.repository` when mirroring
-to a private registry and must retain, review, and re-record the digest after
-the mirror operation.
+The deployment uses the upstream operator-compatible broker and init images;
+this directory intentionally contains no derived image. Current tags and
+digests are authoritative in
+[`charts/artemis-ha/values.yaml`](../../charts/artemis-ha/values.yaml), with
+supported operands constrained by
+[`values.schema.json`](../../charts/artemis-ha/values.schema.json).
 
-The HA chart relies on the upstream Artemis distribution for the ZooKeeper
-Curator lock-manager class and on the operator-compatible launch scripts. A
-runtime image acceptance test must verify that the selected mirrored image
-contains `org.apache.activemq.artemis.lockmanager.zookeeper.CuratorDistributedLockManager`.
-If it does not, add a thin, non-root derived image from the exact pinned
-upstream image, include the Apache/ArkMQ license and source attribution, and
-update the chart digest and ADR before promotion.
-
-No credentials, environment names, domains, or registry credentials belong in
-this directory.
+Private-registry promotion must preserve or re-approve the verified digest and
+retain license, SBOM, scan, signature, and provenance evidence. Build a thin
+non-root derivative only if runtime acceptance proves the pinned upstream image
+lacks required lock-manager or filesystem behavior; update the chart and HA
+ADR as part of that reviewed change. Never add credentials or environment
+identifiers here.

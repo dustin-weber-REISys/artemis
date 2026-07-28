@@ -7,11 +7,11 @@ ZooKeeper, operator, and client libraries as one unobserved change.
 
 1. Record source versions, immutable digests, SBOM, license inventory, scan
    result, and the operator/operand compatibility matrix.
-2. Run `make validate` locally. With charts present, require Helm lint,
-   template, and kubeconform to pass. The isolated baseline reports chart
-   checks as `SKIP` when no charts are present.
-3. Apply the digest to `test`; run compatibility, 100,000-message durability,
-   failure, credential rotation, management authorization, and load scenarios.
+2. Run the canonical repository validation from the root
+   [`README`](../../README.md#validate).
+3. Apply the digest to test and run the required compatibility, durability,
+   failure, credential rotation, management authorization, and load scenarios
+   from [`tests/e2e/scenarios.yaml`](../../tests/e2e/scenarios.yaml).
 4. Promote the same digest to nonprod. Run upgrade and rollback there, then
    obtain operational approval before prod.
 5. Upgrade one ZooKeeper member at a time, then one Artemis HA pair or
