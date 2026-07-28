@@ -1,0 +1,18 @@
+apiVersion: v2
+name: artemis-ha
+description: Generic two-peer Apache ActiveMQ Artemis HA pair managed by the ArkMQ Broker Operator
+type: application
+version: 0.1.0
+appVersion: "2.53.0"
+keywords:
+  - activemq-artemis
+  - messaging
+  - high-availability
+  - zookeeper
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: ArkMQ Broker Operator
+      url: https://github.com/arkmq-org/activemq-artemis-operator
+    - name: Apache ActiveMQ Artemis
+      url: https://activemq.apache.org/components/artemis/

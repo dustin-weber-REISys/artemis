@@ -1,0 +1,216 @@
+{{- $fullname := include "artemis-ha.crName" . -}}
+{{- $podAnnotations := deepCopy .Values.broker.annotations -}}
+{{- if .Values.vault.enabled }}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject" "true" -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-pre-populate-only" "true" -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/role" .Values.vault.role -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/tls-secret" .Values.vault.tlsSecretName -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/ca-cert" .Values.vault.caCertPath -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/tls-skip-verify" "false" -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-secret-broker-credentials" .Values.vault.secretPath -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-file-broker-credentials" "broker-credentials.properties" -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-template-broker-credentials" .Values.vault.templates.brokerCredentials -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-secret-keycloak-client-secret" .Values.vault.secretPath -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-file-keycloak-client-secret" "keycloak-client-secret" -}}
+{{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject-template-keycloak-client-secret" .Values.vault.templates.keycloakClientSecret -}}
+{{- range $key, $value := .Values.vault.extraAnnotations }}
+{{- $_ := set $podAnnotations $key $value -}}
+{{- end }}
+{{- end }}
+
+{{- $brokerProperties := list
+  (printf "HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER")
+  (printf "HAPolicyConfiguration.groupName=%s" .Values.ha.groupName)
+  (printf "HAPolicyConfiguration.clusterName=%s" .Values.ha.clusterName)
+  (printf "HAPolicyConfiguration.initialReplicationSyncTimeout=%d" (int .Values.ha.initialReplicationSyncTimeoutMs))
+  (printf "HAPolicyConfiguration.retryReplicationWait=%d" (int .Values.ha.retryReplicationWaitMs))
+  (printf "HAPolicyConfiguration.distributedManagerConfiguration.className=org.apache.activemq.artemis.lockmanager.zookeeper.CuratorDistributedLockManager")
+  (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.connect-string=%s" .Values.zookeeper.connectString)
+  (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.session-ms=%d" (int .Values.ha.zookeeperSessionTimeoutMs))
+  (printf "HAPolicyConfiguration.coordinationId=%s" .Values.ha.coordinationId)
+  (printf "globalMaxSize=%s" .Values.brokerProperties.globalMaxSize)
+  (printf "maxDiskUsage=%d" (int .Values.brokerProperties.maxDiskUsage))
+  (printf "connectionTTLOverride=%d" (int .Values.brokerProperties.connectionTtlOverride))
+  (printf "iDCacheSize=%d" (int .Values.brokerProperties.duplicateDetectionIdCacheSize))
+  (printf "persistIDCache=%t" .Values.brokerProperties.persistDuplicateDetectionIds)
+  (printf "metricsConfiguration.jvmGc=true")
+  (printf "metricsConfiguration.jvmMemory=true")
+  (printf "metricsConfiguration.jvmThread=true")
+  (printf "addressSettings.%s.maxSizeBytes=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.maxSizeBytes))
+  (printf "addressSettings.%s.pageSizeBytes=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.pageSizeBytes))
+  (printf "addressSettings.%s.addressFullMessagePolicy=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.addressFullPolicy)
+  (printf "addressSettings.%s.maxDeliveryAttempts=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.maxDeliveryAttempts))
+  (printf "addressSettings.%s.redeliveryDelay=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.redeliveryDelay))
+  (printf "addressSettings.%s.deadLetterAddress=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.deadLetterAddress)
+  (printf "addressSettings.%s.expiryAddress=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiryAddress)
+  (printf "addressSettings.%s.autoCreateQueues=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoCreateQueues)
+  (printf "addressSettings.%s.autoCreateAddresses=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoCreateAddresses)
+  (printf "addressSettings.%s.defaultAddressRoutingType=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.defaultAddressRoutingType)
+  (printf "addressSettings.%s.defaultQueueRoutingType=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.defaultQueueRoutingType)
+}}
+{{- range $acceptorName, $acceptor := .Values.acceptors }}
+{{- if $acceptor.enabled }}
+{{- range $key, $value := $acceptor.extraParams }}
+{{- $brokerProperties = append $brokerProperties (printf "acceptorConfigurations.%s.extraParams.%s=%s" $acceptorName $key $value) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range .Values.brokerProperties.extra }}
+{{- $brokerProperties = append $brokerProperties . }}
+{{- end }}
+
+{{- if ne (int .Values.replicas) 2 }}
+{{- fail "replicas must remain exactly 2: this chart only implements a two-peer competing-primary pair" }}
+{{- end }}
+{{- if ne .Values.ha.mode "competing-primary" }}
+{{- fail "ha.mode must be competing-primary; the operator does not provide a safe generic two-primary abstraction" }}
+{{- end }}
+{{- if not .Values.zookeeper.enabled }}
+{{- fail "zookeeper.enabled must be true for this HA chart" }}
+{{- end }}
+{{- if not .Values.persistence.enabled }}
+{{- fail "persistence.enabled must be true for a durable HA pair" }}
+{{- end }}
+{{- if empty .Values.ha.coordinationId }}
+{{- fail "ha.coordinationId is required and must be unique per HA pair" }}
+{{- end }}
+{{- if empty .Values.zookeeper.connectString }}
+{{- fail "zookeeper.connectString is required and must identify the external ensemble" }}
+{{- end }}
+{{- if ne (printf "artemis.%s" .Values.broker.version) .Values.images.broker.tag }}
+{{- fail "images.broker.tag must match broker.version so the operator operand matrix and image are auditable" }}
+{{- end }}
+
+apiVersion: broker.amq.io/v1beta1
+kind: ActiveMQArtemis
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+spec:
+  version: {{ .Values.broker.version | quote }}
+  brokerProperties:
+    {{- toYaml $brokerProperties | nindent 4 }}
+  env:
+    - name: APPLICATION_NAME
+      value: $(CR_NAME)
+    - name: PING_SVC_NAME
+      value: ping-svc
+    {{- if .Values.keycloak.enabled }}
+    # These are image/application hooks. The operator does not claim these
+    # names; environments may replace or extend them through keycloak.extraEnv.
+    - name: HAWTIO_AUTH
+      value: oidc
+    - name: HAWTIO_OIDC_ISSUER
+      value: {{ .Values.keycloak.issuerUrl | quote }}
+    - name: HAWTIO_OIDC_CLIENT_ID
+      value: {{ .Values.keycloak.clientId | quote }}
+    - name: HAWTIO_OIDC_SCOPES
+      value: {{ .Values.keycloak.scopes | quote }}
+    - name: HAWTIO_OIDC_CLIENT_SECRET_FILE
+      value: {{ .Values.keycloak.clientSecretFile | quote }}
+    - name: HAWTIO_OIDC_VIEWER_ROLE
+      value: {{ .Values.keycloak.viewerRole | quote }}
+    - name: HAWTIO_OIDC_ADMINISTRATOR_ROLE
+      value: {{ .Values.keycloak.administratorRole | quote }}
+    {{- end }}
+    {{- with .Values.keycloak.extraEnv }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  deploymentPlan:
+    image: {{ include "artemis-ha.image" .Values.images.broker | quote }}
+    initImage: {{ include "artemis-ha.image" .Values.images.init | quote }}
+    imagePullSecrets:
+      {{- toYaml .Values.images.imagePullSecrets | nindent 6 }}
+    size: {{ .Values.replicas }}
+    requireLogin: {{ .Values.broker.requireLogin }}
+    persistenceEnabled: {{ .Values.persistence.enabled }}
+    journalType: {{ .Values.persistence.journalType | quote }}
+    messageMigration: false
+    clustered: true
+    resources:
+      {{- toYaml .Values.broker.resources | nindent 6 }}
+    storage:
+      size: {{ .Values.persistence.size | quote }}
+      storageClassName: {{ .Values.persistence.storageClassName | quote }}
+    topologySpreadConstraints:
+      {{- range .Values.topology.topologySpreadConstraints }}
+      - maxSkew: {{ .maxSkew }}
+        topologyKey: {{ .topologyKey | quote }}
+        whenUnsatisfiable: {{ .whenUnsatisfiable }}
+        labelSelector:
+          matchLabels:
+            ActiveMQArtemis: {{ $fullname }}
+      {{- end }}
+    jolokiaAgentEnabled: true
+    managementRBACEnabled: true
+    podSecurity:
+      serviceAccountName: {{ include "artemis-ha.serviceAccountName" . }}
+      runAsUser: 1000
+    podSecurityContext:
+      {{- toYaml .Values.security.podSecurityContext | nindent 6 }}
+    containerSecurityContext:
+      {{- toYaml .Values.security.containerSecurityContext | nindent 6 }}
+    extraVolumes:
+      {{- range .Values.security.writableVolumes }}
+      - name: {{ .name }}
+        emptyDir: {}
+      {{- end }}
+    extraVolumeMounts:
+      {{- range .Values.security.writableVolumes }}
+      - name: {{ .name }}
+        mountPath: {{ .mountPath }}
+      {{- end }}
+    startupProbe:
+      tcpSocket:
+        port: 8161
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
+    livenessProbe:
+      tcpSocket:
+        port: 8161
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+    readinessProbe:
+      exec:
+        command:
+          - /bin/bash
+          - -ec
+          - >-
+            curl -fsS --max-time 5 -u "$AMQ_USER:$AMQ_PASSWORD"
+            "http://$HOSTNAME:8161/console/jolokia/read/org.apache.activemq.artemis:broker=%22${APPLICATION_NAME}%22/Active"
+            | grep -q '"value":true'
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 8
+      failureThreshold: 3
+    enableMetricsPlugin: true
+    tolerations:
+      {{- toYaml .Values.broker.tolerations | nindent 6 }}
+    nodeSelector:
+      {{- toYaml .Values.broker.nodeSelector | nindent 6 }}
+    affinity:
+      podAntiAffinity:
+        {{- toYaml .Values.topology.podAntiAffinity | nindent 8 }}
+    labels:
+      {{- toYaml .Values.broker.labels | nindent 6 }}
+    annotations:
+      {{- toYaml $podAnnotations | nindent 6 }}
+    podDisruptionBudget:
+      maxUnavailable: {{ .Values.topology.pdb.maxUnavailable }}
+    revisionHistoryLimit: {{ .Values.broker.revisionHistoryLimit }}
+  console:
+    expose: false
+  acceptors:
+    {{- range $name, $acceptor := .Values.acceptors }}
+    {{- if $acceptor.enabled }}
+    - name: {{ $name }}
+      port: {{ $acceptor.port }}
+      protocols: {{ $acceptor.protocols | quote }}
+      sslEnabled: {{ $acceptor.sslEnabled }}
+      connectionsAllowed: {{ $acceptor.connectionsAllowed }}
+    {{- end }}
+    {{- end }}

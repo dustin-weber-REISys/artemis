@@ -1,0 +1,44 @@
+{{- $fullname := include "artemis-ha.crName" . -}}
+{{- range $name, $acceptor := .Values.acceptors }}
+{{- if $acceptor.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s" $fullname $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "artemis-ha.labels" $ | nindent 4 }}
+    artemis.example.io/protocol: {{ $name }}
+spec:
+  type: {{ $.Values.services.type }}
+  publishNotReadyAddresses: {{ $.Values.services.publishNotReadyAddresses }}
+  internalTrafficPolicy: {{ $.Values.services.internalTrafficPolicy }}
+  selector:
+    {{- include "artemis-ha.brokerSelector" $ | nindent 4 }}
+  ports:
+    - name: {{ $name }}
+      port: {{ $acceptor.port }}
+      targetPort: {{ $acceptor.port }}
+      protocol: TCP
+      appProtocol: {{ $name }}
+{{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-console" $fullname | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+    artemis.example.io/protocol: console
+spec:
+  type: {{ .Values.services.type }}
+  publishNotReadyAddresses: {{ .Values.services.publishNotReadyAddresses }}
+  internalTrafficPolicy: {{ .Values.services.internalTrafficPolicy }}
+  selector:
+    {{- include "artemis-ha.brokerSelector" . | nindent 4 }}
+  ports:
+    - name: console
+      port: {{ .Values.console.port }}
+      targetPort: {{ .Values.console.port }}
+      protocol: TCP

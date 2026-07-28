@@ -1,0 +1,27 @@
+{{- if and .Values.console.enabled .Values.console.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-console" (include "artemis-ha.fullname" .) | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.console.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.console.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.console.ingress.host | quote }}
+      secretName: {{ .Values.console.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.console.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-console" (include "artemis-ha.fullname" .) | trunc 63 | trimSuffix "-" }}
+                port:
+                  name: console
+{{- end }}

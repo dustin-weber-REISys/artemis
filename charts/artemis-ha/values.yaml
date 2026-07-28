@@ -1,0 +1,271 @@
+# This file is intentionally generic. Environment overlays must provide the
+# external ZooKeeper connection string and a pair-unique coordination ID.
+
+operator:
+  version: "2.2.0"
+
+images:
+  broker:
+    repository: quay.io/arkmq-org/activemq-artemis-broker-kubernetes
+    tag: artemis.2.53.0
+    digest: sha256:e78ff2a781f116b5b6df42f718e81c206bc0aa42f04edf2d4c764b8793c1ae1e
+    pullPolicy: IfNotPresent
+  init:
+    repository: quay.io/arkmq-org/activemq-artemis-broker-init
+    tag: artemis.2.53.0
+    digest: sha256:f4bce2118750fda36d165c963629ef02483eb4ed283cd66a39b0358f19fa40b2
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+replicas: 2
+
+ha:
+  # The chart intentionally supports only the safe, operator-compatible pair.
+  mode: competing-primary
+  coordinationId: ""
+  groupName: artemis-ha-pair
+  clusterName: artemis-ha-cluster
+  initialReplicationSyncTimeoutMs: 30000
+  retryReplicationWaitMs: 2000
+  zookeeperSessionTimeoutMs: 18000
+  # Recovered peers are synchronized and failed back through an operational
+  # runbook; the primary lock-manager policy does not use automatic failback.
+  automaticFailback: false
+
+zookeeper:
+  # The chart consumes, but does not create, the external ensemble.
+  enabled: true
+  connectString: ""
+  namespace: example-platform
+  podSelector:
+    app.kubernetes.io/name: zookeeper
+  port: 2181
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClassName: gp3
+  journalType: NIO
+
+broker:
+  version: 2.53.0
+  requireLogin: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  terminationGracePeriodSeconds: 120
+  revisionHistoryLimit: 10
+  nodeSelector: {}
+  tolerations: []
+  labels: {}
+  annotations: {}
+
+security:
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  # These mounts are required by the upstream operator/image read-only-root
+  # pattern. They are emptyDir volumes, not configuration or secret stores.
+  writableVolumes:
+    - name: jboss-home
+      mountPath: /home/jboss
+    - name: jolokia-config
+      mountPath: /opt/jboss/container/jolokia/etc
+    - name: tmp-dir
+      mountPath: /tmp
+
+acceptors:
+  openwire:
+    enabled: true
+    port: 61616
+    protocols: OPENWIRE
+    connectionsAllowed: 10000
+    sslEnabled: false
+    extraParams: {}
+  amqp:
+    enabled: true
+    port: 5672
+    protocols: AMQP
+    connectionsAllowed: 10000
+    sslEnabled: false
+    extraParams: {}
+  stomp:
+    enabled: true
+    port: 61613
+    protocols: STOMP
+    connectionsAllowed: 10000
+    sslEnabled: false
+    extraParams: {}
+  mqtt:
+    enabled: true
+    port: 1883
+    protocols: MQTT
+    connectionsAllowed: 10000
+    sslEnabled: false
+    extraParams: {}
+  websocket:
+    enabled: true
+    port: 61614
+    protocols: STOMP
+    connectionsAllowed: 10000
+    sslEnabled: false
+    extraParams:
+      httpEnabled: "true"
+
+console:
+  enabled: true
+  port: 8161
+  ingress:
+    enabled: true
+    className: nginx
+    host: artemis.example.invalid
+    tlsSecretName: example-wildcard-tls
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-passthrough: "false"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+
+keycloak:
+  enabled: true
+  issuerUrl: https://keycloak.example.invalid/realms/example
+  clientId: example-artemis-console
+  scopes: openid profile email
+  viewerRole: messaging-viewer
+  administratorRole: messaging-admin
+  clientSecretFile: /vault/secrets/keycloak-client-secret
+  namespace: example-platform
+  podSelector:
+    app.kubernetes.io/name: keycloak
+  port: 8443
+  extraEnv: []
+
+vault:
+  enabled: true
+  role: example-messaging
+  tlsSecretName: example-vault-tls
+  caCertPath: /vault/tls/ca.crt
+  secretPath: kubernetes/example/example-messaging
+  namespace: example-platform
+  podSelector:
+    app.kubernetes.io/name: vault
+  port: 8200
+  templates:
+    brokerCredentials: |
+      {{- with secret "kubernetes/example/example-messaging" -}}
+      username={{ .Data.data.username }}
+      password={{ .Data.data.password }}
+      {{- end }}
+    keycloakClientSecret: |
+      {{- with secret "kubernetes/example/example-messaging" -}}
+      {{ .Data.data.keycloak_client_secret }}
+      {{- end }}
+  extraAnnotations: {}
+
+brokerProperties:
+  globalMaxSize: 512Mi
+  maxDiskUsage: 90
+  connectionTtlOverride: 60000
+  duplicateDetectionIdCacheSize: 20000
+  persistDuplicateDetectionIds: true
+  addressSettings:
+    match: "#"
+    maxSizeBytes: 104857600
+    pageSizeBytes: 10485760
+    addressFullPolicy: PAGE
+    maxDeliveryAttempts: 10
+    redeliveryDelay: 1000
+    deadLetterAddress: DLQ
+    expiryAddress: ExpiryQueue
+    autoCreateQueues: false
+    autoCreateAddresses: false
+    defaultAddressRoutingType: ANYCAST
+    defaultQueueRoutingType: ANYCAST
+  extra: []
+
+topology:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - topologyKey: topology.kubernetes.io/zone
+      - topologyKey: kubernetes.io/hostname
+  pdb:
+    maxUnavailable: 1
+
+services:
+  type: ClusterIP
+  publishNotReadyAddresses: false
+  internalTrafficPolicy: Cluster
+
+networkPolicy:
+  enabled: true
+  # A list of namespace/pod selector pairs is required for application access.
+  # Empty defaults keep this chart deny-by-default until an environment adds
+  # its approved callers.
+  clientSources: []
+  managementSources:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: example-ingress
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+  monitoringSources:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: example-monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+  extraIngress: []
+  extraEgress: []
+
+monitoring:
+  enabled: true
+  pendingMessagesWarningThreshold: 10000
+  # The operator's default exporter exposes queue/JVM metrics, while the
+  # ServiceMonitor sees only active-ready endpoints. Environments may supply
+  # names after adding JMX exporter rules for the Active/ReplicaSync attrs.
+  activeMetricName: ""
+  replicationSynchronizedMetricName: ""
+  extraRules: []
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+    port: console
+  prometheusRule:
+    enabled: true
+    namespace: ""
+    labels: {}
+    severity: warning

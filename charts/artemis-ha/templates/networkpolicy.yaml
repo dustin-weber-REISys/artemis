@@ -1,0 +1,140 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "artemis-ha.fullname" . }}-default-deny
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "artemis-ha.brokerSelector" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "artemis-ha.fullname" . }}-allow
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "artemis-ha.brokerSelector" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Broker peer/replication traffic stays inside this pair. The operator's
+    # generated headless Service supplies discovery for the clustered CR.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
+      ports:
+        - port: 61616
+        - port: 61617
+        - port: 61618
+        - port: 61619
+        - port: 61620
+        - port: 8161
+    {{- range .Values.networkPolicy.clientSources }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml .namespaceSelector | nindent 12 }}
+          podSelector:
+            {{- toYaml .podSelector | nindent 12 }}
+      ports:
+        - port: 61616
+        - port: 5672
+        - port: 61613
+        - port: 1883
+        - port: 61614
+    {{- end }}
+    {{- range .Values.networkPolicy.managementSources }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml .namespaceSelector | nindent 12 }}
+          podSelector:
+            {{- toYaml .podSelector | nindent 12 }}
+      ports:
+        - port: 8161
+    {{- end }}
+    {{- range .Values.networkPolicy.monitoringSources }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml .namespaceSelector | nindent 12 }}
+          podSelector:
+            {{- toYaml .podSelector | nindent 12 }}
+      ports:
+        - port: 8161
+    {{- end }}
+    {{- with .Values.networkPolicy.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    # Kubernetes DNS is required for service discovery and the ZooKeeper
+    # connect string. Namespace labels are supported on every modern EKS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
+      ports:
+        - port: 61616
+        - port: 61617
+        - port: 61618
+        - port: 61619
+        - port: 61620
+        - port: 8161
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.zookeeper.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.zookeeper.podSelector | nindent 14 }}
+      ports:
+        - port: {{ .Values.zookeeper.port }}
+          protocol: TCP
+    {{- if .Values.vault.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.vault.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.vault.podSelector | nindent 14 }}
+      ports:
+        - port: {{ .Values.vault.port }}
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.keycloak.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.keycloak.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.keycloak.podSelector | nindent 14 }}
+      ports:
+        - port: {{ .Values.keycloak.port }}
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

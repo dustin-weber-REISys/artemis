@@ -1,0 +1,105 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "artemis-ha.fullname" . }}
+  namespace: {{ include "artemis-ha.monitoringNamespace" . }}
+  labels:
+    {{ include "artemis-ha.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "artemis-ha.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      artemis.example.io/protocol: console
+  endpoints:
+    - port: {{ .Values.monitoring.serviceMonitor.port }}
+      path: {{ .Values.monitoring.serviceMonitor.path }}
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      scheme: http
+{{- end }}
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "artemis-ha.fullname" . }}
+  namespace: {{ include "artemis-ha.ruleNamespace" . }}
+  labels:
+    {{ include "artemis-ha.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRule.labels }}
+    {{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: {{ include "artemis-ha.fullname" . }}.broker
+      rules:
+        - alert: ArtemisBrokerMetricsUnavailable
+          expr: >-
+            absent(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-console" (include "artemis-ha.fullname" .) | quote }})
+          for: 5m
+          labels:
+            severity: {{ .Values.monitoring.prometheusRule.severity }}
+          annotations:
+            summary: Artemis broker metrics are unavailable
+            description: No Prometheus target is reporting for the Artemis console service.
+        - alert: ArtemisActiveBrokerEndpointCountUnexpected
+          expr: >-
+            sum(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-console" (include "artemis-ha.fullname" .) | quote }}}) != 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Artemis pair does not have exactly one active-ready endpoint
+            description: The active-only readiness probe and Service endpoint set must expose exactly one broker.
+        {{- if .Values.monitoring.activeMetricName }}
+        - alert: ArtemisActiveBrokerMetricUnexpected
+          expr: >-
+            sum({{ .Values.monitoring.activeMetricName }}{namespace={{ .Release.Namespace | quote }}}) != 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Artemis active-state metric is not exactly one
+            description: The optional JMX exporter hook does not report exactly one active broker.
+        {{- end }}
+        {{- if .Values.monitoring.replicationSynchronizedMetricName }}
+        - alert: ArtemisReplicationSynchronizationMissing
+          expr: >-
+            sum({{ .Values.monitoring.replicationSynchronizedMetricName }}{namespace={{ .Release.Namespace | quote }}}) < 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Artemis replication is not synchronized
+            description: The pair is not reporting a synchronized replication relationship.
+        {{- end }}
+        - alert: ArtemisPendingMessagesHigh
+          expr: >-
+            sum(artemis_total_pending_message_count{namespace={{ .Release.Namespace | quote }}}) > {{ .Values.monitoring.pendingMessagesWarningThreshold }}
+          for: 10m
+          labels:
+            severity: {{ .Values.monitoring.prometheusRule.severity }}
+          annotations:
+            summary: Artemis pending messages are high
+            description: The configured pending-message threshold has been exceeded.
+        - alert: ArtemisBrokerPodNotReady
+          expr: >-
+            sum(kube_pod_status_ready{namespace={{ .Release.Namespace | quote }},condition="true",pod=~"{{ include "artemis-ha.fullname" . }}-ss-[01]"}) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: No Artemis pod is ready
+            description: The active-only readiness contract has no ready broker endpoint.
+        {{- with .Values.monitoring.extraRules }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
