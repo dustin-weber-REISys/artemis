@@ -1,18 +1,6 @@
-{{- if and .Values.enabled (eq .Values.haMode "quorum") (ne (int .Values.replicaCount) 3) -}}
-{{- fail "haMode=quorum requires exactly three ZooKeeper members" -}}
+{{- if ne (int .Values.replicaCount) 3 -}}
+{{- fail "the ZooKeeper quorum requires exactly three members" -}}
 {{- end -}}
-{{- if and .Values.enabled (eq .Values.haMode "none") (ne (int .Values.replicaCount) 1) -}}
-{{- fail "haMode=none is only valid for a single-member sandbox composition" -}}
-{{- end -}}
-{{- if and .Values.enabled (not .Values.persistence.enabled) (eq .Values.haMode "quorum") -}}
-{{- fail "persistent storage is required for an enabled quorum ensemble" -}}
-{{- end -}}
-{{- if and .Values.tls.client.enabled (eq .Values.tls.client.secretName "") -}}
-{{- fail "tls.client.secretName is required when client TLS is enabled" -}}
-{{- end -}}
-{{- if and .Values.tls.quorum.enabled (not .Values.tls.client.enabled) -}}
-{{- fail "tls.quorum.enabled requires tls.client.enabled so the configured TLS Secret is mounted" -}}
-{{- end -}}
-{{- if and .Values.authentication.enabled (eq .Values.authentication.jaasSecretName "") -}}
-{{- fail "authentication.jaasSecretName is required when SASL is enabled" -}}
+{{- if not .Values.persistence.enabled -}}
+{{- fail "persistent storage is required for the ZooKeeper quorum" -}}
 {{- end -}}

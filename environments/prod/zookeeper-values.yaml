@@ -1,25 +1,11 @@
-# Prod uses the same topology, image tag, and promoted digest as test/nonprod.
-# Capacity and the gp3 class are environment-specific inputs.
-enabled: true
-haMode: quorum
-replicaCount: 3
+# Prod capacity and storage class are promoted independently.
 
 image:
-  registry: PLACEHOLDER_ECR_REGISTRY
-  repository: PLACEHOLDER_ECR_REPOSITORY/zookeeper
-  tag: 3.9.5
   # Promote only the immutable digest validated in nonprod.
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  pullPolicy: IfNotPresent
-  pullSecrets: []
 
 persistence:
-  enabled: true
   storageClass: PLACEHOLDER_PROD_GP3_STORAGE_CLASS
-  accessModes:
-    - ReadWriteOnce
-  size: 20Gi
-  volumeMode: Filesystem
 
 resources:
   requests:
@@ -33,33 +19,19 @@ jvm:
   heapOpts: -Xms512m -Xmx1Gi
 
 networkPolicy:
-  enabled: true
   brokerNamespaceSelector:
     matchLabels:
       messaging.example.io/cluster: PLACEHOLDER_PROD_EKS_CLUSTER
-  brokerPodSelector:
-    matchExpressions:
-      - key: ActiveMQArtemis
-        operator: Exists
   monitoringNamespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: PLACEHOLDER_PROD_MONITORING_NAMESPACE
-  monitoringPodSelector:
-    matchLabels:
-      app.kubernetes.io/part-of: monitoring
 
 metrics:
-  enabled: true
   serviceMonitor:
     enabled: true
     labels:
       release: PLACEHOLDER_PROD_PROMETHEUS_RELEASE
-    interval: 30s
-    scrapeTimeout: 10s
-    honorLabels: true
   prometheusRule:
     enabled: true
     labels:
       release: PLACEHOLDER_PROD_PROMETHEUS_RELEASE
-    rules:
-      quorumUnavailableFor: 5m

@@ -1,7 +1,4 @@
-# Promotion profiles must retain this quorum topology. Sandbox is the only
-# supported composition that sets enabled=false and haMode=none.
-enabled: true
-haMode: quorum
+# This chart always renders a promotion-grade three-member quorum.
 replicaCount: 3
 
 image:

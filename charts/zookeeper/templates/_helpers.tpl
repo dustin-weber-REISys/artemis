@@ -55,19 +55,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "zookeeper.zooServers" -}}
-{{- if eq .Values.haMode "quorum" -}}
 {{- range $i, $_ := until (int .Values.replicaCount) -}}
 {{- if $i }} {{ end -}}server.{{ add $i 1 }}={{ include "zookeeper.fullname" $ }}-{{ $i }}.{{ include "zookeeper.headlessServiceName" $ }}.{{ $.Release.Namespace }}.svc.cluster.local:2888:3888;2181
 {{- end -}}
 {{- end -}}
-{{- end -}}
 
 {{- define "zookeeper.configServerLines" -}}
-{{- if eq .Values.haMode "quorum" -}}
 {{- $replicas := int .Values.replicaCount -}}
 {{- range $i, $_ := until $replicas -}}
 server.{{ add $i 1 }}={{ include "zookeeper.fullname" $ }}-{{ $i }}.{{ include "zookeeper.headlessServiceName" $ }}.{{ $.Release.Namespace }}.svc.cluster.local:2888:3888{{ if lt (add $i 1) $replicas }}{{ "\n" }}{{ end }}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 
