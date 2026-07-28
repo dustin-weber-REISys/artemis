@@ -25,8 +25,8 @@ disruption while it is rejoining.
    consumer or producer was in flight.
 
 Record the measured recovery time against the current target in
-[`tests/e2e/scenarios.yaml`](../../tests/e2e/scenarios.yaml); do not silently
-change the target in an execution record.
+[`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml); do
+not silently change the target in an execution record.
 
 ## Manual failback
 

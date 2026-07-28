@@ -30,11 +30,11 @@ tokens with values supplied by the cluster platform; do not commit them.
 5. Check default-deny NetworkPolicies allow only broker messaging,
    replication, management, monitoring, DNS, Vault, Keycloak, and ZooKeeper
    paths.
-6. Run every required protocol case from
-   [`tests/e2e/scenarios.yaml`](../../tests/e2e/scenarios.yaml) with the
-   validation client. Use disposable destinations and credentials injected by
-   the approved runner, not command-line secrets. Reports must satisfy their
-   declared message-accounting claims.
+6. Run every required protocol case from the
+   [`acceptance plan`](../../tests/e2e/acceptance-plan.yaml) with the validation
+   client. Use disposable destinations and credentials injected by the approved
+   runner, not command-line secrets. Reports must satisfy their declared
+   message-accounting claims.
 7. Attach Argo, pod placement, active/passive, replication, ZooKeeper, policy,
    identity, and client reports to the change record.
 

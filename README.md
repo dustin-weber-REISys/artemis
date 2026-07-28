@@ -35,8 +35,8 @@ charts and their schemas:
 - [`charts/zookeeper/values.yaml`](charts/zookeeper/values.yaml) and
   [`charts/zookeeper/values.schema.json`](charts/zookeeper/values.schema.json)
 - [`environments`](environments) for promotion overlays
-- [`tests/e2e/scenarios.yaml`](tests/e2e/scenarios.yaml) for the acceptance
-  scenario catalog
+- [`tests/e2e/acceptance-plan.yaml`](tests/e2e/acceptance-plan.yaml) for the
+  acceptance plan
 
 ## Validate
 

@@ -36,7 +36,7 @@ changeable implementation facts belong in executable files:
 | Supported Artemis operands | [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json) |
 | Rendered broker and ZooKeeper behavior | Chart templates under [`charts`](../charts) |
 | Validation workflow | [`Makefile`](../Makefile) and [`scripts`](../scripts) |
-| Acceptance scenarios and thresholds | [`tests/e2e/scenarios.yaml`](../tests/e2e/scenarios.yaml) and [`tests/load/sustained-load.yaml`](../tests/load/sustained-load.yaml) |
+| Acceptance scenarios and thresholds | [`tests/e2e/acceptance-plan.yaml`](../tests/e2e/acceptance-plan.yaml) and [`tests/load/sustained-load-profiles.yaml`](../tests/load/sustained-load-profiles.yaml) |
 | Classic compatibility inventory | [`tests/compatibility/classic-6.2.6-inventory.yaml`](../tests/compatibility/classic-6.2.6-inventory.yaml) |
 
 If prose conflicts with one of these files, the executable source governs the

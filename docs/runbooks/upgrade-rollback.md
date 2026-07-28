@@ -11,7 +11,7 @@ ZooKeeper, operator, and client libraries as one unobserved change.
    [`README`](../../README.md#validate).
 3. Apply the digest to test and run the required compatibility, durability,
    failure, credential rotation, management authorization, and load scenarios
-   from [`tests/e2e/scenarios.yaml`](../../tests/e2e/scenarios.yaml).
+   from [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml).
 4. Promote the same digest to nonprod. Run upgrade and rollback there, then
    obtain operational approval before prod.
 5. Upgrade one ZooKeeper member at a time, then one Artemis HA pair or
