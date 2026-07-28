@@ -1,4 +1,13 @@
-schemaVersion: validation.artemis.apache.org/compatibility/v1
+schemaVersion: validation.artemis.apache.org/compatibility-inventory/v1
+kind: CompatibilityInventory
+description: >-
+  Runtime discovery inventory for migration planning. Pending entries are not
+  executable compatibility tests or passing acceptance results.
+resultSemantics:
+  pending-runtime-inventory: no runtime conclusion has been recorded
+  observed-compatible: runtime evidence confirms the feature works for the migration baseline
+  observed-incompatible: runtime evidence confirms a compatibility gap
+  not-used: runtime inventory confirms the feature is outside the migration scope
 baseline:
   broker: ActiveMQ Classic 6.2.6
   requiredProtocols:

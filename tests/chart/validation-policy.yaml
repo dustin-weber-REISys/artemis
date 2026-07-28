@@ -1,4 +1,8 @@
-schemaVersion: validation.artemis.apache.org/chart-policy/v1
+schemaVersion: validation.artemis.apache.org/chart-validation-policy/v1
+kind: ChartValidationPolicy
+description: >-
+  Declarative policy consumed by chart validation; this file is not itself an
+  executable chart test.
 renderInputs:
   valuesFilesAreEnvironmentSupplied: true
   credentialsAllowedInValues: false
