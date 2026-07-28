@@ -1,8 +1,18 @@
 package org.example.artemis.validation;
 
 public enum Protocol {
-    OPENWIRE,
-    AMQP;
+    OPENWIRE("openwire"),
+    AMQP("amqp");
+
+    private final String reportValue;
+
+    Protocol(String reportValue) {
+        this.reportValue = reportValue;
+    }
+
+    public String reportValue() {
+        return reportValue;
+    }
 
     public static Protocol parse(String value) {
         return switch (value.toLowerCase(java.util.Locale.ROOT)) {

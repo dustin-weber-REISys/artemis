@@ -50,39 +50,18 @@ public final class DurableSendRunner {
             }
         }
 
-        String status = failures == 0 ? "PASS" : "FAIL";
-        String rpoStatus = failures == 0 ? "PASS" : "NOT_EVALUATED";
-        return new ValidationReport(
-                "validation.artemis.apache.org/v1",
-                "safety",
-                "send",
-                config.protocol().name().toLowerCase(),
-                config.destination(),
-                config.idPrefix(),
-                config.runId(),
-                startedAt,
-                Instant.now(),
-                config.startSequence(),
-                config.count(),
-                config.count(),
-                acknowledged,
-                0,
-                0,
-                failures,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                unacknowledged,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                unacknowledged.stream().map(sequence -> MessageIds.id(config.idPrefix(), sequence)).toList(),
-                status,
-                rpoStatus,
-                "Persistent send acknowledgement is synchronous; broker-acknowledged IDs are the RPO baseline.");
+        return ValidationReport.forSend(
+                new ValidationReport.RunContext(
+                        config.protocol(),
+                        config.destination(),
+                        config.idPrefix(),
+                        config.runId()),
+                new ValidationReport.Timing(startedAt, Instant.now()),
+                new ValidationReport.SendMetrics(
+                        config.startSequence(),
+                        config.count(),
+                        acknowledged,
+                        failures),
+                unacknowledged);
     }
 }

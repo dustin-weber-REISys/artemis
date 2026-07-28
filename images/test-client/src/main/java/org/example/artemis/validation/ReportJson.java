@@ -1,47 +1,58 @@
 package org.example.artemis.validation;
 
-import java.time.Instant;
 import java.util.List;
 
-/** Dependency-free, stable JSON serialization for reports and shell tooling. */
+/**
+ * Stable v1 JSON projection for reports and shell tooling.
+ *
+ * <p>The explicit projection keeps the external flat schema independent from the
+ * nested domain model without adding a general-purpose JSON dependency to the
+ * runtime image.
+ */
 public final class ReportJson {
     private ReportJson() {
     }
 
     public static String toJson(ValidationReport report) {
+        ValidationReport.Context context = report.context();
+        ValidationReport.Timing timing = report.timing();
+        ValidationReport.Metrics metrics = report.metrics();
+        ValidationReport.Findings findings = report.findings();
+        ValidationReport.Outcome outcome = report.outcome();
+
         StringBuilder json = new StringBuilder(1024);
         json.append('{');
         field(json, "schemaVersion", report.schemaVersion());
-        field(json, "claim", report.claim());
-        field(json, "operation", report.operation());
-        field(json, "protocol", report.protocol());
-        field(json, "destination", report.destination());
-        field(json, "idPrefix", report.idPrefix());
-        field(json, "runId", report.runId());
-        field(json, "startedAt", report.startedAt());
-        field(json, "completedAt", report.completedAt());
-        number(json, "expectedStart", report.expectedStart());
-        number(json, "expectedCount", report.expectedCount());
-        number(json, "requestedCount", report.requestedCount());
-        number(json, "acknowledgedCount", report.acknowledgedCount());
-        number(json, "receivedCount", report.receivedCount());
-        number(json, "uniqueCount", report.uniqueCount());
-        number(json, "acknowledgementFailures", report.acknowledgementFailures());
-        array(json, "missingSequences", report.missingSequences());
-        array(json, "duplicateSequences", report.duplicateSequences());
-        array(json, "redeliveredSequences", report.redeliveredSequences());
-        array(json, "reorderedSequences", report.reorderedSequences());
-        array(json, "unexpectedSequences", report.unexpectedSequences());
-        array(json, "unacknowledgedSequences", report.unacknowledgedSequences());
-        strings(json, "missingIds", report.missingIds());
-        strings(json, "duplicateIds", report.duplicateIds());
-        strings(json, "redeliveredIds", report.redeliveredIds());
-        strings(json, "reorderedIds", report.reorderedIds());
-        strings(json, "unexpectedIds", report.unexpectedIds());
-        strings(json, "unacknowledgedIds", report.unacknowledgedIds());
-        field(json, "status", report.status());
-        field(json, "rpoStatus", report.rpoStatus());
-        field(json, "notes", report.notes());
+        field(json, "claim", context.claim().reportValue());
+        field(json, "operation", context.operation().reportValue());
+        field(json, "protocol", context.protocol().reportValue());
+        field(json, "destination", context.destination());
+        field(json, "idPrefix", context.idPrefix());
+        field(json, "runId", context.runId());
+        field(json, "startedAt", timing.startedAt().toString());
+        field(json, "completedAt", timing.completedAt().toString());
+        number(json, "expectedStart", metrics.expectedStart());
+        number(json, "expectedCount", metrics.expectedCount());
+        number(json, "requestedCount", metrics.requestedCount());
+        number(json, "acknowledgedCount", metrics.acknowledgedCount());
+        number(json, "receivedCount", metrics.receivedCount());
+        number(json, "uniqueCount", metrics.uniqueCount());
+        number(json, "acknowledgementFailures", metrics.acknowledgementFailures());
+        findingSequences(json, "missingSequences", findings.missing());
+        findingSequences(json, "duplicateSequences", findings.duplicate());
+        findingSequences(json, "redeliveredSequences", findings.redelivered());
+        findingSequences(json, "reorderedSequences", findings.reordered());
+        findingSequences(json, "unexpectedSequences", findings.unexpected());
+        findingSequences(json, "unacknowledgedSequences", findings.unacknowledged());
+        findingIds(json, "missingIds", findings.missing());
+        findingIds(json, "duplicateIds", findings.duplicate());
+        findingIds(json, "redeliveredIds", findings.redelivered());
+        findingIds(json, "reorderedIds", findings.reordered());
+        findingIds(json, "unexpectedIds", findings.unexpected());
+        findingIds(json, "unacknowledgedIds", findings.unacknowledged());
+        field(json, "status", outcome.status().reportValue());
+        field(json, "rpoStatus", outcome.rpoStatus().reportValue());
+        field(json, "notes", outcome.notes());
         json.append('}');
         return json.toString();
     }
@@ -53,8 +64,18 @@ public final class ReportJson {
         string(json, value);
     }
 
-    private static void field(StringBuilder json, String name, Instant value) {
-        field(json, name, value == null ? null : value.toString());
+    private static void findingSequences(
+            StringBuilder json,
+            String name,
+            ValidationReport.Finding finding) {
+        array(json, name, finding.sequences());
+    }
+
+    private static void findingIds(
+            StringBuilder json,
+            String name,
+            ValidationReport.Finding finding) {
+        strings(json, name, finding.ids());
     }
 
     private static void number(StringBuilder json, String name, long value) {

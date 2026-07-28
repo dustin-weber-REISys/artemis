@@ -80,41 +80,21 @@ public final class ConsumeRunner {
 
         List<Long> unacknowledged = new ArrayList<>(pendingAcknowledgement);
         unacknowledged.sort(Long::compareTo);
-        boolean pass = tracker.missingSequences().isEmpty()
-                && unacknowledged.isEmpty()
-                && tracker.unexpectedSequences().isEmpty()
-                && acknowledgementFailures == 0;
-        return new ValidationReport(
-                "validation.artemis.apache.org/v1",
-                "safety",
-                "consume",
-                config.protocol().name().toLowerCase(),
-                config.destination(),
-                config.idPrefix(),
-                config.runId(),
-                startedAt,
-                Instant.now(),
-                config.expectedStart(),
-                config.expectedCount(),
-                0,
-                acknowledged,
-                tracker.receivedCount(),
-                tracker.uniqueCount(),
-                acknowledgementFailures,
-                tracker.missingSequences(),
-                tracker.duplicateSequences(),
-                tracker.redeliveredSequences(),
-                tracker.reorderedSequences(),
-                tracker.unexpectedSequences(),
-                unacknowledged,
-                tracker.missingIds(config.idPrefix()),
-                tracker.duplicateIds(),
-                tracker.redeliveredIds(),
-                tracker.reorderedIds(),
-                tracker.unexpectedIds(),
-                tracker.idsForSequences(unacknowledged, config.idPrefix()),
-                pass ? "PASS" : "FAIL",
-                pass ? "PASS" : "FAIL",
-                "disconnectsBeforeAck=" + disconnects + "; at-least-once delivery is expected, so duplicates are reported rather than treated as loss.");
+        return ValidationReport.forConsume(
+                new ValidationReport.RunContext(
+                        config.protocol(),
+                        config.destination(),
+                        config.idPrefix(),
+                        config.runId()),
+                new ValidationReport.Timing(startedAt, Instant.now()),
+                new ValidationReport.ConsumeMetrics(
+                        config.expectedStart(),
+                        config.expectedCount(),
+                        acknowledged,
+                        tracker.receivedCount(),
+                        tracker.uniqueCount(),
+                        acknowledgementFailures),
+                ValidationReport.Findings.from(tracker, unacknowledged, config.idPrefix()),
+                disconnects);
     }
 }
