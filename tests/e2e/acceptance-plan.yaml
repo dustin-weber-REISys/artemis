@@ -1,0 +1,305 @@
+schemaVersion: validation.artemis.apache.org/manual-acceptance-plan/v1
+kind: ManualAcceptancePlan
+description: >-
+  Acceptance coverage for Artemis HA on EKS. This is a plan, not an automated
+  end-to-end test suite. Repository checks are directly executable,
+  runner-assisted cases execute only the named setup or disruption action, and
+  manual procedures require an operator to perform the action and collect every
+  listed verification item as evidence. Runtime values such as context, cluster,
+  namespace, URLs, credentials, and pod names are supplied by the operator.
+executionKinds:
+  repository-check: a repository command performs the check and returns its own result
+  runner-assisted: the EKS runner performs only the named action; verification remains manual
+  manual-procedure: the EKS runner refuses execution and directs the operator to the plan
+requiredCoverage:
+  - chart-lint-render
+  - clean-install
+  - openwire-compatibility
+  - amqp-compatibility
+  - durable-sequenced-backlog
+  - active-broker-process-kill
+  - active-broker-pod-delete
+  - active-broker-node-drain
+  - active-broker-az-loss-guidance
+  - zookeeper-one-member-loss
+  - zookeeper-quorum-loss
+  - broker-replication-isolation
+  - broker-zookeeper-isolation
+  - consumer-disconnect-before-ack
+  - producer-timeout-after-commit
+  - ebs-detach-reschedule
+  - argo-managed-upgrade-rollback
+  - failed-upgrade-rollback
+  - vault-credential-rotation
+  - keycloak-hawtio-authorization
+  - queue-management
+  - per-source-dead-letter
+  - sustained-load
+  - safe-manual-failback
+claims:
+  safety:
+    observable: acknowledged durable IDs have no missing sequences; at most one broker is active
+    rpo: zero for broker-acknowledged durable sends; in-flight sends may be redelivered
+  liveness:
+    observable: eligible peer becomes active and the client endpoint recovers within the measured target
+    initialRecoveryTargetSeconds: 30
+  compatibility:
+    observable: OpenWire and AMQP sends, receives, explicit acknowledgements, duplicate IDs, and redelivery are reported
+  operability:
+    observable: chart/GitOps health, rotation, management authorization, and rollback evidence is captured
+cases:
+  - id: chart-lint-render
+    claim: operability
+    destructive: false
+    eksRequired: false
+    execution:
+      kind: repository-check
+      command: scripts/validate-charts.sh
+    action: helm lint and render every repository-owned chart with kubeconform
+    verification:
+      - rendered manifests pass Kubernetes schema validation
+      - no credential value occurs in rendered output
+  - id: clean-install
+    claim: operability
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: Argo CD syncs CRDs/operator, ZooKeeper, broker, and validation in dependency order
+    verification:
+      - Argo application is Synced and Healthy
+      - exactly one broker reports active and one reports passive
+  - id: openwire-compatibility
+    claim: compatibility
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: validation client sends and consumes persistent sequenced messages over OpenWire
+    verification:
+      - send acknowledgement count equals requested count
+      - consume report has no missing or unexpected sequence numbers
+  - id: amqp-compatibility
+    claim: compatibility
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: validation client sends and consumes persistent sequenced messages over AMQP 1.0
+    verification:
+      - send acknowledgement count equals requested count
+      - consume report has no missing or unexpected sequence numbers
+  - id: durable-sequenced-backlog
+    claim: safety
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: send at least 100000 deterministic persistent messages before failover tests
+    verification:
+      - report records the acknowledged send baseline
+      - expected IDs are passed unchanged to every consumer/failover run
+  - id: active-broker-process-kill
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: terminate-pod-process
+    action: terminate the active broker process during production-like send and consume
+    verification:
+      - no split brain is observed
+      - client endpoint recovery duration is at or below the agreed target
+  - id: active-broker-pod-delete
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: delete-single-pod
+    action: delete the active broker pod during production-like send and consume
+    verification:
+      - no missing acknowledged IDs
+      - redelivered and duplicated IDs are distinguished
+  - id: active-broker-node-drain
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: drain-node
+    action: cordon and drain the active broker node with the PDB enforced
+    verification:
+      - the passive peer activates once
+      - the recovered pod is synchronized before manual failback
+  - id: active-broker-az-loss-guidance
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: inspect-zone-nodes
+    action: simulate AZ loss by isolating or draining every test node in one zone under the EKS change window
+    verification:
+      - the surviving zone serves clients
+      - the AZ simulation and recovery timestamps are recorded
+  - id: zookeeper-one-member-loss
+    claim: safety
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: delete-single-pod
+    action: delete or isolate exactly one ZooKeeper member
+    verification:
+      - ZooKeeper remains writable with quorum
+      - exactly one broker remains active
+  - id: zookeeper-quorum-loss
+    claim: safety
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: delete-multiple-pods
+    action: isolate two of three ZooKeeper voting members
+    verification:
+      - no dual broker activation occurs
+      - acknowledged durable messages remain accounted for
+  - id: broker-replication-isolation
+    claim: safety
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: manage-replication-isolation-policy
+    action: apply the temporary broker replication isolation policy
+    verification:
+      - replication disconnected state is observable
+      - the isolated peer cannot activate concurrently
+  - id: broker-zookeeper-isolation
+    claim: safety
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: manage-zookeeper-isolation-policy
+    action: apply the temporary broker-to-ZooKeeper isolation policy
+    verification:
+      - lock/session loss is observable
+      - no dual broker activation occurs
+  - id: consumer-disconnect-before-ack
+    claim: safety
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: close the consumer delivery session before acknowledgement
+    verification:
+      - the ID is redelivered
+      - the report distinguishes the duplicate from the redelivery flag
+  - id: producer-timeout-after-commit
+    claim: safety
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: force a producer timeout after commit and retry with the same duplicate ID
+    verification:
+      - the retry outcome is observable
+      - duplicate detection prevents an unintended second business delivery
+  - id: ebs-detach-reschedule
+    claim: safety
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: exercise stateful pod rescheduling after an EBS detach event
+    verification:
+      - the broker remounts its own RWO volume
+      - acknowledged durable IDs remain accounted for
+  - id: argo-managed-upgrade-rollback
+    claim: operability
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: operate-argocd-application
+    action: promote an immutable chart/image digest through Argo CD and roll back the application revision
+    verification:
+      - Argo returns to Synced and Healthy after each change
+      - broker, replication, queue, and client evidence remains healthy
+  - id: failed-upgrade-rollback
+    claim: operability
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: operate-argocd-application
+    action: inject a rejected upgrade revision and execute the approved rollback procedure
+    verification:
+      - failed revision is identifiable
+      - rollback does not erase acknowledged durable messages
+  - id: vault-credential-rotation
+    claim: operability
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: restart-broker-statefulsets
+    action: rotate broker/application credentials in Vault and restart one HA peer at a time
+    verification:
+      - no secret value appears in manifests or logs
+      - clients reconnect with the rotated credential
+  - id: keycloak-hawtio-authorization
+    claim: operability
+    destructive: false
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: check-console-http-access
+    action: check Hawtio OIDC login and viewer/admin role enforcement
+    verification:
+      - unauthenticated access is rejected
+      - viewer cannot perform admin actions and admin can perform approved actions
+  - id: queue-management
+    claim: operability
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: exercise browse, move, retry, purge, and DLQ management on a disposable validation queue
+    verification:
+      - each operation is audit logged without message bodies or credentials
+      - production queues are never used for destructive management tests
+  - id: per-source-dead-letter
+    claim: compatibility
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: exhaust redelivery on two disposable source queues and verify automatic creation, retention, browse, and replay of their independent prefixed dead-letter queues
+    verification:
+      - each source has one distinct retained dead-letter queue after max delivery attempts
+      - original address and queue metadata route replay to the correct source
+      - no application destination is created by a producer or consumer when application auto-creation is disabled
+  - id: sustained-load
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: apply-load-job
+    action: run sustained and burst load with replication enabled
+    verification:
+      - throughput, latency, replication lag, paging, and disk evidence are captured
+      - no acknowledged durable IDs are missing
+  - id: safe-manual-failback
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: synchronize the recovered peer and perform a controlled manual failback
+    verification:
+      - active/passive state changes once
+      - client recovery and message accounting remain within target
