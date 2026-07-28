@@ -1,0 +1,35 @@
+schemaVersion: validation.artemis.apache.org/load/v1
+name: replicated-validation-load
+defaults:
+  messageCount: 100000
+  payloadBytes: 256
+  producerConcurrency: 1
+  consumerConcurrency: 1
+  durationSeconds: 900
+  protocol: amqp
+  persistent: true
+  duplicateId: stable-per-sequence
+  expectedRpo: zero-for-acknowledged
+measurements:
+  - sendAcknowledgementLatency
+  - endToEndDeliveryLatency
+  - throughputMessagesPerSecond
+  - replicationConnected
+  - replicationSynchronized
+  - replicationLag
+  - queueDepth
+  - pagingBytes
+  - brokerDiskUsage
+  - jvmGcPause
+  - clientReconnectDuration
+profiles:
+  - name: burst
+    messageCount: 100000
+    durationSeconds: 120
+  - name: sustained
+    messageCount: 100000
+    durationSeconds: 900
+acceptance:
+  missingAcknowledgedSequences: 0
+  splitBrainActiveBrokers: 0
+  recoveryTargetSeconds: 30

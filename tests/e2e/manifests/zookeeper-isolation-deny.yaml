@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: validation-zookeeper-isolation
+  labels:
+    app.kubernetes.io/part-of: artemis-validation
+    validation.artemis.apache.org/temporary: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: zookeeper
+  policyTypes:
+    - Ingress
+  ingress: []

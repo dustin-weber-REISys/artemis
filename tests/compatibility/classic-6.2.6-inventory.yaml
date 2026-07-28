@@ -1,0 +1,61 @@
+schemaVersion: validation.artemis.apache.org/compatibility/v1
+baseline:
+  broker: ActiveMQ Classic 6.2.6
+  requiredProtocols:
+    - openwire
+    - amqp
+  referenceListeners:
+    openwire: 61616
+    amqp: 5672
+    stomp: 61613
+    mqtt: 1883
+    websocket: 61614
+  clientJmsApi: jakarta.jms
+  validationClientLibrary:
+    openwire: org.apache.activemq:activemq-client:6.2.6
+    amqp: org.apache.qpid:qpid-jms-client:2.7.0
+features:
+  - id: durable-queues
+    phase: required
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: selectors
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: redelivery-and-dlq
+    phase: required
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: message-groups
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: scheduled-messages
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: durable-topic-subscriptions
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: xa-transactions
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: virtual-topics
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: advisory-consumers
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: temporary-destinations
+    phase: focused-compatibility-test
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: amqp-interoperability
+    phase: required
+    protocol: amqp
+    result: pending-runtime-inventory

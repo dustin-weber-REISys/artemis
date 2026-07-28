@@ -1,0 +1,5 @@
+This image contains repository-owned validation code under the Apache License,
+Version 2.0, plus dependencies from Apache ActiveMQ Classic and Apache Qpid
+JMS. Dependency license and source inventories are supplied by the promotion
+pipeline next to the SBOM; the image build does not contain credentials or
+environment-specific values.

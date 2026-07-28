@@ -1,0 +1,14 @@
+schemaVersion: validation.artemis.apache.org/chart-policy/v1
+renderInputs:
+  valuesFilesAreEnvironmentSupplied: true
+  credentialsAllowedInValues: false
+  publicBrokerLoadBalancerAllowed: false
+requiredChecks:
+  - helm-lint
+  - helm-template
+  - kubeconform
+  - secret-pattern-scan
+  - immutable-image-reference-check
+  - active-passive-readiness-check
+  - zone-spread-and-rwo-check
+  - default-deny-network-policy-check
