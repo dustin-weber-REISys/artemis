@@ -22,12 +22,14 @@ class RunnerTest {
                         "run-1", Protocol.OPENWIRE, "validation.queue"));
 
         assertTrue(report.successful());
-        assertEquals(4, report.receivedCount());
-        assertEquals(List.of(0L), report.duplicateSequences());
-        assertEquals(List.of(0L), report.redeliveredSequences());
-        assertEquals(List.of("msg-0"), report.duplicateIds());
-        assertEquals(List.of("msg-0"), report.redeliveredIds());
-        assertEquals(List.of(), report.missingSequences());
+        assertEquals(Operation.CONSUME, report.context().operation());
+        assertEquals(4, report.metrics().receivedCount());
+        assertEquals(List.of(0L), report.findings().duplicate().sequences());
+        assertEquals(List.of(0L), report.findings().redelivered().sequences());
+        assertEquals(List.of("msg-0"), report.findings().duplicate().ids());
+        assertEquals(List.of("msg-0"), report.findings().redelivered().ids());
+        assertTrue(report.findings().missing().isEmpty());
+        assertEquals(RpoStatus.PASS, report.outcome().rpoStatus());
         assertEquals(3, transport.acknowledged.size());
     }
 
@@ -40,10 +42,14 @@ class RunnerTest {
                 new DurableSendRunner.Config(20, 3, "msg-", "dup-", "body-",
                         "run-2", Protocol.AMQP, "validation.queue"));
 
-        assertEquals(2, report.acknowledgedCount());
-        assertEquals(List.of(21L), report.unacknowledgedSequences());
-        assertEquals("FAIL", report.status());
-        assertEquals("NOT_EVALUATED", report.rpoStatus());
+        assertEquals(Operation.SEND, report.context().operation());
+        assertEquals(2, report.metrics().acknowledgedCount());
+        assertEquals(List.of(21L), report.findings().unacknowledged().sequences());
+        assertEquals(
+                List.of("msg-00000000000000000021"),
+                report.findings().unacknowledged().ids());
+        assertEquals(ReportStatus.FAIL, report.outcome().status());
+        assertEquals(RpoStatus.NOT_EVALUATED, report.outcome().rpoStatus());
         assertEquals("msg-00000000000000000020", transport.sent.get(0).id());
         assertEquals("dup-00000000000000000022", transport.sent.get(2).duplicateId());
     }
