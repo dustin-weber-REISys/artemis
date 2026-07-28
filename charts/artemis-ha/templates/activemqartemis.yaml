@@ -40,12 +40,22 @@
   (printf "addressSettings.%s.maxDeliveryAttempts=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.maxDeliveryAttempts))
   (printf "addressSettings.%s.redeliveryDelay=%d" .Values.brokerProperties.addressSettings.match (int .Values.brokerProperties.addressSettings.redeliveryDelay))
   (printf "addressSettings.%s.deadLetterAddress=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.deadLetterAddress)
-  (printf "addressSettings.%s.expiryAddress=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiryAddress)
+  (printf "addressSettings.%s.autoCreateDeadLetterResources=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoCreateDeadLetterResources)
+  (printf "addressSettings.%s.deadLetterQueuePrefix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.deadLetterQueuePrefix)
+  (printf "addressSettings.%s.deadLetterQueueSuffix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.deadLetterQueueSuffix)
+  (printf "addressSettings.%s.autoDeleteQueues=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoDeleteQueues)
+  (printf "addressSettings.%s.autoDeleteAddresses=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoDeleteAddresses)
   (printf "addressSettings.%s.autoCreateQueues=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoCreateQueues)
   (printf "addressSettings.%s.autoCreateAddresses=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.autoCreateAddresses)
   (printf "addressSettings.%s.defaultAddressRoutingType=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.defaultAddressRoutingType)
   (printf "addressSettings.%s.defaultQueueRoutingType=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.defaultQueueRoutingType)
 }}
+{{- if .Values.brokerProperties.addressSettings.expiry.enabled }}
+{{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.expiryAddress=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.address) }}
+{{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.autoCreateExpiryResources=%t" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.autoCreateResources) }}
+{{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.expiryQueuePrefix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.queuePrefix) }}
+{{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.expiryQueueSuffix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.queueSuffix) }}
+{{- end }}
 {{- range $acceptorName, $acceptor := .Values.acceptors }}
 {{- if $acceptor.enabled }}
 {{- range $key, $value := $acceptor.extraParams }}

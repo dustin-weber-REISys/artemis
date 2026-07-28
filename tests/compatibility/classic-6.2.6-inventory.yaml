@@ -13,7 +13,7 @@ baseline:
   clientJmsApi: jakarta.jms
   validationClientLibrary:
     openwire: org.apache.activemq:activemq-client:6.2.6
-    amqp: org.apache.qpid:qpid-jms-client:2.7.0
+    amqp: org.apache.qpid:qpid-jms-client:2.10.0
 features:
   - id: durable-queues
     phase: required

@@ -1,7 +1,7 @@
 # Deterministic validation client
 
 This image is a small, open-source JMS client for repeatable Artemis HA tests.
-It uses ActiveMQ Classic `6.2.6` for OpenWire and Apache Qpid JMS `2.7.0` for
+It uses ActiveMQ Classic `6.2.6` for OpenWire and Apache Qpid JMS `2.10.0` for
 AMQP 1.0. Both are Jakarta Messaging clients; no protocol frames are built by
 hand.
 

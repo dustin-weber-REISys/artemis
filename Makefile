@@ -11,15 +11,17 @@ RUNTIME_IMAGE ?= eclipse-temurin:17-jre
 BUILD_IMAGE_DIGEST ?=
 RUNTIME_IMAGE_DIGEST ?=
 
-.PHONY: help test package validate validate-static validate-scenarios validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke build-image
+.PHONY: help test test-topology package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke build-image
 
 help:
 	@printf '%s\n' \
 		'test              Run the deterministic client unit tests' \
+		'test-topology     Exercise topology validation regression cases' \
 		'package           Build the client jar and runtime dependency directory' \
 		'validate          Run repository, scenario, and chart/static checks' \
 		'validate-static   Check owned implementation invariants' \
 		'validate-scenarios Validate declarative EKS scenario definitions' \
+		'validate-topology Validate the generated 2/4/4 workload topology' \
 		'validate-charts   Lint/render charts when charts are present' \
 		'validate-operator-schema Validate broker CRs against ArkMQ 2.2.0' \
 		'validate-compose  Validate the local Docker Compose configuration' \
@@ -34,6 +36,9 @@ help:
 test:
 	$(MAVEN) -B -ntp -f $(CLIENT_DIR)/pom.xml test
 
+test-topology:
+	./tests/topology/test.sh
+
 package:
 	$(MAVEN) -B -ntp -f $(CLIENT_DIR)/pom.xml package
 
@@ -42,6 +47,9 @@ validate-static:
 
 validate-scenarios:
 	./scripts/validate-scenarios.sh --report $(REPORT_DIR)/scenario-validation.json
+
+validate-topology:
+	./scripts/validate-topology.sh --report $(REPORT_DIR)/topology-validation.json
 
 validate-charts:
 	./scripts/validate-charts.sh --report $(REPORT_DIR)/chart-validation.json
@@ -52,7 +60,7 @@ validate-operator-schema:
 validate-compose:
 	./scripts/validate-compose.sh --report $(REPORT_DIR)/compose-validation.json
 
-validate: validate-static validate-scenarios validate-charts validate-operator-schema validate-compose test
+validate: validate-static validate-scenarios validate-topology test-topology validate-charts validate-operator-schema validate-compose test
 
 local-up:
 	$(COMPOSE) -f $(COMPOSE_FILE) up -d --wait broker

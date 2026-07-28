@@ -31,7 +31,7 @@ if [[ "$schema" != "validation.artemis.apache.org/scenarios/v1" ]]; then
   errors=$((errors + 1))
 fi
 
-required_ids='chart-lint-render clean-install openwire-compatibility amqp-compatibility durable-sequenced-backlog active-broker-process-kill active-broker-pod-delete active-broker-node-drain active-broker-az-loss-guidance zookeeper-one-member-loss zookeeper-quorum-loss broker-replication-isolation broker-zookeeper-isolation consumer-disconnect-before-ack producer-timeout-after-commit ebs-detach-reschedule argo-managed-upgrade-rollback failed-upgrade-rollback vault-credential-rotation keycloak-hawtio-authorization queue-management sustained-load safe-manual-failback'
+required_ids='chart-lint-render clean-install openwire-compatibility amqp-compatibility durable-sequenced-backlog active-broker-process-kill active-broker-pod-delete active-broker-node-drain active-broker-az-loss-guidance zookeeper-one-member-loss zookeeper-quorum-loss broker-replication-isolation broker-zookeeper-isolation consumer-disconnect-before-ack producer-timeout-after-commit ebs-detach-reschedule argo-managed-upgrade-rollback failed-upgrade-rollback vault-credential-rotation keycloak-hawtio-authorization queue-management per-source-dead-letter sustained-load safe-manual-failback'
 ids=$(yq -r '.scenarios[]?.id // ""' "$scenario_file")
 for required_id in $required_ids; do
   if ! printf '%s\n' "$ids" | grep -Fxq "$required_id"; then

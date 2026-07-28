@@ -7,9 +7,12 @@
 ## Context
 
 Each EKS cluster hosts the ArkMQ operator, a ZooKeeper coordination service,
-and three Artemis workload namespaces. An Artemis HA pair needs a distributed
-lock so that only one broker can become active. The coordination identity must
-be isolated per pair even when several pairs use one ZooKeeper ensemble.
+and the Artemis workload namespaces assigned to that cluster. `TEST` contains
+`SKY` and `SKY2`; `Nonprod` contains `smktest` (`EUT`), `TRN`, `TRN2`, and
+`PT`; and `Prod` contains `PE`, `PP`, `DM`, and `PR`. An Artemis HA pair needs
+a distributed lock so that only one broker can become active. The coordination
+identity must be isolated per pair even when several pairs use one ZooKeeper
+ensemble.
 
 The repository must remain generic. Cluster names, namespaces, ECR locations,
 Vault paths, domains, and account identifiers are supplied by deployment
@@ -30,7 +33,8 @@ chart provides:
   restarting passive or follower members;
 - restricted four-letter commands, disabled admin server, Prometheus metrics,
   default-deny NetworkPolicies, and non-root security settings; and
-- an image reference built from the official `apache/zookeeper:3.9.5` source,
+- an image reference built from the Docker Official Image
+  `docker.io/library/zookeeper:3.9.5` source,
   mirrored to ECR and pinned by digest.
 
 Every Artemis HA pair uses the shared client Service but receives two unique
@@ -76,9 +80,18 @@ client Service. `curatorNamespace` remains unique even though the ensemble is
 dedicated; this keeps the coordination identity explicit and makes a later
 move back to the shared ensemble safe.
 
-The override is not enabled by any promotion profile. It is an explicit
-per-workload composition and requires the same destructive validation as the
-shared topology.
+The shared per-cluster ensemble remains the default baseline. A dedicated
+ensemble for `PR` is the recommended stronger coordination-isolation option
+inside the existing `Prod` EKS cluster. Enabling it is an explicit,
+environment-approved composition and requires the same destructive validation
+as the shared topology; this ADR does not silently mandate or provision a new
+infrastructure boundary.
+
+A dedicated ensemble still shares the `Prod` EKS control plane, networking,
+cluster-wide capacity, and upgrade lifecycle. If `PR` must be independent of
+those failure domains, the hard-isolation option is a separate EKS cluster
+with its own operator and ZooKeeper ensemble. That option requires a separate
+infrastructure decision and is outside the default three-cluster composition.
 
 ## Consequences
 

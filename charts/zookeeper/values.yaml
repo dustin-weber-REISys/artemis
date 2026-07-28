@@ -5,10 +5,10 @@ haMode: quorum
 replicaCount: 3
 
 image:
-  # Mirror the official apache/zookeeper:3.9.5 image into ECR and replace the
-  # explicit placeholders below during environment promotion.
+  # Mirror Docker Official Image docker.io/library/zookeeper:3.9.5 into ECR and
+  # replace the explicit placeholders below during environment promotion.
   registry: PLACEHOLDER_ECR_REGISTRY
-  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  repository: PLACEHOLDER_ECR_REPOSITORY/zookeeper
   tag: 3.9.5
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   pullPolicy: IfNotPresent

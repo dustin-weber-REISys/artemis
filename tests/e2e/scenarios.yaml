@@ -203,6 +203,16 @@ scenarios:
     verification:
       - each operation is audit logged without message bodies or credentials
       - production queues are never used for destructive management tests
+  - id: per-source-dead-letter
+    claim: compatibility
+    destructive: true
+    eksRequired: true
+    defaultMode: dry-run
+    action: exhaust redelivery on two disposable source queues and verify automatic creation, retention, browse, and replay of their independent prefixed dead-letter queues
+    verification:
+      - each source has one distinct retained dead-letter queue after max delivery attempts
+      - original address and queue metadata route replay to the correct source
+      - no application destination is created by a producer or consumer when application auto-creation is disabled
   - id: sustained-load
     claim: liveness
     destructive: true

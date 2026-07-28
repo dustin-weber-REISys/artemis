@@ -12,4 +12,6 @@ while (($#)); do
 done
 "$script_dir/validate-static.sh" --report "$report_dir/static-validation.json"
 "$script_dir/validate-scenarios.sh" --report "$report_dir/scenario-validation.json"
+"$script_dir/validate-topology.sh" --report "$report_dir/topology-validation.json"
+"$repo_root/tests/topology/test.sh"
 "$script_dir/validate-charts.sh" --report "$report_dir/chart-validation.json"

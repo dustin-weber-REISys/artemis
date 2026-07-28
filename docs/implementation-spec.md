@@ -19,8 +19,8 @@ The system must:
 4. provide an upgrade path from ActiveMQ Classic 6.2.x clients and behavior.
 5. Integrate with existing Vault Agent Injector, nginx ingress, wildcard TLS
    certificates, Keycloak, Prometheus, and CloudWatch patterns.
-6. Support nine application namespaces distributed across separate `test`,
-   `nonprod`, and `prod` EKS clusters.
+6. Support ten application environments distributed across separate `TEST`,
+   `Nonprod`, and `Prod` EKS clusters.
 7. Avoid paid products and external runtime dependencies.
 
 ## 2. Design Principles
@@ -88,6 +88,18 @@ Sharing ZooKeeper does not share message data. Each broker pair retains
 independent journals, EBS volumes, credentials, policies, services, and
 coordination identity.
 
+The confirmed workload distribution is:
+
+| EKS cluster | Application environments | HA pairs | Broker pods |
+| --- | --- | ---: | ---: |
+| `TEST` | `SKY`, `SKY2` | 2 | 4 |
+| `Nonprod` | `smktest` (`EUT`), `TRN`, `TRN2`, `PT` | 4 | 8 |
+| `Prod` | `PE`, `PP`, `DM`, `PR` | 4 | 8 |
+| **Total** | **10** | **10** | **20** |
+
+The operator and default ZooKeeper ensemble are shared only inside an EKS
+cluster. They are not shared across the three EKS clusters.
+
 ### 4.2 Per Artemis Workload Namespace
 
 Each promotion-grade deployment contains:
@@ -109,6 +121,15 @@ Each promotion-grade deployment contains:
 The two brokers use the same `coordination-id` and compete for activation. At
 runtime exactly one broker is active and the other is passive. Both retain
 separate AZ-scoped volumes. Shared EBS across availability zones is forbidden.
+
+Every named application environment receives its own HA pair. Artemis queue
+and address names are scoped to a broker pair, so multiple environments may
+intentionally use the same queue names. This does not mix messages: the pairs
+have separate journals, PVCs, services, credentials, authorization policies,
+queue catalogs, and coordination identities. Cluster connections, federation,
+or bridges between pairs are disabled unless separately designed and
+approved, and clients must use the Service and credentials for their intended
+environment.
 
 ### 4.3 Message Flow
 
@@ -141,17 +162,19 @@ The profile must be visibly labeled `haMode: none` and disabled by default.
 
 ### 5.2 Test
 
-The `test` cluster is the first complete implementation of the production
+The `TEST` cluster is the first complete implementation of the production
 topology:
 
-- two brokers across distinct zones;
-- three ZooKeeper members across three zones;
+- two independent HA pairs for `SKY` and `SKY2`, four broker pods total;
+- two brokers across distinct zones in each pair;
+- one shared three-member ZooKeeper ensemble across three zones by default;
 - one EBS volume per stateful pod;
 - production-equivalent security, ingress, Vault, monitoring, and Argo CD flow;
 - smaller resource requests and storage; and
 - destructive validation enabled.
 
-Suggested starting point:
+Suggested starting point; Artemis sizing is per HA pair and ZooKeeper sizing is
+for the shared cluster ensemble:
 
 | Component | Replicas | CPU request | Memory request | Storage |
 | --- | ---: | ---: | ---: | ---: |
@@ -160,15 +183,18 @@ Suggested starting point:
 
 ### 5.3 Nonprod
 
-`nonprod` is the release-candidate environment:
+`Nonprod` is the release-candidate cluster:
 
+- four independent HA pairs for `smktest` (`EUT`), `TRN`, `TRN2`, and `PT`,
+  eight broker pods total;
 - identical topology and versions to the proposed production release;
 - production-like queue policy and client compatibility tests;
 - upgrade, rollback, credential rotation, node drain, and AZ disruption tests;
 - representative sustained workload; and
 - larger storage and resources than test.
 
-Suggested starting point:
+Suggested starting point; Artemis sizing is per HA pair and ZooKeeper sizing is
+for the shared cluster ensemble:
 
 | Component | Replicas | CPU request | Memory request | Storage |
 | --- | ---: | ---: | ---: | ---: |
@@ -177,10 +203,13 @@ Suggested starting point:
 
 ### 5.4 Prod
 
-`prod` uses the same topology and tested artifact digests:
+`Prod` uses the same topology and tested artifact digests:
 
-- two brokers across distinct zones;
-- three ZooKeeper members across three zones;
+- four independent HA pairs for `PE`, `PP`, `DM`, and `PR`, eight broker pods
+  total;
+- two brokers across distinct zones in each pair;
+- one shared three-member ZooKeeper ensemble across three zones by default,
+  with a dedicated `PR` ensemble as the recommended isolation option;
 - conservative PodDisruptionBudgets;
 - production alerts and on-call runbooks;
 - backups and volume snapshot policy supplied by the platform;
@@ -191,6 +220,36 @@ Suggested storage baseline is 100 GiB gp3 per broker and 20 GiB gp3 per
 ZooKeeper member. Capacity is not an acceptance value. Final size, IOPS, and
 throughput must be derived from message rate, message size, retention, paging,
 replay, replication latency, and recovery-time measurements.
+
+### 5.5 PR Isolation
+
+`PR` always has the same data and identity boundaries as every other
+environment: its own Artemis HA pair, journals, PVCs, Service, credentials,
+Vault path, authorization policy, queue catalog, console identity, and
+pair-unique ZooKeeper coordination values. NetworkPolicies must admit only
+approved `PR` clients and platform dependencies, and no cluster connection,
+federation, or bridge may connect `PR` to `PE`, `PP`, or `DM` without a
+separate design approval. Resource quotas on the other production namespaces
+and an appropriate priority class for `PR` should prevent ordinary workload
+contention from starving it.
+
+The recommended stronger option inside the existing `Prod` EKS cluster adds:
+
+- dedicated broker node placement through approved labels, taints, and
+  tolerations, while retaining cross-zone anti-affinity; and
+- a dedicated three-member ZooKeeper ensemble with separate PVCs, Service,
+  PodDisruptionBudget, NetworkPolicies, maintenance lifecycle, and monitoring.
+
+This reduces node-capacity and coordination failure coupling but does not
+isolate `PR` from the shared EKS control plane, cluster networking, cluster-wide
+capacity exhaustion, or cluster upgrades.
+
+If the availability, security, or compliance requirement is independence from
+those EKS-wide failures, the hard-isolation option is a separate EKS cluster
+for `PR`, with its own operator, ZooKeeper ensemble, platform integrations, and
+Argo CD destination. That option requires explicit infrastructure and
+operational approval; it is not mandated or provisioned implicitly by this
+repository's three-cluster baseline.
 
 ## 6. Open-Source Component Baseline
 
@@ -252,7 +311,7 @@ or the environment repository supplies:
 - CloudWatch log group metadata; and
 - placement labels or tolerations.
 
-The charts must support all nine namespaces through values without copying
+The charts must support all ten namespaces through values without copying
 templates.
 
 ## 8. Container Image Policy
@@ -349,8 +408,9 @@ The initial compatibility profile must represent:
 - anycast queues for point-to-point traffic;
 - multicast addresses for topics;
 - durable queues;
-- per-address dead-letter behavior compatible with the `DLQ.` convention where
-  feasible;
+- one retained, automatically created `DLQ.<source-address>` queue per source
+  address, backed by a shared internal dead-letter address and filtered using
+  Artemis original-address metadata;
 - redelivery delay and maximum attempts as explicit values;
 - expiry address behavior;
 - paging and producer flow control;
@@ -358,6 +418,20 @@ The initial compatibility profile must represent:
 - queue and address auto-creation disabled in production unless explicitly
   approved; and
 - declarative queue/address definitions in Git.
+
+Application queue creation and dead-letter resource creation are separate
+controls. Promoted environments keep `autoCreateQueues` and
+`autoCreateAddresses` disabled so a producer or consumer cannot create a
+permanent destination through a typo. They enable
+`autoCreateDeadLetterResources`, use `DLQ.` as the dead-letter queue prefix,
+and disable automatic deletion of those broker-created resources so incident
+evidence remains available for triage. A source queue must already exist; its
+corresponding DLQ is created only when a message first exceeds the configured
+delivery-attempt limit.
+
+An isolated test overlay may temporarily enable application address and queue
+auto-creation to verify producer/consumer behavior. That override is not
+promoted to nonproduction or production.
 
 The following Classic behaviors require focused compatibility tests before
 production:
@@ -447,13 +521,38 @@ environment variables or command lines.
   flow and PKCE `S256`; do not distribute a client secret to the browser or
   broker pod.
 - Retain separate viewer and administrator roles.
+- Treat Hawtio as the authenticated presentation layer, not as the final
+  authorization boundary. The Artemis management API must enforce the same
+  permissions for Hawtio and direct Jolokia/JMX requests.
+- Convert OIDC identities and roles to Artemis `UserPrincipal` and
+  `RolePrincipal` principals before Artemis management authorization runs.
+- Grant the viewer role `view` permission and no `edit` permission. Grant the
+  administrator role both `view` and `edit` only for approved `mops.*`
+  management resources and operations. Add narrower operator roles when the
+  legacy environment permits selected actions such as retrying or moving
+  messages without granting full administration.
+- Keep human console roles separate from application roles that grant
+  `send`, `consume`, `browse`, or queue/address lifecycle permissions.
+- Use one Artemis JMX authorization mechanism. The preferred operator/GitOps
+  implementation is reloadable `securityRoles."mops..."` broker properties
+  with `ArtemisRbacMBeanServerBuilder`; when that builder is enabled, remove
+  the competing `authorisation` section from `management.xml`.
 - Route the console through `ingressClassName: nginx`.
 - Terminate TLS at nginx using the environment wildcard certificate.
 - Use `ssl-passthrough: "false"`.
 - Make proxy connect, read, and send timeouts configurable.
 - Restrict ingress by existing network and authentication controls.
-- Keep Jolokia authorization rules least-privilege.
+- Keep Jolokia origin, command, and MBean restrictions least-privilege, but do
+  not use UI visibility or Jolokia routing as a substitute for Artemis
+  management RBAC.
 - Do not put Hawtio in the message path.
+
+The chart currently renders the Keycloak role names and enables the operator's
+management-RBAC switch, but it does not yet render the `mops.*` role grants,
+the Artemis principal-class settings, or removal of the default
+`management.xml` authorization block. Therefore viewer/admin enforcement is a
+pre-production implementation and environment-verification item, not a
+completed control.
 
 ## 13. Observability
 
@@ -559,8 +658,10 @@ The `100,000` message count is a repeatable test fixture, not the claim.
 18. Vault credential rotation and pod restart.
 19. Keycloak login and Hawtio viewer/admin authorization.
 20. Queue browse, move, retry, purge, and DLQ management.
-21. Sustained and burst load with replication enabled.
-22. Broker recovery and safe manual failback.
+21. Per-source DLQ auto-creation, retention, original-destination metadata,
+    and replay using two disposable source queues.
+22. Sustained and burst load with replication enabled.
+23. Broker recovery and safe manual failback.
 
 ### 16.4 Initial Acceptance Criteria
 
@@ -633,7 +734,7 @@ ZooKeeper upgrades occur test, then nonprod, then prod, one member at a time.
 ## 19. Deliverables
 
 - Repository-owned Helm charts for Artemis and ZooKeeper.
-- Argo CD application examples for three clusters and nine namespaces.
+- Argo CD application examples for three clusters and ten namespaces.
 - Generic test, nonprod, prod, and sandbox values.
 - Optional thin Artemis image definition if required.
 - Deterministic validation client image.
@@ -671,6 +772,10 @@ These do not block a generic implementation:
   https://artemis.apache.org/components/artemis/documentation/latest/network-isolation.html
 - Apache Artemis protocols:
   https://artemis.apache.org/components/artemis/documentation/latest/protocols-interoperability.html
+- Apache Artemis management and JMX RBAC:
+  https://artemis.apache.org/components/artemis/documentation/latest/management.html
+- Apache Artemis authentication and authorization:
+  https://artemis.apache.org/components/artemis/documentation/latest/security.html
 - Apache Artemis current release:
   https://artemis.apache.org/components/artemis/download/
 - ArkMQ operator:

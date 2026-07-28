@@ -18,7 +18,8 @@ does not prove application use.
 
 ## Required tests
 
-- Durable anycast queues, selectors, redelivery, and the `DLQ.` convention.
+- Durable anycast queues, selectors, redelivery, and one retained
+  `DLQ.<source-address>` queue per source address.
 - OpenWire send/consume using the existing client libraries.
 - AMQP 1.0 send/consume with durable delivery and explicit acknowledgement.
 - Duplicate retry using the stable `_AMQ_DUPL_ID` property.

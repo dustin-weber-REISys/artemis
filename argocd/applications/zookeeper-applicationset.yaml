@@ -37,8 +37,14 @@ spec:
         targetRevision: main
         path: charts/zookeeper
         helm:
+          # Keep the Helm release name identical to the generated Argo CD
+          # Application name so Argo's instance tracking label remains aligned
+          # with the chart's immutable selectors.
+          releaseName: '{{.environment}}-shared-zookeeper'
           valueFiles:
-            - environments/{{.environment}}/zookeeper-values.yaml
+            # Argo CD resolves same-repository values files relative to the
+            # chart path (charts/zookeeper), not the repository root.
+            - ../../environments/{{.environment}}/zookeeper-values.yaml
       destination:
         server: '{{.clusterServer}}'
         namespace: '{{.platformNamespace}}'

@@ -34,6 +34,10 @@ or redelivered in-flight messages.
 - **Credential, TLS, Keycloak, or Vault issue:** stop rotation/restarts, verify
   file-rendered secret paths and certificate validity without printing values,
   then restart one HA peer at a time.
+- **Dead-letter growth:** preserve the affected per-source DLQ, record depth
+  and original-address metadata without message bodies, stop bulk retry or
+  purge actions, and isolate oversized or repeatedly failing messages into an
+  approved triage queue before restoring normal traffic.
 
 Use `scripts/eks-scenario.sh` for scoped evidence. It is dry-run by default;
 destructive execution requires the exact context, cluster, and namespace

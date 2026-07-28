@@ -10,56 +10,66 @@ spec:
   goTemplateOptions:
     - missingkey=error
   generators:
-    # Three namespaces per cluster make nine generated Applications. The
-    # namespace names are intentionally placeholders and are supplied by the
-    # environment repository or cluster registration process.
-    - list:
-        elements:
-          - environment: test
-            clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
-            workloadKey: test-a
-            workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_A
-          - environment: test
-            clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
-            workloadKey: test-b
-            workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_B
-          - environment: test
-            clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
-            workloadKey: test-c
-            workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_C
-          - environment: nonprod
-            clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
-            workloadKey: nonprod-a
-            workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_A
-          - environment: nonprod
-            clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
-            workloadKey: nonprod-b
-            workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_B
-          - environment: nonprod
-            clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
-            workloadKey: nonprod-c
-            workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_C
-          - environment: prod
-            clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
-            workloadKey: prod-a
-            workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_A
-          - environment: prod
-            clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
-            workloadKey: prod-b
-            workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_B
-          - environment: prod
-            clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
-            clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
-            workloadKey: prod-c
-            workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_C
+    # Each matrix declares an EKS cluster once and combines it with only that
+    # cluster's workloads. This generates the confirmed 2/4/4 topology without
+    # repeating cluster registration details for every Artemis HA pair.
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - environment: test
+                  clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
+                  clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
+          - list:
+              elements:
+                - workloadKey: test-sky
+                  workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
+                  coordinationId: test-sky-01
+                - workloadKey: test-sky2
+                  workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
+                  coordinationId: test-sky2-01
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - environment: nonprod
+                  clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
+                  clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
+          - list:
+              elements:
+                - workloadKey: nonprod-smktest-eut
+                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
+                  coordinationId: np-eut-pair01
+                - workloadKey: nonprod-trn
+                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
+                  coordinationId: np-trn-pair01
+                - workloadKey: nonprod-trn2
+                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
+                  coordinationId: np-trn2-pair01
+                - workloadKey: nonprod-pt
+                  workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
+                  coordinationId: np-pt-pair01
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - environment: prod
+                  clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
+                  clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
+          - list:
+              elements:
+                - workloadKey: prod-pe
+                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PE
+                  coordinationId: prod-pe-pair01
+                - workloadKey: prod-pp
+                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP
+                  coordinationId: prod-pp-pair01
+                - workloadKey: prod-dm
+                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_DM
+                  coordinationId: prod-dm-pair01
+                - workloadKey: prod-pr
+                  workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR
+                  coordinationId: prod-pr-pair01
   template:
     metadata:
       name: '{{.workloadKey}}-artemis'
@@ -74,14 +84,22 @@ spec:
         path: charts/artemis-ha
         helm:
           valueFiles:
-            - environments/{{.environment}}/artemis-values.yaml
+            # Argo CD resolves same-repository values files relative to the
+            # chart path (charts/artemis-ha), not the repository root.
+            - ../../environments/{{.environment}}/artemis-values.yaml
           parameters:
             - name: ha.coordinationId
-              value: '{{.workloadKey}}-pair'
+              # Explicit IDs keep every pair unique while satisfying the
+              # chart's 8-16 character coordination ID constraint.
+              value: '{{.coordinationId}}'
             - name: ha.groupName
               value: '{{.workloadKey}}-group'
+            - name: ha.clusterName
+              value: '{{.workloadKey}}-cluster'
             - name: zookeeper.connectString
-              value: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181
+              # The ZooKeeper Application uses the matching explicit Helm
+              # release name: <environment>-shared-zookeeper.
+              value: '{{.environment}}-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181'
             - name: zookeeper.serviceNamespace
               value: PLACEHOLDER_PLATFORM_NAMESPACE
             # Curator namespaces are unique per HA pair even though the

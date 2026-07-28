@@ -1,9 +1,8 @@
 # Argo CD composition
 
 The examples create one platform operator Application and one shared
-ZooKeeper Application per EKS cluster, followed by nine Artemis workload
-Applications (three namespaces in each of the `test`, `nonprod`, and `prod`
-clusters).
+ZooKeeper Application per EKS cluster, followed by ten Artemis workload
+Applications: two in `test`, four in `nonprod`, and four in `prod`.
 
 Sync waves establish the dependency order:
 
@@ -17,14 +16,13 @@ placeholder ECR OCI repository and reads environment values through Argo CD's
 multi-source `$values` reference. ECR repository credentials and cluster
 registrations are configured outside this repository.
 
-`application-example.yaml` shows the concrete Application shape generated for
-one workload; it is illustrative only and should not be applied alongside the
-ApplicationSet.
-
 The workload ApplicationSet passes a unique Curator namespace for every HA
 pair while pointing all pairs in a cluster at the shared ZooKeeper client
-Service. See [the ZooKeeper topology ADR](../docs/adr-zookeeper-topology.md)
-for the explicit dedicated-ensemble override.
+Service. The ZooKeeper Helm release name is explicitly identical to its
+generated Application name, and each workload derives the corresponding
+`<environment>-shared-zookeeper-zookeeper-client` endpoint. See
+[the ZooKeeper topology ADR](../docs/adr-zookeeper-topology.md) for the
+explicit dedicated-ensemble override.
 
 Replace every `PLACEHOLDER_*` value before applying these examples. No
 credentials, account identifiers, real cluster names, or real domains should

@@ -6,7 +6,7 @@ replicaCount: 3
 
 image:
   registry: PLACEHOLDER_ECR_REGISTRY
-  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  repository: PLACEHOLDER_ECR_REPOSITORY/zookeeper
   tag: 3.9.5
   # The exact mirrored digest is promoted unchanged to nonprod and prod.
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
