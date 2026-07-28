@@ -1,0 +1,219 @@
+{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "zookeeper.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "zookeeper.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "zookeeper.headlessServiceName" . }}
+  replicas: {{ .Values.replicaCount }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "zookeeper.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "zookeeper.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/part-of: shared-messaging
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "zookeeper.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext.pod | nindent 8 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "zookeeper.selectorLabels" . | nindent 18 }}
+              topologyKey: {{ .Values.topology.hostKey | quote }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topology.maxSkew }}
+          topologyKey: {{ .Values.topology.zoneKey | quote }}
+          whenUnsatisfiable: {{ .Values.topology.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "zookeeper.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: zookeeper
+          image: {{ include "zookeeper.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              ordinal="${HOSTNAME##*-}"
+              export ZOO_MY_ID="$((ordinal + 1))"
+              if [ -n "${ZK_KEYSTORE_PASSWORD:-}" ]; then
+                export JVMFLAGS="${JVMFLAGS:-} -Dzookeeper.ssl.keyStore.password=${ZK_KEYSTORE_PASSWORD} -Dzookeeper.ssl.trustStore.password=${ZK_TRUSTSTORE_PASSWORD:-}"
+              fi
+              if [ -n "${ZK_JAAS_FILE:-}" ]; then
+                export JVMFLAGS="${JVMFLAGS:-} -Djava.security.auth.login.config=${ZK_JAAS_FILE}"
+              fi
+              exec /docker-entrypoint.sh
+          ports:
+            - name: client
+              containerPort: {{ .Values.service.client.port }}
+              protocol: TCP
+            {{- if .Values.tls.client.enabled }}
+            - name: client-tls
+              containerPort: {{ .Values.tls.client.port }}
+              protocol: TCP
+            {{- end }}
+            - name: quorum
+              containerPort: 2888
+              protocol: TCP
+            - name: leader-election
+              containerPort: 3888
+              protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: JVMFLAGS
+              value: {{ .Values.jvm.heapOpts | quote }}
+            - name: ZOO_LOG_DIR
+              value: /tmp/zookeeper
+            - name: ZOO_4LW_COMMANDS
+              value: {{ .Values.configuration.fourLetterWordWhitelist | quote }}
+            - name: ZOO_SERVERS
+              value: {{ include "zookeeper.zooServers" . | quote }}
+            {{- if .Values.tls.client.enabled }}
+            - name: ZK_KEYSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tls.client.secretName }}
+                  key: {{ .Values.tls.client.keyStorePasswordKey }}
+            - name: ZK_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tls.client.secretName }}
+                  key: {{ .Values.tls.client.trustStorePasswordKey }}
+            {{- end }}
+            {{- if .Values.authentication.enabled }}
+            - name: ZK_JAAS_FILE
+              value: /etc/zookeeper/auth/{{ .Values.authentication.jaasFile }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext.container | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - zkServer.sh status
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - zkServer.sh status
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/bash
+                  - -ec
+                  - zkServer.sh stop || true
+          volumeMounts:
+            - name: config
+              mountPath: /conf/zoo.cfg
+              subPath: zoo.cfg
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp/zookeeper
+            {{- if .Values.tls.client.enabled }}
+            - name: {{ include "zookeeper.tlsVolumeName" . }}
+              mountPath: /etc/zookeeper/tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.authentication.enabled }}
+            - name: {{ include "zookeeper.authVolumeName" . }}
+              mountPath: /etc/zookeeper/auth
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "zookeeper.configMapName" . }}
+            defaultMode: 0444
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.tls.client.enabled }}
+        - name: {{ include "zookeeper.tlsVolumeName" . }}
+          secret:
+            secretName: {{ .Values.tls.client.secretName }}
+            defaultMode: 0440
+        {{- end }}
+        {{- if .Values.authentication.enabled }}
+        - name: {{ include "zookeeper.authVolumeName" . }}
+          secret:
+            secretName: {{ .Values.authentication.jaasSecretName }}
+            items:
+              - key: {{ .Values.authentication.jaasFile }}
+                path: {{ .Values.authentication.jaasFile }}
+            defaultMode: 0440
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "zookeeper.labels" . | nindent 10 }}
+        {{- with .Values.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.persistence.accessModes | nindent 10 }}
+        storageClassName: {{ .Values.persistence.storageClass | quote }}
+        volumeMode: {{ .Values.persistence.volumeMode }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+  {{- end }}
+{{- end }}

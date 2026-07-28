@@ -1,0 +1,25 @@
+# Sandbox composition only: the chart emits no ZooKeeper resources. Pair this
+# with the Artemis sandbox values that set haMode: none and use one broker.
+# This profile has no HA, AZ-loss, durability, or promotion claim.
+enabled: false
+haMode: none
+replicaCount: 1
+
+image:
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  tag: 3.9.5
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: IfNotPresent
+
+persistence:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+metrics:
+  enabled: false

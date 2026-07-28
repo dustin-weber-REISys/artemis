@@ -1,0 +1,21 @@
+# Generic workload overlay consumed by the future Artemis HA chart. The
+# ApplicationSet supplies namespace, coordination ID, and shared-ZooKeeper
+# service parameters per generated Application.
+haMode: quorum
+replicaCount: 2
+coordination:
+  backend: zookeeper
+  zookeeper:
+    ensembleMode: shared
+    serviceName: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE
+    serviceNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    curatorNamespace: PLACEHOLDER_TEST_CURATOR_NAMESPACE_FROM_APPLICATIONSET
+    dedicatedEnsemble:
+      enabled: false
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+persistence:
+  storageClass: PLACEHOLDER_TEST_GP3_STORAGE_CLASS
+  size: 20Gi

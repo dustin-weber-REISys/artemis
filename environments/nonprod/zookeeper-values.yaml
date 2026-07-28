@@ -1,0 +1,64 @@
+# Nonprod keeps the tested three-member topology and artifact identities while
+# increasing capacity for release-candidate and failure testing.
+enabled: true
+haMode: quorum
+replicaCount: 3
+
+image:
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  tag: 3.9.5
+  # Promote the exact digest that passed the test acceptance suite.
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+persistence:
+  enabled: true
+  storageClass: PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  volumeMode: Filesystem
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 1
+    memory: 2Gi
+
+jvm:
+  heapOpts: -Xms512m -Xmx1Gi
+
+networkPolicy:
+  enabled: true
+  brokerNamespaceSelector:
+    matchLabels:
+      messaging.example.io/cluster: PLACEHOLDER_NONPROD_EKS_CLUSTER
+  brokerPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: artemis
+  monitoringNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: PLACEHOLDER_NONPROD_MONITORING_NAMESPACE
+  monitoringPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: monitoring
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: PLACEHOLDER_NONPROD_PROMETHEUS_RELEASE
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  prometheusRule:
+    enabled: true
+    labels:
+      release: PLACEHOLDER_NONPROD_PROMETHEUS_RELEASE
+    rules:
+      quorumUnavailableFor: 5m

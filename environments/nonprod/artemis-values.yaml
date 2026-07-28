@@ -1,0 +1,20 @@
+# Release-candidate capacity with the same HA and ZooKeeper coordination
+# semantics as test and prod.
+haMode: quorum
+replicaCount: 2
+coordination:
+  backend: zookeeper
+  zookeeper:
+    ensembleMode: shared
+    serviceName: PLACEHOLDER_SHARED_ZOOKEEPER_SERVICE
+    serviceNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    curatorNamespace: PLACEHOLDER_NONPROD_CURATOR_NAMESPACE_FROM_APPLICATIONSET
+    dedicatedEnsemble:
+      enabled: false
+resources:
+  requests:
+    cpu: 1
+    memory: 4Gi
+persistence:
+  storageClass: PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
+  size: 50Gi

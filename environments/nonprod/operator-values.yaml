@@ -1,0 +1,6 @@
+# Promote the exact operator image digest that passed the test suite.
+image:
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/arkmq-operator
+  tag: 2.2.0
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

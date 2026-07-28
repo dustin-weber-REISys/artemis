@@ -1,0 +1,165 @@
+# Promotion profiles must retain this quorum topology. Sandbox is the only
+# supported composition that sets enabled=false and haMode=none.
+enabled: true
+haMode: quorum
+replicaCount: 3
+
+image:
+  # Mirror the official apache/zookeeper:3.9.5 image into ECR and replace the
+  # explicit placeholders below during environment promotion.
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  tag: 3.9.5
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  client:
+    type: ClusterIP
+    port: 2181
+    annotations: {}
+  headless:
+    annotations: {}
+
+configuration:
+  tickTime: 2000
+  initLimit: 10
+  syncLimit: 5
+  maxClientConnections: 60
+  fourLetterWordWhitelist: ruok,mntr,stat,srvr
+  autopurgeSnapRetainCount: 3
+  autopurgePurgeInterval: 1
+  adminServerEnabled: false
+  preAllocSize: 65536
+  snapCount: 100000
+  minSessionTimeout: 4000
+  maxSessionTimeout: 18000
+  extra: {}
+
+jvm:
+  heapOpts: -Xms512m -Xmx512m
+
+persistence:
+  enabled: true
+  storageClass: PLACEHOLDER_GP3_STORAGE_CLASS
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  volumeMode: Filesystem
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 1
+    memory: 2Gi
+
+probes:
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  readiness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+terminationGracePeriodSeconds: 30
+
+securityContext:
+  pod:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  container:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+topology:
+  zoneKey: topology.kubernetes.io/zone
+  hostKey: kubernetes.io/hostname
+  maxSkew: 1
+  whenUnsatisfiable: DoNotSchedule
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: true
+  brokerNamespaceSelector:
+    matchLabels:
+      messaging.example.io/cluster: PLACEHOLDER_CLUSTER_NAME
+  brokerPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: artemis
+  monitoringNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: PLACEHOLDER_MONITORING_NAMESPACE
+  monitoringPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: monitoring
+
+metrics:
+  enabled: true
+  port: 7000
+  serviceMonitor:
+    enabled: false
+    labels:
+      release: PLACEHOLDER_PROMETHEUS_RELEASE
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  prometheusRule:
+    enabled: false
+    labels:
+      release: PLACEHOLDER_PROMETHEUS_RELEASE
+    rules:
+      quorumUnavailableFor: 5m
+
+# These settings only add references to Kubernetes Secrets. Secret contents are
+# supplied by Vault or the environment repository and never belong in Git.
+tls:
+  client:
+    enabled: false
+    port: 2281
+    secretName: PLACEHOLDER_ZOOKEEPER_TLS_SECRET
+    keyStoreFile: keystore.jks
+    trustStoreFile: truststore.jks
+    keyStorePasswordKey: keystore-password
+    trustStorePasswordKey: truststore-password
+  quorum:
+    enabled: false
+
+authentication:
+  enabled: false
+  jaasSecretName: PLACEHOLDER_ZOOKEEPER_JAAS_SECRET
+  jaasFile: jaas.conf
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []

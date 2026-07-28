@@ -1,0 +1,39 @@
+# Illustrative generated Application shape. The workload ApplicationSet is the
+# deployable source of truth and creates the nine concrete Applications.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-a-artemis-example
+  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: messaging-platform
+  source:
+    repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+    targetRevision: main
+    path: charts/artemis-ha
+    helm:
+      valueFiles:
+        - environments/test/artemis-values.yaml
+      parameters:
+        - name: global.clusterName
+          value: PLACEHOLDER_TEST_EKS_CLUSTER
+        - name: global.namespace
+          value: PLACEHOLDER_TEST_NAMESPACE_A
+        - name: coordination.id
+          value: PLACEHOLDER_TEST_EKS_CLUSTER-test-a
+        - name: coordination.zookeeper.ensembleMode
+          value: shared
+        - name: coordination.zookeeper.curatorNamespace
+          value: /artemis/test/test-a
+  destination:
+    server: https://PLACEHOLDER_TEST_EKS_API_SERVER
+    namespace: PLACEHOLDER_TEST_NAMESPACE_A
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

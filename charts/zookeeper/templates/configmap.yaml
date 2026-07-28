@@ -1,0 +1,48 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "zookeeper.configMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "zookeeper.labels" . | nindent 4 }}
+data:
+  zoo.cfg: |
+    tickTime={{ .Values.configuration.tickTime }}
+    initLimit={{ .Values.configuration.initLimit }}
+    syncLimit={{ .Values.configuration.syncLimit }}
+    dataDir=/data/data
+    dataLogDir=/data/datalog
+    clientPort={{ .Values.service.client.port }}
+    clientPortAddress=0.0.0.0
+    maxClientCnxns={{ .Values.configuration.maxClientConnections }}
+    4lw.commands.whitelist={{ .Values.configuration.fourLetterWordWhitelist }}
+    autopurge.snapRetainCount={{ .Values.configuration.autopurgeSnapRetainCount }}
+    autopurge.purgeInterval={{ .Values.configuration.autopurgePurgeInterval }}
+    preAllocSize={{ .Values.configuration.preAllocSize }}
+    snapCount={{ .Values.configuration.snapCount }}
+    minSessionTimeout={{ .Values.configuration.minSessionTimeout }}
+    maxSessionTimeout={{ .Values.configuration.maxSessionTimeout }}
+    admin.enableServer={{ .Values.configuration.adminServerEnabled }}
+    standaloneEnabled={{ eq .Values.haMode "none" }}
+    metricsProvider.className=org.apache.zookeeper.metrics.prometheus.PrometheusMetricsProvider
+    metricsProvider.httpPort={{ .Values.metrics.port }}
+    {{- include "zookeeper.configServerLines" . | nindent 4 }}
+    {{- if .Values.tls.client.enabled }}
+    secureClientPort={{ .Values.tls.client.port }}
+    ssl.keyStore.location=/etc/zookeeper/tls/{{ .Values.tls.client.keyStoreFile }}
+    ssl.trustStore.location=/etc/zookeeper/tls/{{ .Values.tls.client.trustStoreFile }}
+    {{- end }}
+    {{- if .Values.tls.quorum.enabled }}
+    sslQuorum=true
+    ssl.quorum.keyStore.location=/etc/zookeeper/tls/{{ .Values.tls.client.keyStoreFile }}
+    ssl.quorum.trustStore.location=/etc/zookeeper/tls/{{ .Values.tls.client.trustStoreFile }}
+    {{- end }}
+    {{- if .Values.authentication.enabled }}
+    authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+    requireClientAuthScheme=sasl
+    {{- end }}
+    {{- range $key, $value := .Values.configuration.extra }}
+    {{ $key }}={{ $value }}
+    {{- end }}
+{{- end }}

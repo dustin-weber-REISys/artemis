@@ -1,0 +1,64 @@
+# Test is promotion-grade topology with smaller capacity. Replace only the
+# explicit placeholders in the environment repository or Argo CD parameters.
+enabled: true
+haMode: quorum
+replicaCount: 3
+
+image:
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/apache-zookeeper
+  tag: 3.9.5
+  # The exact mirrored digest is promoted unchanged to nonprod and prod.
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+persistence:
+  enabled: true
+  storageClass: PLACEHOLDER_TEST_GP3_STORAGE_CLASS
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  volumeMode: Filesystem
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+jvm:
+  heapOpts: -Xms256m -Xmx512m
+
+networkPolicy:
+  enabled: true
+  brokerNamespaceSelector:
+    matchLabels:
+      messaging.example.io/cluster: PLACEHOLDER_TEST_EKS_CLUSTER
+  brokerPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: artemis
+  monitoringNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: PLACEHOLDER_TEST_MONITORING_NAMESPACE
+  monitoringPodSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: monitoring
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: PLACEHOLDER_TEST_PROMETHEUS_RELEASE
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  prometheusRule:
+    enabled: true
+    labels:
+      release: PLACEHOLDER_TEST_PROMETHEUS_RELEASE
+    rules:
+      quorumUnavailableFor: 5m

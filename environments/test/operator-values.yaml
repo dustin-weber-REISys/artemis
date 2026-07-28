@@ -1,0 +1,7 @@
+# Generic value promotion input for the mirrored ArkMQ operator chart.
+# Align the key names with the mirrored chart's verified 2.2.0 schema.
+image:
+  registry: PLACEHOLDER_ECR_REGISTRY
+  repository: PLACEHOLDER_ECR_REPOSITORY/arkmq-operator
+  tag: 2.2.0
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

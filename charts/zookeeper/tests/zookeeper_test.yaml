@@ -1,0 +1,79 @@
+suite: zookeeper chart
+templates:
+  - templates/configmap.yaml
+  - templates/services.yaml
+  - templates/statefulset.yaml
+  - templates/pdb.yaml
+  - templates/networkpolicy.yaml
+  - templates/servicemonitor.yaml
+tests:
+  - it: renders a three-member quorum by default
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+        template: templates/statefulset.yaml
+      - equal:
+          path: spec.serviceName
+          value: RELEASE-NAME-zookeeper-headless
+        template: templates/statefulset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].image
+          content: "@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        template: templates/statefulset.yaml
+      - matchRegex:
+          path: data["zoo.cfg"]
+          pattern: "server\\.1=.*-0\\.RELEASE-NAME-zookeeper-headless"
+        template: templates/configmap.yaml
+      - matchRegex:
+          path: data["zoo.cfg"]
+          pattern: "server\\.3=.*-2\\.RELEASE-NAME-zookeeper-headless"
+        template: templates/configmap.yaml
+
+  - it: keeps peer and client services separate
+    asserts:
+      - equal:
+          path: spec.clusterIP
+          value: None
+        template: templates/services.yaml
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-zookeeper-headless
+        template: templates/services.yaml
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-zookeeper-client
+        template: templates/services.yaml
+        documentIndex: 1
+
+  - it: protects quorum with a one-pod disruption budget
+    asserts:
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+        template: templates/pdb.yaml
+
+  - it: can render a sandbox composition with no resources
+    set:
+      enabled: false
+      haMode: none
+      replicaCount: 1
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/statefulset.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/networkpolicy.yaml
+
+  - it: renders a ServiceMonitor only when enabled
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - isKind:
+          of: ServiceMonitor
+        template: templates/servicemonitor.yaml
+      - equal:
+          path: spec.endpoints[0].port
+          value: metrics
+        template: templates/servicemonitor.yaml

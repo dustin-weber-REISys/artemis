@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shared-zookeeper
+  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        elements:
+          - environment: test
+            clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
+            clusterServer: https://PLACEHOLDER_TEST_EKS_API_SERVER
+            platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+          - environment: nonprod
+            clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
+            clusterServer: https://PLACEHOLDER_NONPROD_EKS_API_SERVER
+            platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+          - environment: prod
+            clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
+            clusterServer: https://PLACEHOLDER_PROD_EKS_API_SERVER
+            platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+  template:
+    metadata:
+      name: '{{.environment}}-shared-zookeeper'
+      namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+      annotations:
+        argocd.argoproj.io/sync-wave: "-10"
+    spec:
+      project: messaging-platform
+      source:
+        repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+        targetRevision: main
+        path: charts/zookeeper
+        helm:
+          valueFiles:
+            - environments/{{.environment}}/zookeeper-values.yaml
+      destination:
+        server: '{{.clusterServer}}'
+        namespace: '{{.platformNamespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
