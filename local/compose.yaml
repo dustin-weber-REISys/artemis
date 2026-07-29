@@ -23,7 +23,9 @@ services:
       AMQ_ROLE: admin
       AMQ_CLUSTERED: "false"
       AMQ_RESET_CONFIG: "false"
-      AMQ_EXTRA_ARGS: ""
+      # Local-only console access: allow Hawtio's browser session on the
+      # published localhost port to invoke the Jolokia management endpoint.
+      AMQ_EXTRA_ARGS: "--relax-jolokia"
     depends_on:
       broker-volume-init:
         condition: service_completed_successfully

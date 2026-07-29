@@ -24,8 +24,9 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
 fi
 
 compose_args=(--env-file "$repo_root/.env.example" -f "$repo_root/compose.yaml")
-if docker compose "${compose_args[@]}" config --quiet \
-  && docker compose --profile smoke "${compose_args[@]}" config --quiet; then
+if rendered=$(docker compose "${compose_args[@]}" config) \
+  && docker compose --profile smoke "${compose_args[@]}" config --quiet \
+  && grep -Fq 'AMQ_EXTRA_ARGS: --relax-jolokia' <<<"$rendered"; then
   printf '%s\n' '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"compose","status":"PASS","file":"local/compose.yaml"}' > "$report"
   printf '%s\n' 'compose validation: PASS'
 else

@@ -14,10 +14,11 @@ authoritative for local credentials and supported host-port overrides.
 ## Persistence and reset
 
 Normal stop/start preserves the named volume. The first start creates the broker
-instance in that volume, so changing creation-time credentials does not
-reconfigure an existing instance. Use the destructive `make local-reset` target
-when a new local broker instance is intended; it removes this Compose project's
-broker volume and all retained queues and messages.
+instance in that volume, so changing creation-time credentials or Jolokia
+settings does not reconfigure an existing instance. After updating from a
+version that did not enable relaxed local Jolokia access, run the destructive
+`make local-reset` target once before `make local-up`. The reset removes this
+Compose project's broker volume and all retained queues and messages.
 
 The local Makefile keeps the Compose project name `artemis`, preserving the
 named-volume identity used before this directory split.
@@ -34,6 +35,11 @@ anonymous access enabled even when explicit client credentials are supplied.
 The values in `.env.example` are the supported local client and console
 credentials, but this stack does not demonstrate strict authentication. Never
 reuse them outside local development.
+
+The local broker is created with `--relax-jolokia` so the Hawtio console opened
+at `http://localhost:8161/console` can display its Artemis management views,
+including connections, addresses, queues, and messages. This relaxation is for
+the standalone localhost workflow only and is not a production security model.
 
 The relevant upstream behavior is documented in the
 [ArkMQ basic image tutorial](https://arkmq.org/docs/tutorials/deploybasicimage/)
