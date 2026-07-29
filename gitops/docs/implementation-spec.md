@@ -31,7 +31,8 @@ changeable implementation facts belong in executable files:
 
 | Concern | Authoritative source |
 | --- | --- |
-| Generated clusters, workloads, namespaces, and coordination identities | [`argocd/applications`](../argocd/applications) |
+| Local-cluster child Applications, workloads, namespaces, and coordination identities | [`argocd/bootstrap`](../argocd/bootstrap) and [`argocd/topology`](../argocd/topology) |
+| Argo CD repository credentials, `messaging-platform` AppProject policy, and root Application | Per-cluster EKS Terraform inputs |
 | Current component and image versions | Chart values, schemas, and environment overlays under [`charts`](../charts) and [`environments`](../environments) |
 | Supported Artemis operands | [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json) |
 | Rendered broker and ZooKeeper behavior | Chart templates under [`charts`](../charts) |
@@ -76,9 +77,11 @@ volumes, services, credentials, policies, addresses, or queues. Cross-pair
 cluster connections, federation, and bridges are absent unless separately
 designed and approved.
 
-The current generated workload distribution is defined and validated from the
-Artemis ApplicationSet, not repeated here. Sandbox is intentionally
-non-promotable and makes no HA, AZ-loss, durability, or upgrade claim.
+Each EKS cluster runs its own Argo CD instance and consumes only its matching
+bootstrap and topology file. The current generated workload distribution is
+defined and validated from the environment-local Artemis ApplicationSets, not
+repeated here. Sandbox is intentionally non-promotable and makes no HA,
+AZ-loss, durability, or upgrade claim.
 
 ### Stronger isolation
 
@@ -192,12 +195,12 @@ for acknowledged messages, and follow
 | --- | --- |
 | AWS/platform | Account, network, EKS, IAM, node capacity, EBS CSI, storage classes, KMS, snapshots, and restore infrastructure |
 | Supply chain | ECR repositories, mirroring, SBOM, scanning, signing, provenance, and promotion evidence |
-| GitOps platform | Argo CD installation, cluster registration, repository/OCI credentials, and bootstrap control |
+| GitOps platform | Per-cluster Argo CD installation, standalone repository/OCI credentials, local root Application, project policy, and bootstrap control |
 | Security/Vault | Secret values, Vault auth mounts, policies, roles, certificate material, and approved secret materialization |
 | Identity | Keycloak realm, public clients, redirect URIs, claims, groups, and role assignments |
 | Application owners | Queue catalog, client identities, compatibility evidence, traffic quiescence, cutover, and business reconciliation |
 | Operations | Monitoring selection, log collection, alarms, backup policy, incident command, and production approval |
-| This repository | Generic charts, Argo composition, schemas, environment baselines, validation harness, ADRs, and runbooks |
+| This repository | Artemis charts and versions, local-cluster Argo composition, workload topology, schemas, environment baselines, validation harness, ADRs, and runbooks |
 
 ## Validation and promotion gates
 

@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: artemis-workloads
+  name: test-artemis-workloads
   namespace: PLACEHOLDER_ARGOCD_NAMESPACE
   annotations:
     argocd.argoproj.io/sync-wave: "0"
@@ -14,13 +14,17 @@ spec:
         generators:
           - git:
               repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-              revision: main
+              revision: PLACEHOLDER_GITOPS_REVISION
               files:
-                - path: gitops/argocd/topology/catalog.yaml
+                - path: gitops/argocd/topology/test.yaml
           - list:
-              # Expand broker pairs while retaining the catalog's cluster map
-              # for environment-keyed lookups in the Application template.
               elementsYaml: '{{ .brokerPairs | toJson }}'
+      selector:
+        matchLabels:
+          enabled: "true"
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
   template:
     metadata:
       name: '{{.brokerPairName}}-artemis'
@@ -31,34 +35,26 @@ spec:
       project: messaging-platform
       source:
         repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-        targetRevision: main
+        targetRevision: PLACEHOLDER_GITOPS_REVISION
         path: gitops/charts/artemis-ha
         helm:
           valueFiles:
-            # Argo CD resolves same-repository values files relative to the
-            # chart path (gitops/charts/artemis-ha), not the repository root.
             - ../../environments/{{.environment}}/artemis-values.yaml
           parameters:
             - name: ha.coordinationId
-              # Explicit IDs keep every pair unique while satisfying the
-              # chart's 8-16 character coordination ID constraint.
               value: '{{.coordinationId}}'
             - name: ha.groupName
               value: '{{.brokerPairName}}-group'
             - name: ha.clusterName
               value: '{{.brokerPairName}}-cluster'
             - name: zookeeper.connectString
-              # The ZooKeeper Application uses the matching explicit Helm
-              # release name: <environment>-shared-zookeeper.
-              value: '{{.environment}}-shared-zookeeper-zookeeper-client.{{(index .clusters .environment).platformNamespace}}.svc.cluster.local:2181'
+              value: '{{.environment}}-shared-zookeeper-zookeeper-client.{{.platformNamespace}}.svc.cluster.local:2181'
             - name: zookeeper.serviceNamespace
-              value: '{{(index .clusters .environment).platformNamespace}}'
-            # Curator namespaces are unique per HA pair even though the
-            # ZooKeeper service is shared at cluster scope.
+              value: '{{.platformNamespace}}'
             - name: zookeeper.curatorNamespace
               value: 'artemis/{{.environment}}/{{.brokerPairName}}'
       destination:
-        server: '{{(index .clusters .environment).clusterServer}}'
+        server: https://kubernetes.default.svc
         namespace: '{{.workloadNamespace}}'
       syncPolicy:
         automated:
@@ -66,9 +62,7 @@ spec:
           selfHeal: true
         managedNamespaceMetadata:
           labels:
-            # The shared ZooKeeper NetworkPolicy admits only broker pods in
-            # workload namespaces belonging to this EKS cluster.
-            messaging.example.io/cluster: '{{(index .clusters .environment).clusterName}}'
+            messaging.example.io/cluster: '{{.clusterName}}'
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true

@@ -20,9 +20,9 @@ make local-down
 
 ### [`gitops`](gitops)
 
-The deployable EKS baseline: Argo CD ApplicationSets, Helm charts, environment
-overlays, topology, acceptance scenarios, runbooks, and their validation
-scripts.
+The deployable EKS baseline: standalone per-cluster Argo CD bootstraps, Helm
+charts, environment overlays, topology, acceptance scenarios, runbooks, and
+their validation scripts.
 
 ```sh
 make validate-topology

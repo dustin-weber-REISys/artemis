@@ -16,19 +16,20 @@ syntactically valid and can pass rendering while remaining unusable or unsafe.
 The effective rendered configuration must contain no placeholder, example
 endpoint, all-zero digest, or secret value.
 
-The generated topology is authoritative in
-[`argocd/applications`](../argocd/applications). Chart defaults and constraints
-are authoritative in [`charts`](../charts), and promotion overlays are in
-[`environments`](../environments). Do not copy those volatile values into an
-environment checklist.
+The local-cluster bootstraps are authoritative in
+[`argocd/bootstrap`](../argocd/bootstrap), and each cluster's broker-pair
+inventory is authoritative in [`argocd/topology`](../argocd/topology). Chart
+defaults and constraints are authoritative in [`charts`](../charts), and
+promotion overlays are in [`environments`](../environments). Do not copy those
+volatile values into an environment checklist.
 
 ## Ownership and handoffs
 
 | Layer | Owner and handoff required before sync |
 | --- | --- |
-| AWS/EKS | Platform team supplies registered cluster destinations, network paths, node capacity, placement labels, EBS CSI, encrypted delayed-binding storage, KMS, and restore capability. |
+| AWS/EKS | Platform team supplies the local cluster, network paths, node capacity, placement labels, EBS CSI, encrypted delayed-binding storage, KMS, and restore capability. |
 | Artifact supply chain | Platform team supplies private registry/chart access and evidence for exact mirrored digests, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
-| Argo CD | GitOps team supplies installation, ApplicationSet support, cluster registration, Git/OCI credentials, project policy, and a controlled bootstrap mechanism. |
+| Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git/OCI credentials, project policy, the Terraform-created root Application, and a controlled bootstrap mechanism. |
 | Vault and certificates | Security/platform team supplies auth mounts, least-privilege policies and roles, CA/TLS material, workload-bound secret references, and any Secret synchronization. |
 | Keycloak and ingress | Identity/network teams supply public OIDC clients, exact redirect URIs, claims and role mappings, DNS, TLS Secrets, ingress labels, and reachable issuer/JWKS endpoints. |
 | Observability and backup | Operations supplies Prometheus discovery, log collection and retention, alarms, snapshots, restore procedures, and on-call ownership. |
@@ -59,9 +60,9 @@ Complete these checks before changing Argo CD resources:
 
 ### Cluster services and network
 
-- Argo CD and its ApplicationSet controller, nginx ingress, Vault Agent
-  Injector, Prometheus CRDs (when enabled), a NetworkPolicy-enforcing CNI,
-  DNS, and the cluster log collector are healthy.
+- The cluster-local Argo CD and its ApplicationSet controller, nginx ingress,
+  Vault Agent Injector, Prometheus CRDs (when enabled), a
+  NetworkPolicy-enforcing CNI, DNS, and the cluster log collector are healthy.
 - Actual namespace and pod labels are available for every NetworkPolicy
   selector. External Vault, Keycloak, DNS, or monitoring endpoints receive
   explicit least-privilege egress; pod selectors do not admit external IPs.
@@ -86,7 +87,7 @@ platform. This repository does not mandate a vendor for those functions.
 ### 1. Approve and mirror artifacts
 
 Resolve current artifact references from chart values, environment overlays,
-and the operator ApplicationSet. For every artifact:
+and the environment-local operator Applications. For every artifact:
 
 1. copy the exact upstream artifact into the approved registry;
 2. verify the destination digest and target architecture;
@@ -102,10 +103,33 @@ repository name appears equivalent.
 
 ### 2. Integrate Argo CD
 
-Update the project and ApplicationSets under [`argocd`](../argocd) with the
-approved Argo namespace, Git/OCI sources, immutable revision policy, registered
-cluster destinations, platform namespace, workload namespaces, and registry
-locations.
+Update the selected directory under
+[`argocd/bootstrap`](../argocd/bootstrap) and its matching
+[`topology`](../argocd/topology) file with the approved Argo namespace,
+Git/OCI sources, immutable revision policy, local platform namespace, workload
+namespaces, cluster identity, and registry locations.
+
+In the cluster's Terraform configuration:
+
+1. register the Artemis Git repository through `standalone_argocd_repos`, and
+   register the private OCI repository through the owning module's existing
+   Argo CD registry credential mechanism;
+2. create the `messaging-platform` project through
+   `argocd_additional_projects`;
+3. add one Artemis root entry to `argocd_repos` whose source path is exactly
+   `gitops/argocd/bootstrap/<environment>`; and
+4. use the same approved branch, tag, or commit for the root entry and every
+   `PLACEHOLDER_GITOPS_REVISION` in that environment's child manifests.
+
+Do not register the other EKS clusters as destinations. Every child
+Application uses `https://kubernetes.default.svc`. The standalone repository
+must not create or modify the AppProject that authorizes its own Applications.
+
+The Terraform project must allow the local platform and workload namespaces,
+the Artemis Git and mirrored OCI sources, and the exact cluster-scoped kinds
+rendered by the approved ArkMQ chart. Because the current operator values set
+`clusterScoped: true`, the allowlist includes `Namespace`,
+`CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
 
 Keep the operator's cluster scope, CRD ownership, and watch scope as
 architecture decisions. Narrowing or expanding them requires RBAC and
@@ -115,12 +139,13 @@ The ZooKeeper release name and the Artemis connection template must continue
 to resolve to the same client service. Coordination IDs and Curator namespaces
 must remain unique per broker pair. These invariants are checked by repository
 validation; do not create parallel standalone Applications for workloads
-already generated by an ApplicationSet.
+already generated by the local ApplicationSet.
 
 ### 3. Supply environment and workload values
 
 Put settings shared by a promotion stage in its file under
-[`environments`](../environments). Put workload-specific identity, console,
+[`environments`](../environments). Put the approved broker-pair identities and
+namespaces in the matching topology file. Put workload-specific console,
 Vault, client allowlist, queue, capacity, or alert differences in explicit
 workload configuration or ApplicationSet parameters.
 
@@ -202,22 +227,29 @@ parent bootstrap or a phased procedure enforces health checks.
 
 1. Approve artifacts and all AWS, cluster, identity, secret, observability, and
    backup prerequisites.
-2. Register clusters and configure Git/private-OCI credentials in Argo CD.
+2. In each cluster's Terraform, configure this standalone Git repository,
+   private-OCI credentials, the `messaging-platform` project through
+   `argocd_additional_projects`, and the root Application through
+   `argocd_repos`, pointing only to that cluster's bootstrap path and approved
+   revision.
 3. Create Vault policies/roles/data references, Keycloak clients, TLS
    material, and the namespace/pod labels required by policy.
 4. Run the canonical repository validation and inspect effective rendered
    manifests for placeholders, secret values, identity collisions, mutable
    images, and incorrect selectors.
-5. Apply the AppProject.
-6. Apply the operator ApplicationSet and wait for each operator and its CRDs to
+5. Verify Terraform created the local `messaging-platform` AppProject and that
+   its effective source, destination, and cluster-resource policy matches the
+   rendered operator and the approved topology.
+6. Sync the operator Application and wait for the operator and its CRDs to
    become healthy.
-7. Apply the ZooKeeper ApplicationSet and verify placement, separate PVCs,
-   quorum, policy, and metrics.
-8. Apply one test Artemis workload and complete the first-workload checks
-   below.
-9. Add remaining test workloads one at a time, then promote the exact artifacts
-   to nonprod for load, failure, upgrade, rollback, rotation, and authorization
-   testing.
+7. Sync the ZooKeeper Application and verify placement, separate PVCs, quorum,
+   policy, and metrics.
+8. Preview the local workload ApplicationSet, change `enabled` to `"true"` for
+   one test broker pair, allow it to reconcile, and complete the first-workload
+   checks below.
+9. Enable remaining test workloads one at a time, then promote the exact
+   artifacts to nonprod for load, failure, upgrade, rollback, rotation, and
+   authorization testing.
 10. Obtain application, security, platform, and operations approval before
     adding production workloads one at a time.
 

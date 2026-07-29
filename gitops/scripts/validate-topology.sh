@@ -3,14 +3,14 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-catalog_file="$repo_root/argocd/topology/catalog.yaml"
-applications_dir="$repo_root/argocd/applications"
+topology_dir="$repo_root/argocd/topology"
+bootstrap_dir="$repo_root/argocd/bootstrap"
 report="$repo_root/reports/topology-validation.json"
 
 while (($#)); do
   case "$1" in
-    --catalog|--file) catalog_file=$2; shift 2 ;;
-    --applications-dir) applications_dir=$2; shift 2 ;;
+    --topology-dir) topology_dir=$2; shift 2 ;;
+    --bootstrap-dir) bootstrap_dir=$2; shift 2 ;;
     --report) report=$2; shift 2 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -20,17 +20,6 @@ command -v yq >/dev/null 2>&1 || {
   printf '%s\n' 'yq is required (the repository baseline uses yq 4.53.3)' >&2
   exit 2
 }
-
-for required_path in \
-  "$catalog_file" \
-  "$applications_dir/operator-applicationset.yaml" \
-  "$applications_dir/zookeeper-applicationset.yaml" \
-  "$applications_dir/artemis-workloads-applicationset.yaml"; do
-  if [[ ! -f "$required_path" ]]; then
-    printf 'topology input not found: %s\n' "$required_path" >&2
-    exit 2
-  fi
-done
 
 if [[ "$report" != /* ]]; then
   report="$repo_root/$report"
@@ -53,166 +42,296 @@ assert_equal() {
   fi
 }
 
-assert_applicationset_contract() {
-  file=$1
-  catalog_expression=$2
-  label=$3
+unique_line_count() {
+  printf '%s\n' "$1" | sed '/^$/d' | sort -u | wc -l | tr -d ' '
+}
 
-  assert_equal "$label apiVersion" \
-    "$(yq -r '.apiVersion // ""' "$file")" \
-    'argoproj.io/v1alpha1'
-  assert_equal "$label kind" \
-    "$(yq -r '.kind // ""' "$file")" \
-    'ApplicationSet'
-  assert_equal "$label Go template mode" \
-    "$(yq -r '.spec.goTemplate // false' "$file")" \
-    true
-  assert_equal "$label missingkey=error option count" \
-    "$(yq -r '[.spec.goTemplateOptions[] | select(. == "missingkey=error")] | length' "$file")" \
-    1
-  assert_equal "$label generator count" \
-    "$(yq -r '.spec.generators | length' "$file")" \
-    1
-  assert_equal "$label matrix child count" \
-    "$(yq -r '.spec.generators[0].matrix.generators | length' "$file")" \
-    2
-  assert_equal "$label catalog path" \
-    "$(yq -r '.spec.generators[0].matrix.generators[0].git.files[0].path // ""' "$file")" \
-    'gitops/argocd/topology/catalog.yaml'
-  assert_equal "$label catalog file count" \
-    "$(yq -r '.spec.generators[0].matrix.generators[0].git.files | length' "$file")" \
-    1
-  assert_equal "$label catalog revision" \
-    "$(yq -r '.spec.generators[0].matrix.generators[0].git.revision // ""' "$file")" \
-    main
-  assert_equal "$label catalog expansion" \
-    "$(yq -r '.spec.generators[0].matrix.generators[1].list.elementsYaml // ""' "$file")" \
-    "$catalog_expression"
+assert_sync_policy() {
+  file=$1
+  expression_prefix=$2
+  label=$3
 
   for safety_option in CreateNamespace=true ServerSideApply=true ApplyOutOfSyncOnly=true; do
     assert_equal "$label $safety_option count" \
-      "$(OPTION="$safety_option" yq -r \
-        '[.spec.template.spec.syncPolicy.syncOptions[] | select(. == strenv(OPTION))] | length' \
+      "$(OPTION="$safety_option" PREFIX="$expression_prefix" yq -r \
+        '[eval(strenv(PREFIX) + ".syncOptions[]") | select(. == strenv(OPTION))] | length' \
         "$file")" \
       1
   done
   assert_equal "$label automated prune" \
-    "$(yq -r '.spec.template.spec.syncPolicy.automated.prune // false' "$file")" \
+    "$(PREFIX="$expression_prefix" yq -r \
+      'eval(strenv(PREFIX) + ".automated.prune") // false' "$file")" \
     true
   assert_equal "$label automated self-heal" \
-    "$(yq -r '.spec.template.spec.syncPolicy.automated.selfHeal // false' "$file")" \
+    "$(PREFIX="$expression_prefix" yq -r \
+      'eval(strenv(PREFIX) + ".automated.selfHeal") // false' "$file")" \
     true
 }
 
-assert_equal 'catalog schemaVersion' \
-  "$(yq -r '.schemaVersion // ""' "$catalog_file")" \
-  'topology.artemis.apache.org/v1'
+assert_singleton_application() {
+  file=$1
+  environment=$2
+  component=$3
+  expected_name=$4
+  expected_wave=$5
 
-cluster_count=$(yq -r '.clusters // {} | length' "$catalog_file")
-broker_pair_count=$(yq -r '.brokerPairs // [] | length' "$catalog_file")
-assert_equal 'cluster count' "$cluster_count" 3
-assert_equal 'broker pair count' "$broker_pair_count" 10
+  assert_equal "$environment $component apiVersion" \
+    "$(yq -r '.apiVersion // ""' "$file")" \
+    'argoproj.io/v1alpha1'
+  assert_equal "$environment $component kind" \
+    "$(yq -r '.kind // ""' "$file")" \
+    Application
+  assert_equal "$environment $component name" \
+    "$(yq -r '.metadata.name // ""' "$file")" \
+    "$expected_name"
+  assert_equal "$environment $component sync wave" \
+    "$(yq -r '.metadata.annotations."argocd.argoproj.io/sync-wave" // ""' "$file")" \
+    "$expected_wave"
+  assert_equal "$environment $component project" \
+    "$(yq -r '.spec.project // ""' "$file")" \
+    messaging-platform
+  assert_equal "$environment $component local destination" \
+    "$(yq -r '.spec.destination.server // ""' "$file")" \
+    'https://kubernetes.default.svc'
+  assert_sync_policy "$file" '.spec.syncPolicy' "$environment $component"
+}
 
-unexpected_cluster_key_count=$(yq -r '
-  [.clusters // {} | keys[]
-    | select(. != "test" and . != "nonprod" and . != "prod")
-  ] | length
-' "$catalog_file")
-assert_equal 'unexpected cluster key count' "$unexpected_cluster_key_count" 0
+assert_workload_applicationset() {
+  file=$1
+  environment=$2
 
-cluster_key_mismatch_count=$(yq -r '
-  [.clusters // {} | to_entries[]
-    | select(.key != .value.environment)
-  ] | length
-' "$catalog_file")
-assert_equal 'cluster key/environment mismatch count' "$cluster_key_mismatch_count" 0
+  assert_equal "$environment workloads apiVersion" \
+    "$(yq -r '.apiVersion // ""' "$file")" \
+    'argoproj.io/v1alpha1'
+  assert_equal "$environment workloads kind" \
+    "$(yq -r '.kind // ""' "$file")" \
+    ApplicationSet
+  assert_equal "$environment workloads name" \
+    "$(yq -r '.metadata.name // ""' "$file")" \
+    "$environment-artemis-workloads"
+  assert_equal "$environment workloads Go template mode" \
+    "$(yq -r '.spec.goTemplate // false' "$file")" \
+    true
+  assert_equal "$environment workloads missingkey=error option count" \
+    "$(yq -r '[.spec.goTemplateOptions[] | select(. == "missingkey=error")] | length' "$file")" \
+    1
+  assert_equal "$environment workloads generator count" \
+    "$(yq -r '.spec.generators | length' "$file")" \
+    1
+  assert_equal "$environment workloads matrix child count" \
+    "$(yq -r '.spec.generators[0].matrix.generators | length' "$file")" \
+    2
+  assert_equal "$environment workloads topology path" \
+    "$(yq -r '.spec.generators[0].matrix.generators[0].git.files[0].path // ""' "$file")" \
+    "gitops/argocd/topology/$environment.yaml"
+  generator_revision=$(yq -r \
+    '.spec.generators[0].matrix.generators[0].git.revision // ""' "$file")
+  if [[ -z "$generator_revision" ]]; then
+    record_error "$environment workloads Git generator revision is required"
+  fi
+  assert_equal "$environment workloads source revision" \
+    "$(yq -r '.spec.template.spec.source.targetRevision // ""' "$file")" \
+    "$generator_revision"
+  assert_equal "$environment workloads topology expansion" \
+    "$(yq -r '.spec.generators[0].matrix.generators[1].list.elementsYaml // ""' "$file")" \
+    '{{ .brokerPairs | toJson }}'
+  assert_equal "$environment workloads enable selector" \
+    "$(yq -r '.spec.generators[0].selector.matchLabels.enabled // ""' "$file")" \
+    'true'
+  assert_equal "$environment workloads Application modification policy" \
+    "$(yq -r '.spec.syncPolicy.applicationsSync // ""' "$file")" \
+    create-update
+  assert_equal "$environment workloads preserve resources on deletion" \
+    "$(yq -r '.spec.syncPolicy.preserveResourcesOnDeletion // false' "$file")" \
+    true
+  assert_equal "$environment workloads local destination" \
+    "$(yq -r '.spec.template.spec.destination.server // ""' "$file")" \
+    'https://kubernetes.default.svc'
+  assert_equal "$environment workloads destination namespace" \
+    "$(yq -r '.spec.template.spec.destination.namespace // ""' "$file")" \
+    '{{.workloadNamespace}}'
+  assert_equal "$environment workloads environment values path" \
+    "$(yq -r '.spec.template.spec.source.helm.valueFiles[0] // ""' "$file")" \
+    '../../environments/{{.environment}}/artemis-values.yaml'
+  assert_equal "$environment workloads cluster label" \
+    "$(yq -r \
+      '.spec.template.spec.syncPolicy.managedNamespaceMetadata.labels."messaging.example.io/cluster" // ""' \
+      "$file")" \
+    '{{.clusterName}}'
+  assert_equal "$environment workloads ZooKeeper endpoint" \
+    "$(yq -r \
+      '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.connectString") | .value' \
+      "$file")" \
+    '{{.environment}}-shared-zookeeper-zookeeper-client.{{.platformNamespace}}.svc.cluster.local:2181'
+  assert_equal "$environment workloads ZooKeeper namespace" \
+    "$(yq -r \
+      '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.serviceNamespace") | .value' \
+      "$file")" \
+    '{{.platformNamespace}}'
+  assert_sync_policy "$file" '.spec.template.spec.syncPolicy' "$environment workloads"
+}
 
-for required_field in environment clusterName clusterServer platformNamespace; do
-  missing_count=$(FIELD="$required_field" yq -r '
-    [.clusters // {} | .[]
-      | select((.[strenv(FIELD)] // "") == "")
-    ] | length
-  ' "$catalog_file")
-  assert_equal "clusters missing $required_field" "$missing_count" 0
-done
-
-for unique_field in environment clusterName clusterServer; do
-  unique_count=$(FIELD="$unique_field" yq -r \
-    '[.clusters // {} | .[] | .[strenv(FIELD)]] | unique | length' \
-    "$catalog_file")
-  assert_equal "unique cluster $unique_field count" "$unique_count" "$cluster_count"
-done
-
-for required_field in environment brokerPairName workloadNamespace coordinationId; do
-  missing_count=$(FIELD="$required_field" yq -r '
-    [.brokerPairs // [] | .[]
-      | select((.[strenv(FIELD)] // "") == "")
-    ] | length
-  ' "$catalog_file")
-  assert_equal "broker pairs missing $required_field" "$missing_count" 0
-done
-
-unknown_cluster_reference_count=$(yq -r '
-  .clusters as $clusters
-  | [.brokerPairs // [] | .[]
-      | select($clusters[.environment] == null)
-    ] | length
-' "$catalog_file")
-assert_equal 'unknown broker pair cluster reference count' "$unknown_cluster_reference_count" 0
+environments='test nonprod prod'
+cluster_count=0
+broker_pair_count=0
+all_names=''
+all_namespaces=''
+all_coordination_ids=''
+distribution_json=''
 
 for environment_count in test:2 nonprod:4 prod:4; do
   environment=${environment_count%%:*}
   expected_count=${environment_count##*:}
-  actual_count=$(ENVIRONMENT="$environment" yq -r '
-    [.brokerPairs // [] | .[]
-      | select(.environment == strenv(ENVIRONMENT))
-    ] | length
-  ' "$catalog_file")
+  topology="$topology_dir/$environment.yaml"
+  environment_bootstrap="$bootstrap_dir/$environment"
+  operator="$environment_bootstrap/operator-application.yaml"
+  zookeeper="$environment_bootstrap/zookeeper-application.yaml"
+  workloads="$environment_bootstrap/artemis-workloads-applicationset.yaml"
+
+  for required_path in "$topology" "$operator" "$zookeeper" "$workloads"; do
+    if [[ ! -f "$required_path" ]]; then
+      record_error "topology input not found: $required_path"
+    fi
+  done
+  if [[ ! -f "$topology" || ! -f "$operator" || ! -f "$zookeeper" || ! -f "$workloads" ]]; then
+    continue
+  fi
+
+  cluster_count=$((cluster_count + 1))
+  assert_equal "$environment topology schemaVersion" \
+    "$(yq -r '.schemaVersion // ""' "$topology")" \
+    'topology.artemis.apache.org/v1'
+  assert_equal "$environment topology environment" \
+    "$(yq -r '.environment // ""' "$topology")" \
+    "$environment"
+
+  for required_field in clusterName platformNamespace; do
+    assert_equal "$environment topology missing $required_field count" \
+      "$(FIELD="$required_field" yq -r \
+        '[select((.[strenv(FIELD)] // "") == "")] | length' "$topology")" \
+      0
+  done
+
+  actual_count=$(yq -r '.brokerPairs // [] | length' "$topology")
   assert_equal "$environment broker pair count" "$actual_count" "$expected_count"
+  broker_pair_count=$((broker_pair_count + actual_count))
+
+  for required_field in brokerPairName workloadNamespace coordinationId enabled; do
+    assert_equal "$environment broker pairs missing $required_field" \
+      "$(FIELD="$required_field" yq -r '
+        [.brokerPairs // [] | .[]
+          | select((.[strenv(FIELD)] // "") == "")
+        ] | length
+      ' "$topology")" \
+      0
+  done
+
+  assert_equal "$environment invalid coordination ID count" \
+    "$(yq -r '
+      [.brokerPairs // [] | .[]
+        | select(
+            (.coordinationId | type) != "!!str"
+            or (.coordinationId | length) < 8
+            or (.coordinationId | length) > 16
+            or (.coordinationId | test("^[A-Za-z0-9][A-Za-z0-9._-]+$") | not)
+          )
+      ] | length
+    ' "$topology")" \
+    0
+  assert_equal "$environment invalid enabled value count" \
+    "$(yq -r '
+      [.brokerPairs // [] | .[]
+        | select(.enabled != "true" and .enabled != "false")
+      ] | length
+    ' "$topology")" \
+    0
+  assert_equal "$environment broker-pair name prefix mismatch count" \
+    "$(PREFIX="^$environment-" yq -r '
+      [.brokerPairs // [] | .[]
+        | select(.brokerPairName | test(strenv(PREFIX)) | not)
+      ] | length
+    ' "$topology")" \
+    0
+
+  all_names="$all_names
+$(yq -r '.brokerPairs[].brokerPairName' "$topology")"
+  all_namespaces="$all_namespaces
+$(yq -r '.brokerPairs[].workloadNamespace' "$topology")"
+  all_coordination_ids="$all_coordination_ids
+$(yq -r '.brokerPairs[].coordinationId' "$topology")"
+
+  assert_singleton_application \
+    "$operator" "$environment" operator "$environment-arkmq-operator" -20
+  assert_equal "$environment operator values path" \
+    "$(yq -r '.spec.sources[0].helm.valueFiles[0] // ""' "$operator")" \
+    "\$values/gitops/environments/$environment/operator-values.yaml"
+  assert_singleton_application \
+    "$zookeeper" "$environment" ZooKeeper "$environment-shared-zookeeper" -10
+  assert_equal "$environment ZooKeeper release name" \
+    "$(yq -r '.spec.source.helm.releaseName // ""' "$zookeeper")" \
+    "$environment-shared-zookeeper"
+  assert_equal "$environment ZooKeeper values path" \
+    "$(yq -r '.spec.source.helm.valueFiles[0] // ""' "$zookeeper")" \
+    "../../environments/$environment/zookeeper-values.yaml"
+  assert_workload_applicationset "$workloads" "$environment"
+
+  git_revision=$(yq -r \
+    '.spec.generators[0].matrix.generators[0].git.revision // ""' "$workloads")
+  assert_equal "$environment operator Git values revision" \
+    "$(yq -r '.spec.sources[1].targetRevision // ""' "$operator")" \
+    "$git_revision"
+  assert_equal "$environment ZooKeeper Git revision" \
+    "$(yq -r '.spec.source.targetRevision // ""' "$zookeeper")" \
+    "$git_revision"
+
+  git_repo=$(yq -r \
+    '.spec.generators[0].matrix.generators[0].git.repoURL // ""' "$workloads")
+  assert_equal "$environment workload source repository" \
+    "$(yq -r '.spec.template.spec.source.repoURL // ""' "$workloads")" \
+    "$git_repo"
+  assert_equal "$environment operator Git values repository" \
+    "$(yq -r '.spec.sources[1].repoURL // ""' "$operator")" \
+    "$git_repo"
+  assert_equal "$environment ZooKeeper Git repository" \
+    "$(yq -r '.spec.source.repoURL // ""' "$zookeeper")" \
+    "$git_repo"
+
+  if [[ -n "$distribution_json" ]]; then
+    distribution_json="$distribution_json,"
+  fi
+  distribution_json="$distribution_json\"$environment\":$actual_count"
 done
 
-for unique_field in brokerPairName workloadNamespace coordinationId; do
-  unique_count=$(FIELD="$unique_field" yq -r \
-    '[.brokerPairs // [] | .[] | .[strenv(FIELD)]] | unique | length' \
-    "$catalog_file")
-  assert_equal "unique $unique_field count" "$unique_count" "$broker_pair_count"
-done
+assert_equal 'cluster bootstrap count' "$cluster_count" 3
+assert_equal 'broker pair count' "$broker_pair_count" 10
+assert_equal 'unique brokerPairName count' \
+  "$(unique_line_count "$all_names")" \
+  "$broker_pair_count"
+assert_equal 'unique workloadNamespace count' \
+  "$(unique_line_count "$all_namespaces")" \
+  "$broker_pair_count"
+assert_equal 'unique coordinationId count' \
+  "$(unique_line_count "$all_coordination_ids")" \
+  "$broker_pair_count"
 
-invalid_coordination_ids=$(yq -r '
-  [.brokerPairs // [] | .[]
-    | select(
-        (.coordinationId | type) != "!!str"
-        or (.coordinationId | test("^[A-Za-z0-9][A-Za-z0-9._-]{7,15}$") | not)
-      )
-  ] | length
-' "$catalog_file")
-assert_equal 'invalid coordination ID count' "$invalid_coordination_ids" 0
+if rg -n \
+    'clusterServer|PLACEHOLDER_(TEST|NONPROD|PROD)_EKS_API_SERVER' \
+    "$topology_dir" "$bootstrap_dir" >/dev/null; then
+  record_error 'cross-cluster destination data remains in cluster-local topology or bootstrap manifests'
+fi
 
-application_name_count=$(yq -r \
-  '[.brokerPairs // [] | .[] | .brokerPairName + "-artemis"] | unique | length' \
-  "$catalog_file")
-curator_namespace_count=$(yq -r \
-  '[.brokerPairs // [] | .[] | "artemis/" + .environment + "/" + .brokerPairName] | unique | length' \
-  "$catalog_file")
-assert_equal 'unique generated Application name count' "$application_name_count" "$broker_pair_count"
-assert_equal 'unique Curator namespace count' "$curator_namespace_count" "$broker_pair_count"
-
-assert_applicationset_contract \
-  "$applications_dir/operator-applicationset.yaml" \
-  '{{ values .clusters | toJson }}' \
-  operator
-assert_applicationset_contract \
-  "$applications_dir/zookeeper-applicationset.yaml" \
-  '{{ values .clusters | toJson }}' \
-  ZooKeeper
-assert_applicationset_contract \
-  "$applications_dir/artemis-workloads-applicationset.yaml" \
-  '{{ .brokerPairs | toJson }}' \
-  Artemis
+while IFS= read -r bootstrap_manifest; do
+  if yq -r 'select(.kind == "AppProject") | .kind' "$bootstrap_manifest" \
+      | grep -qx AppProject; then
+    record_error "repository-owned AppProject is forbidden; Terraform owns project policy: $bootstrap_manifest"
+  fi
+done < <(find "$bootstrap_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 
 status=PASS
 [[ "$errors" -eq 0 ]] || status=FAIL
-printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"deployment-topology","status":"%s","clusters":%d,"brokerPairs":%d,"distribution":{"test":2,"nonprod":4,"prod":4},"errors":%d,"catalog":"%s"}\n' \
-  "$status" "$cluster_count" "$broker_pair_count" "$errors" "${catalog_file#"$repo_root/"}" > "$report"
-printf '%s\n' "topology validation: $status ($cluster_count clusters, $broker_pair_count broker pairs, $errors errors)"
+printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"deployment-topology","status":"%s","clusters":%d,"brokerPairs":%d,"distribution":{%s},"projectOwner":"terraform","errors":%d,"topologyDirectory":"%s","bootstrapDirectory":"%s"}\n' \
+  "$status" "$cluster_count" "$broker_pair_count" "$distribution_json" "$errors" \
+  "${topology_dir#"$repo_root/"}" "${bootstrap_dir#"$repo_root/"}" > "$report"
+printf '%s\n' \
+  "topology validation: $status ($cluster_count local cluster bootstraps, $broker_pair_count broker pairs, $errors errors)"
 [[ "$errors" -eq 0 ]]

@@ -1,0 +1,16 @@
+schemaVersion: topology.artemis.apache.org/v1
+environment: test
+clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
+platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+
+# This file is consumed only by the ApplicationSet running in the test
+# cluster's local Argo CD instance.
+brokerPairs:
+  - brokerPairName: test-sky
+    workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
+    coordinationId: test-sky-01
+    enabled: "false"
+  - brokerPairName: test-sky2
+    workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
+    coordinationId: test-sky2-01
+    enabled: "false"

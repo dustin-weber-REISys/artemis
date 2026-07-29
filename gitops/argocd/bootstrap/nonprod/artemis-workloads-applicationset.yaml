@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: nonprod-artemis-workloads
+  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+              revision: PLACEHOLDER_GITOPS_REVISION
+              files:
+                - path: gitops/argocd/topology/nonprod.yaml
+          - list:
+              elementsYaml: '{{ .brokerPairs | toJson }}'
+      selector:
+        matchLabels:
+          enabled: "true"
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: '{{.brokerPairName}}-artemis'
+      namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: messaging-platform
+      source:
+        repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+        targetRevision: PLACEHOLDER_GITOPS_REVISION
+        path: gitops/charts/artemis-ha
+        helm:
+          valueFiles:
+            - ../../environments/{{.environment}}/artemis-values.yaml
+          parameters:
+            - name: ha.coordinationId
+              value: '{{.coordinationId}}'
+            - name: ha.groupName
+              value: '{{.brokerPairName}}-group'
+            - name: ha.clusterName
+              value: '{{.brokerPairName}}-cluster'
+            - name: zookeeper.connectString
+              value: '{{.environment}}-shared-zookeeper-zookeeper-client.{{.platformNamespace}}.svc.cluster.local:2181'
+            - name: zookeeper.serviceNamespace
+              value: '{{.platformNamespace}}'
+            - name: zookeeper.curatorNamespace
+              value: 'artemis/{{.environment}}/{{.brokerPairName}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.workloadNamespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            messaging.example.io/cluster: '{{.clusterName}}'
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m

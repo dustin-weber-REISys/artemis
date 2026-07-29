@@ -1,0 +1,24 @@
+schemaVersion: topology.artemis.apache.org/v1
+environment: nonprod
+clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
+platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+
+# The Artemis tenancy inventory is independent of the cluster's Kong or
+# microservice namespace inventory. Confirm every pair before bootstrap.
+brokerPairs:
+  - brokerPairName: nonprod-smktest-eut
+    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
+    coordinationId: np-eut-pair01
+    enabled: "false"
+  - brokerPairName: nonprod-trn
+    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
+    coordinationId: np-trn-pair01
+    enabled: "false"
+  - brokerPairName: nonprod-trn2
+    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
+    coordinationId: np-trn2-pair01
+    enabled: "false"
+  - brokerPairName: nonprod-pt
+    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
+    coordinationId: np-pt-pair01
+    enabled: "false"

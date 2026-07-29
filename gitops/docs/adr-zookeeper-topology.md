@@ -28,7 +28,8 @@ preserve quorum across a member or zone loss. Network access is restricted to
 approved brokers, monitoring, and required platform services. Current image,
 storage, security, probe, policy, and monitoring behavior is authoritative in
 [`charts/zookeeper`](../charts/zookeeper); generated service names and workload
-connections are authoritative in [`argocd/applications`](../argocd/applications).
+connections are authoritative in [`argocd/bootstrap`](../argocd/bootstrap) and
+[`argocd/topology`](../argocd/topology).
 
 The operator, ZooKeeper, and broker layers must be bootstrapped in dependency
 order with health gates. Sync-wave annotations communicate intent but do not,

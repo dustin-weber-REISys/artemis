@@ -8,7 +8,7 @@ help:
 	@printf '%s\n' \
 		'validate                 Run all GitOps and Helm checks' \
 		'validate-scenarios       Validate EKS acceptance definitions' \
-		'validate-topology        Validate the generated 2/4/4 topology' \
+		'validate-topology        Validate local-cluster bootstraps and 2/4/4 topology' \
 		'test-topology            Exercise topology regression cases' \
 		'validate-charts          Lint and render charts and overlays' \
 		'validate-operator-schema Validate broker CRs against ArkMQ 2.2.0'

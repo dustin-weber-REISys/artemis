@@ -45,7 +45,8 @@ into this ADR. They are authoritative in:
 - [`charts/artemis-ha/values.yaml`](../charts/artemis-ha/values.yaml);
 - [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json);
 - [`environments`](../environments); and
-- the operator ApplicationSet under [`argocd/applications`](../argocd/applications).
+- the environment-local operator Applications under
+  [`argocd/bootstrap`](../argocd/bootstrap).
 
 Repository validation checks the rendered broker custom resource against the
 pinned operator schema. Updating the operator or operand requires matrix

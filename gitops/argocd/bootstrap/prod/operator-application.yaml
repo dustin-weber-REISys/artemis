@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prod-arkmq-operator
+  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  project: messaging-platform
+  sources:
+    - repoURL: PLACEHOLDER_ECR_REGISTRY
+      chart: PLACEHOLDER_MIRRORED_ARKMQ_OPERATOR_CHART
+      targetRevision: 2.2.0
+      helm:
+        valueFiles:
+          - $values/gitops/environments/prod/operator-values.yaml
+    - repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+      targetRevision: PLACEHOLDER_GITOPS_REVISION
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

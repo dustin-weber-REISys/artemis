@@ -1,0 +1,24 @@
+schemaVersion: topology.artemis.apache.org/v1
+environment: prod
+clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
+platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+
+# Production pairs remain explicit so promotion cannot silently discover or
+# inherit unrelated application namespaces.
+brokerPairs:
+  - brokerPairName: prod-pe
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PE
+    coordinationId: prod-pe-pair01
+    enabled: "false"
+  - brokerPairName: prod-pp
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP
+    coordinationId: prod-pp-pair01
+    enabled: "false"
+  - brokerPairName: prod-dm
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_DM
+    coordinationId: prod-dm-pair01
+    enabled: "false"
+  - brokerPairName: prod-pr
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR
+    coordinationId: prod-pr-pair01
+    enabled: "false"
