@@ -13,7 +13,7 @@ while (($#)); do
 done
 
 errors=0
-required_files='Makefile compose.yaml .env.example images/test-client/Dockerfile images/test-client/Dockerfile.local images/test-client/pom.xml scripts/validate-topology.sh tests/topology/test.sh tests/e2e/scenarios.yaml tests/compatibility/classic-6.2.6-inventory.yaml tests/load/sustained-load.yaml tests/e2e/manifests/replication-isolation-deny.yaml tests/e2e/manifests/zookeeper-isolation-deny.yaml'
+required_files='Makefile local/Makefile local/compose.yaml local/.env.example local/scripts/validate-compose.sh gitops/Makefile gitops/scripts/validate-topology.sh gitops/tests/topology/test.sh gitops/tests/e2e/scenarios.yaml gitops/tests/compatibility/classic-6.2.6-inventory.yaml gitops/tests/e2e/manifests/replication-isolation-deny.yaml gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml performance/Makefile performance/build-local-image.sh performance/client/Dockerfile performance/client/Dockerfile.local performance/client/Dockerfile.prebuilt performance/client/pom.xml performance/profiles/sustained-load.yaml performance/run-profile.sh'
 for relative_file in $required_files; do
   if [[ ! -f "$repo_root/$relative_file" ]]; then
     printf 'missing required file: %s\n' "$relative_file" >&2
@@ -22,7 +22,7 @@ for relative_file in $required_files; do
 done
 
 if command -v yq >/dev/null 2>&1; then
-  for yaml_file in "$repo_root/compose.yaml" "$repo_root/tests/compatibility/classic-6.2.6-inventory.yaml" "$repo_root/tests/load/sustained-load.yaml" "$repo_root/tests/chart/validation-policy.yaml" "$repo_root/tests/e2e/manifests/replication-isolation-deny.yaml" "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
+  for yaml_file in "$repo_root/local/compose.yaml" "$repo_root/gitops/tests/compatibility/classic-6.2.6-inventory.yaml" "$repo_root/performance/profiles/sustained-load.yaml" "$repo_root/gitops/tests/chart/validation-policy.yaml" "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
     yq -e '.' "$yaml_file" >/dev/null || {
       printf 'invalid YAML: %s\n' "${yaml_file#"$repo_root/"}" >&2
       errors=$((errors + 1))
@@ -34,14 +34,14 @@ fi
 
 if command -v kubeconform >/dev/null 2>&1; then
   kubeconform -strict -summary -ignore-missing-schemas \
-    "$repo_root/tests/e2e/manifests/replication-isolation-deny.yaml" \
-    "$repo_root/tests/e2e/manifests/zookeeper-isolation-deny.yaml" || {
+    "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
+    "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml" || {
       printf '%s\n' 'temporary isolation manifests failed kubeconform' >&2
       errors=$((errors + 1))
     }
 fi
 
-dockerfile="$repo_root/images/test-client/Dockerfile"
+dockerfile="$repo_root/performance/client/Dockerfile"
 if [[ -f "$dockerfile" ]]; then
   grep -Eq '^ARG BUILD_IMAGE_DIGEST$' "$dockerfile" || { printf '%s\n' 'Dockerfile must require BUILD_IMAGE_DIGEST' >&2; errors=$((errors + 1)); }
   grep -Eq '^ARG RUNTIME_IMAGE_DIGEST$' "$dockerfile" || { printf '%s\n' 'Dockerfile must require RUNTIME_IMAGE_DIGEST' >&2; errors=$((errors + 1)); }
@@ -50,14 +50,14 @@ if [[ -f "$dockerfile" ]]; then
   grep -Eq '^USER 65532:65532$' "$dockerfile" || { printf '%s\n' 'runtime image must run as non-root UID 65532' >&2; errors=$((errors + 1)); }
 fi
 
-makefile="$repo_root/Makefile"
+makefile="$repo_root/performance/Makefile"
 grep -q 'BUILD_IMAGE_DIGEST' "$makefile" || { printf '%s\n' 'Makefile must pass build image digest' >&2; errors=$((errors + 1)); }
 grep -q 'RUNTIME_IMAGE_DIGEST' "$makefile" || { printf '%s\n' 'Makefile must pass runtime image digest' >&2; errors=$((errors + 1)); }
 
 if command -v rg >/dev/null 2>&1; then
   if rg -n --hidden --glob '!/.git/**' --glob '!reports/**' \
       'AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}' \
-      "$repo_root/images/test-client" "$repo_root/scripts" "$repo_root/tests" >/dev/null; then
+      "$repo_root/performance" "$repo_root/gitops" "$repo_root/local" "$repo_root/scripts" >/dev/null; then
     printf '%s\n' 'credential-shaped value detected in owned validation files' >&2
     errors=$((errors + 1))
   fi

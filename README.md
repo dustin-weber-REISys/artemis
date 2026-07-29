@@ -1,73 +1,57 @@
-# Artemis on EKS
+# Artemis
 
-Generic GitOps baseline for running Apache ActiveMQ Artemis on existing Amazon
-EKS clusters with Argo CD, Helm, the ArkMQ Broker Operator, and ZooKeeper.
+This repository is organized into three operational areas. Each area has its
+own README and Makefile; the root Makefile provides stable shortcuts across
+them.
 
-The repository models an independent, persistent Artemis HA pair for each
-workload. Pairs in an EKS cluster normally share an operator and ZooKeeper
-ensemble, but not journals, volumes, services, credentials, queue catalogs, or
-coordination identities. The generated workload topology is authoritative in
-[`argocd/applications/artemis-workloads-applicationset.yaml`](argocd/applications/artemis-workloads-applicationset.yaml).
+## Areas
 
-This is not an AWS account bootstrap. Replace every placeholder through the
-approved environment integration process before sync; never commit credentials
-or other secret values.
+### [`local`](local)
 
-## Start here
-
-- [`docs/implementation-spec.md`](docs/implementation-spec.md): design
-  rationale, safety contract, ownership boundaries, and promotion gates.
-- [`docs/environment-import-walkthrough.md`](docs/environment-import-walkthrough.md):
-  prerequisites, external-system handoffs, bootstrap order, and known
-  pre-production gaps.
-- [`docs/adr-operator-ha.md`](docs/adr-operator-ha.md): why the operator-managed
-  competing-primary design was selected and what must be proven at runtime.
-- [`docs/adr-zookeeper-topology.md`](docs/adr-zookeeper-topology.md): shared
-  coordination rationale and isolation trade-offs.
-- [`docs/runbooks`](docs/runbooks): installation, failure, incident, upgrade,
-  compatibility, and recovery procedures.
-
-Current deployable values, supported versions, ports, and defaults live in the
-charts and their schemas:
-
-- [`charts/artemis-ha/values.yaml`](charts/artemis-ha/values.yaml) and
-  [`charts/artemis-ha/values.schema.json`](charts/artemis-ha/values.schema.json)
-- [`charts/zookeeper/values.yaml`](charts/zookeeper/values.yaml) and
-  [`charts/zookeeper/values.schema.json`](charts/zookeeper/values.schema.json)
-- [`environments`](environments) for promotion overlays
-- [`tests/e2e/acceptance-plan.yaml`](tests/e2e/acceptance-plan.yaml) for the
-  acceptance plan
-
-## Validate
-
-From the repository root:
-
-```sh
-make validate
-make package
-```
-
-`make validate` is the canonical repository check. Its implementation and
-required tools are authoritative in the [`Makefile`](Makefile) and
-[`scripts`](scripts). Some checks require network access to the configured
-operator artifact source; environment variables supported by those scripts
-may redirect downloads to approved internal mirrors.
-
-## Develop locally
-
-Docker Compose provides a durable standalone broker for application wiring; it
-does not reproduce EKS HA:
+A standalone, durable Artemis broker for application development and smoke
+testing with Docker Compose. It does not reproduce the EKS high-availability
+design.
 
 ```sh
 make local-up
 make local-smoke
-make local-status
-make local-logs
 make local-down
 ```
 
-`make local-reset` additionally removes the local named volume and retained
-messages. See [`docs/local-development.md`](docs/local-development.md) for the
-security, persistence, and scope limitations. The authoritative local image,
-ports, credentials, and overrides are in [`compose.yaml`](compose.yaml) and
-[`.env.example`](.env.example).
+### [`gitops`](gitops)
+
+The deployable EKS baseline: Argo CD ApplicationSets, Helm charts, environment
+overlays, topology, acceptance scenarios, runbooks, and their validation
+scripts.
+
+```sh
+make validate-topology
+make test-topology
+make validate-charts
+```
+
+### [`performance`](performance)
+
+The deterministic JMS validation client and reusable load profiles. A profile
+can target the local Compose broker or an explicitly supplied deployed broker.
+
+```sh
+make performance-local PROFILE=burst
+
+PERF_URL='amqps://broker.example.invalid:5671' \
+PERF_USERNAME="$ARTEMIS_TEST_USER" \
+PERF_PASSWORD="$ARTEMIS_TEST_PASSWORD" \
+  make performance-deployed PROFILE=sustained
+```
+
+## Validate the repository
+
+```sh
+make validate
+```
+
+This runs cross-area invariants, GitOps and Helm checks, local Compose
+validation, and validation-client unit tests. Some checks require network
+access to their configured artifact sources.
+
+Run `make help` for the complete command list.

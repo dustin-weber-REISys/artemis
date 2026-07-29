@@ -29,7 +29,7 @@ ZooKeeper, operator, and client libraries as one unobserved change.
    supplied:
 
 ```sh
-./scripts/eks-scenario.sh --scenario failed-upgrade-rollback \
+./gitops/scripts/eks-scenario.sh --scenario failed-upgrade-rollback \
   --context CONTEXT --cluster CLUSTER --namespace NAMESPACE \
   --argo-app APP --argo-action rollback --argo-revision REVISION
 ```

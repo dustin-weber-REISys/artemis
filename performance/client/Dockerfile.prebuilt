@@ -1,0 +1,9 @@
+# Local fallback for workstations whose container trust store cannot reach the
+# Maven repository. The host build must populate target/ before this is used.
+FROM eclipse-temurin:17-jre
+
+WORKDIR /opt/validation-client
+COPY target/deterministic-validation-client-*.jar /opt/validation-client/client.jar
+COPY target/lib /opt/validation-client/lib
+
+ENTRYPOINT ["java", "-cp", "/opt/validation-client/client.jar:/opt/validation-client/lib/*", "org.example.artemis.validation.Main"]

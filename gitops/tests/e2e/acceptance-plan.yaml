@@ -54,7 +54,7 @@ cases:
     eksRequired: false
     execution:
       kind: repository-check
-      command: scripts/validate-charts.sh
+      command: gitops/scripts/validate-charts.sh
     action: helm lint and render every repository-owned chart with kubeconform
     verification:
       - rendered manifests pass Kubernetes schema validation

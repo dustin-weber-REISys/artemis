@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-report="$repo_root/reports/compose-validation.json"
+report="$repo_root/../reports/compose-validation.json"
 
 while (($#)); do
   case "$1" in
@@ -26,10 +26,10 @@ fi
 compose_args=(--env-file "$repo_root/.env.example" -f "$repo_root/compose.yaml")
 if docker compose "${compose_args[@]}" config --quiet \
   && docker compose --profile smoke "${compose_args[@]}" config --quiet; then
-  printf '%s\n' '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"compose","status":"PASS","file":"compose.yaml"}' > "$report"
+  printf '%s\n' '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"compose","status":"PASS","file":"local/compose.yaml"}' > "$report"
   printf '%s\n' 'compose validation: PASS'
 else
-  printf '%s\n' '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"compose","status":"FAIL","file":"compose.yaml"}' > "$report"
+  printf '%s\n' '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"compose","status":"FAIL","file":"local/compose.yaml"}' > "$report"
   printf '%s\n' 'compose validation: FAIL' >&2
   exit 1
 fi

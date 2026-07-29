@@ -78,7 +78,7 @@ assert_applicationset_contract() {
     2
   assert_equal "$label catalog path" \
     "$(yq -r '.spec.generators[0].matrix.generators[0].git.files[0].path // ""' "$file")" \
-    'argocd/topology/catalog.yaml'
+    'gitops/argocd/topology/catalog.yaml'
   assert_equal "$label catalog file count" \
     "$(yq -r '.spec.generators[0].matrix.generators[0].git.files | length' "$file")" \
     1

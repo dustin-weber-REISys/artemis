@@ -16,7 +16,7 @@ spec:
               repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
               revision: main
               files:
-                - path: argocd/topology/catalog.yaml
+                - path: gitops/argocd/topology/catalog.yaml
           - list:
               # Expand broker pairs while retaining the catalog's cluster map
               # for environment-keyed lookups in the Application template.
@@ -32,11 +32,11 @@ spec:
       source:
         repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
         targetRevision: main
-        path: charts/artemis-ha
+        path: gitops/charts/artemis-ha
         helm:
           valueFiles:
             # Argo CD resolves same-repository values files relative to the
-            # chart path (charts/artemis-ha), not the repository root.
+            # chart path (gitops/charts/artemis-ha), not the repository root.
             - ../../environments/{{.environment}}/artemis-values.yaml
           parameters:
             - name: ha.coordinationId

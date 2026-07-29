@@ -11,7 +11,7 @@ disruption while it is rejoining.
 2. Run a dry-run plan and inspect the target pod/node before execution:
 
 ```sh
-./scripts/eks-scenario.sh --scenario active-broker-pod-delete \
+./gitops/scripts/eks-scenario.sh --scenario active-broker-pod-delete \
   --context CONTEXT --cluster CLUSTER --namespace NAMESPACE \
   --target-pod ACTIVE_BROKER_POD
 ```

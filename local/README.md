@@ -1,6 +1,6 @@
 # Local Artemis development
 
-[`compose.yaml`](../compose.yaml) runs one durable standalone Artemis broker for
+[`compose.yaml`](compose.yaml) runs one durable standalone Artemis broker for
 application wiring and validation-client smoke tests. It is independent of the
 EKS design: there is no operator, ZooKeeper, second broker, replication,
 failover, Vault, Keycloak, ingress, or production authorization.
@@ -8,7 +8,7 @@ failover, Vault, Keycloak, ingress, or production authorization.
 Use the canonical local commands in the root
 [`README`](../README.md#develop-locally). Docker Engine with Compose v2 is
 required. The Compose file is authoritative for the image, published ports,
-health check, volume, and smoke workflow; [`.env.example`](../.env.example) is
+health check, volume, and smoke workflow; [`.env.example`](.env.example) is
 authoritative for local credentials and supported host-port overrides.
 
 ## Persistence and reset
@@ -18,6 +18,9 @@ instance in that volume, so changing creation-time credentials does not
 reconfigure an existing instance. Use the destructive `make local-reset` target
 when a new local broker instance is intended; it removes this Compose project's
 broker volume and all retained queues and messages.
+
+The local Makefile keeps the Compose project name `artemis`, preserving the
+named-volume identity used before this directory split.
 
 The volume initializer only grants the image runtime user access to a new
 volume. It does not run another broker. The startup wrapper regenerates broker
@@ -38,9 +41,10 @@ and [standalone launch script](https://github.com/arkmq-org/arkmq-org-broker-ima
 
 ## Smoke test and application connections
 
-The smoke profile builds the repository's Java client in a temporary local
-image and sends uniquely identified persistent traffic through the protocols
-defined in `compose.yaml`. Host Java and Maven are not required.
+The smoke profile builds the Java client owned by
+[`performance`](../performance) in a temporary local image and sends uniquely
+identified persistent traffic through the protocols defined in `compose.yaml`.
+Host Java and Maven are not required.
 
 Host applications connect through the published localhost ports. Applications
 added to the Compose project connect to the `broker` service and its container

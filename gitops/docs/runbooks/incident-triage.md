@@ -39,7 +39,7 @@ or redelivered in-flight messages.
   purge actions, and isolate oversized or repeatedly failing messages into an
   approved triage queue before restoring normal traffic.
 
-Use `scripts/eks-scenario.sh` for scoped evidence. It is dry-run by default;
+Use `gitops/scripts/eks-scenario.sh` for scoped evidence. It is dry-run by default;
 destructive execution requires the exact context, cluster, and namespace
 confirmation flags. The script cannot replace an incident commander or an
 approved EKS change window.

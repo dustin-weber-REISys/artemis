@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 acceptance_plan="$repo_root/tests/e2e/acceptance-plan.yaml"
-load_profiles="$repo_root/tests/load/sustained-load-profiles.yaml"
+load_profiles="$repo_root/../performance/profiles/sustained-load-profiles.yaml"
 compatibility_inventory="$repo_root/tests/compatibility/classic-6.2.6-inventory.yaml"
 chart_policy="$repo_root/tests/chart/validation-policy.yaml"
 runner="$script_dir/eks-scenario.sh"

@@ -173,7 +173,7 @@ case "$execution_kind" in
     ;;
   manual-procedure)
     target_description=manual-acceptance-plan
-    planned="follow tests/e2e/acceptance-plan.yaml and attach all required evidence"
+    planned="follow gitops/tests/e2e/acceptance-plan.yaml and attach all required evidence"
     if [[ "$mode" == execute ]]; then
       status=MANUAL_REQUIRED
       printf 'acceptance case %s is a manual procedure; no action was executed\n' "$scenario" >&2

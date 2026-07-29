@@ -12,7 +12,7 @@ tokens with values supplied by the cluster platform; do not commit them.
 - Run the destructive scenario harness once in its default dry-run mode:
 
 ```sh
-./scripts/eks-scenario.sh --scenario clean-install \
+./gitops/scripts/eks-scenario.sh --scenario clean-install \
   --context CONTEXT --cluster CLUSTER --namespace NAMESPACE
 ```
 

@@ -65,7 +65,9 @@ services:
     profiles:
       - smoke
     build:
-      context: ./images/test-client
+      # The reusable validation client lives in the performance area so the
+      # same image can exercise this broker or a deployed endpoint.
+      context: ../performance/client
       dockerfile: Dockerfile.local
     depends_on:
       broker:

@@ -6,10 +6,10 @@
 
 .env
 .env.*
-!.env.example
+!**/.env.example
 
-charts/**/charts/
-charts/**/Chart.lock
+gitops/charts/**/charts/
+gitops/charts/**/Chart.lock
 dist/
 reports/
 tmp/

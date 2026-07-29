@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 report_dir=${REPORT_DIR:-reports}
-client_dir=${CLIENT_DIR:-images/test-client}
+client_dir=${CLIENT_DIR:-performance/client}
 maven=${MAVEN:-mvn}
 
 usage() {
@@ -80,20 +80,20 @@ run_check 'Static invariants' \
   "$script_dir/validate-static.sh" \
   --report "$report_dir/static-validation.json"
 run_check 'Scenario definitions' \
-  "$script_dir/validate-scenarios.sh" \
+  "$repo_root/gitops/scripts/validate-scenarios.sh" \
   --report "$report_dir/scenario-validation.json"
 run_check 'Generated workload topology' \
-  "$script_dir/validate-topology.sh" \
+  "$repo_root/gitops/scripts/validate-topology.sh" \
   --report "$report_dir/topology-validation.json"
 run_check 'Topology regression tests' \
-  "$repo_root/tests/topology/test.sh"
+  "$repo_root/gitops/tests/topology/test.sh"
 run_check 'Helm charts and overlays' \
-  "$script_dir/validate-charts.sh" \
+  "$repo_root/gitops/scripts/validate-charts.sh" \
   --report "$report_dir/chart-validation.json"
 run_check 'ArkMQ operator schema' \
-  "$script_dir/validate-operator-schema.sh"
+  "$repo_root/gitops/scripts/validate-operator-schema.sh"
 run_check 'Docker Compose configuration' \
-  "$script_dir/validate-compose.sh" \
+  "$repo_root/local/scripts/validate-compose.sh" \
   --report "$report_dir/compose-validation.json"
 run_check 'Java unit tests' \
   "$maven" -B -ntp -f "$client_dir/pom.xml" test

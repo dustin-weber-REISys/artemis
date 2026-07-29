@@ -16,7 +16,7 @@ spec:
               repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
               revision: main
               files:
-                - path: argocd/topology/catalog.yaml
+                - path: gitops/argocd/topology/catalog.yaml
           - list:
               # Expand the three cluster records from the shared catalog.
               elementsYaml: '{{ values .clusters | toJson }}'
@@ -31,7 +31,7 @@ spec:
       source:
         repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
         targetRevision: main
-        path: charts/zookeeper
+        path: gitops/charts/zookeeper
         helm:
           # Keep the Helm release name identical to the generated Argo CD
           # Application name so Argo's instance tracking label remains aligned
@@ -39,7 +39,7 @@ spec:
           releaseName: '{{.environment}}-shared-zookeeper'
           valueFiles:
             # Argo CD resolves same-repository values files relative to the
-            # chart path (charts/zookeeper), not the repository root.
+            # chart path (gitops/charts/zookeeper), not the repository root.
             - ../../environments/{{.environment}}/zookeeper-values.yaml
       destination:
         server: '{{.clusterServer}}'
