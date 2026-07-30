@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help test test-topology package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed build-image
+.PHONY: help test test-topology package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -15,7 +15,7 @@ help:
 		'  local-smoke       Run OpenWire and AMQP smoke tests locally' \
 		'' \
 		'GitOps and Helm:' \
-		'  validate-topology Validate the generated 2/4/4 workload topology' \
+		'  validate-topology Validate the broker-pair catalog and Argo bootstrap' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  validate-charts   Lint and render the Helm charts' \
 		'  validate-scenarios Validate the EKS acceptance definitions' \
@@ -26,6 +26,7 @@ help:
 		'  package           Package the validation client' \
 		'  performance-local Run a load profile against the local broker' \
 		'  performance-deployed Run a load profile against PERF_URL' \
+		'  failure-deployed Run a destructive acknowledged-message failover test' \
 		'  build-image       Build the digest-pinned validation client image' \
 		'' \
 		'Repository:' \
@@ -47,6 +48,9 @@ performance-local:
 
 performance-deployed:
 	$(MAKE) -C performance run-deployed REPORT_DIR="$(abspath $(REPORT_DIR))/performance"
+
+failure-deployed:
+	$(MAKE) -C performance failure-deployed REPORT_DIR="$(abspath $(REPORT_DIR))/failure"
 
 local-up:
 	$(MAKE) -C local up

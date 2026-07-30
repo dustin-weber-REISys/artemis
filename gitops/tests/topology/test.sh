@@ -89,19 +89,25 @@ assert_topology_rejected \
   duplicate-namespace \
   test \
   '.brokerPairs[1].workloadNamespace = .brokerPairs[0].workloadNamespace' \
-  'unique workloadNamespace count: expected 10, got 9'
+  'unique workloadNamespace count: expected 14, got 13'
 
 assert_topology_rejected \
   duplicate-broker-pair-name \
   nonprod \
   '.brokerPairs[2].brokerPairName = .brokerPairs[1].brokerPairName' \
-  'unique brokerPairName count: expected 10, got 9'
+  'unique brokerPairName count: expected 14, got 13'
 
 assert_topology_rejected \
   duplicate-coordination-id \
   prod \
   '.brokerPairs[1].coordinationId = .brokerPairs[0].coordinationId' \
-  'unique coordinationId count: expected 10, got 9'
+  'unique coordinationId count: expected 14, got 13'
+
+assert_topology_rejected \
+  duplicate-management-host \
+  prod \
+  '.brokerPairs[1].managementHost = .brokerPairs[0].managementHost' \
+  'unique managementHost count: expected 14, got 13'
 
 assert_topology_rejected \
   invalid-coordination-id \
@@ -211,7 +217,11 @@ expected_broker_pairs=$(printf '%s\n' \
   'prod:prod-dm' \
   'prod:prod-pe' \
   'prod:prod-pp' \
+  'prod:prod-pp-batch' \
+  'prod:prod-pp-external' \
   'prod:prod-pr' \
+  'prod:prod-pr-batch' \
+  'prod:prod-pr-external' \
   'test:test-sky' \
   'test:test-sky2' | sort)
 actual_broker_pairs=$(
@@ -222,7 +232,7 @@ actual_broker_pairs=$(
   done | sort
 )
 if [[ "$actual_broker_pairs" != "$expected_broker_pairs" ]]; then
-  printf '%s\n' 'topology broker-pair identities do not match the required 2/4/4 topology' >&2
+  printf '%s\n' 'topology broker-pair identities do not match the required 2/4/8 topology' >&2
   exit 1
 fi
 
@@ -268,6 +278,21 @@ for environment in test nonprod prod; do
     '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.curatorNamespace") | .value' \
     "$workloads" \
     'artemis/{{.environment}}/{{.brokerPairName}}'
+  assert_yaml_value \
+    "$environment pair-specific storage template" \
+    '.spec.template.spec.source.helm.parameters[] | select(.name == "persistence.size") | .value' \
+    "$workloads" \
+    '{{.storageSize}}'
+  assert_yaml_value \
+    "$environment pair-specific management host template" \
+    '.spec.template.spec.source.helm.parameters[] | select(.name == "console.ingress.host") | .value' \
+    "$workloads" \
+    '{{.managementHost}}'
+  assert_yaml_value \
+    "$environment pair-specific redirect URI template" \
+    '.spec.template.spec.source.helm.parameters[] | select(.name == "keycloak.redirectUri") | .value' \
+    "$workloads" \
+    'https://{{.managementHost}}/console'
 done
 
 if find "$bootstrap_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) \

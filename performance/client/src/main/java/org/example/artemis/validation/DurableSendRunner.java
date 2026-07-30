@@ -12,13 +12,15 @@ public final class DurableSendRunner {
             String idPrefix,
             String duplicateIdPrefix,
             String payloadPrefix,
+            int payloadBytes,
             String runId,
             Protocol protocol,
             String destination) {
 
         public Config {
-            if (startSequence < 0 || count < 0) {
-                throw new IllegalArgumentException("startSequence and count must be non-negative");
+            if (startSequence < 0 || count < 0 || payloadBytes <= 0) {
+                throw new IllegalArgumentException(
+                        "startSequence and count must be non-negative and payloadBytes must be positive");
             }
             if (idPrefix == null || duplicateIdPrefix == null || payloadPrefix == null
                     || runId == null || protocol == null || destination == null) {
@@ -28,6 +30,13 @@ public final class DurableSendRunner {
     }
 
     public ValidationReport run(Transport transport, Config config) throws Exception {
+        return run(transport, config, AcknowledgementSink.NONE);
+    }
+
+    public ValidationReport run(
+            Transport transport,
+            Config config,
+            AcknowledgementSink acknowledgementSink) throws Exception {
         Instant startedAt = Instant.now();
         long acknowledged = 0;
         long failures = 0;
@@ -39,14 +48,23 @@ public final class DurableSendRunner {
                 long sequence = Math.addExact(config.startSequence(), offset);
                 String id = MessageIds.id(config.idPrefix(), sequence);
                 String duplicateId = MessageIds.id(config.duplicateIdPrefix(), sequence);
-                String body = MessageIds.body(config.payloadPrefix(), id, sequence, duplicateId);
+                String body = MessageIds.body(
+                        config.payloadPrefix(),
+                        id,
+                        sequence,
+                        duplicateId,
+                        config.payloadBytes());
                 try {
                     producer.send(sequence, id, duplicateId, body);
-                    acknowledged++;
                 } catch (Exception sendFailure) {
                     failures++;
                     unacknowledged.add(sequence);
+                    continue;
                 }
+                // Ledger failure is fatal: silently losing the external
+                // evidence would invalidate the acknowledged-message claim.
+                acknowledgementSink.record(sequence, id);
+                acknowledged++;
             }
         }
 

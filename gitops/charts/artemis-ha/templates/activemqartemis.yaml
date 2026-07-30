@@ -19,7 +19,6 @@
 {{- $brokerProperties := list
   (printf "HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER")
   (printf "HAPolicyConfiguration.groupName=%s" .Values.ha.groupName)
-  (printf "HAPolicyConfiguration.clusterName=%s" .Values.ha.clusterName)
   (printf "HAPolicyConfiguration.initialReplicationSyncTimeout=%d" (int .Values.ha.initialReplicationSyncTimeoutMs))
   (printf "HAPolicyConfiguration.retryReplicationWait=%d" (int .Values.ha.retryReplicationWaitMs))
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.className=org.apache.activemq.artemis.lockmanager.zookeeper.CuratorDistributedLockManager")
@@ -27,6 +26,10 @@
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.namespace=%s" .Values.zookeeper.curatorNamespace)
   (printf "HAPolicyConfiguration.distributedManagerConfiguration.properties.session-ms=%d" (int .Values.ha.zookeeperSessionTimeoutMs))
   (printf "HAPolicyConfiguration.coordinationId=%s" .Values.ha.coordinationId)
+  (printf "journalSyncTransactional=%t" .Values.brokerProperties.durability.journalSyncTransactional)
+  (printf "journalSyncNonTransactional=%t" .Values.brokerProperties.durability.journalSyncNonTransactional)
+  (printf "journalDatasync=%t" .Values.brokerProperties.durability.journalDatasync)
+  (printf "largeMessageSync=%t" .Values.brokerProperties.durability.largeMessageSync)
   (printf "globalMaxSize=%s" .Values.brokerProperties.globalMaxSize)
   (printf "maxDiskUsage=%d" (int .Values.brokerProperties.maxDiskUsage))
   (printf "connectionTTLOverride=%d" (int .Values.brokerProperties.connectionTtlOverride))
@@ -65,6 +68,11 @@
 {{- end }}
 {{- end }}
 {{- range .Values.brokerProperties.extra }}
+{{- $extraKey := regexFind "^[^=]+" . | lower }}
+{{- $normalizedExtraKey := regexReplaceAll "[-_.[:space:]]" $extraKey "" }}
+{{- if regexMatch "^(hapolicyconfiguration|journalsynctransactional$|journalsyncnontransactional$|journaldatasync$|largemessagesync$|persistenceenabled$|journaltype$|clusterconfigurations|brokerconnections|idcachesize$|persistidcache$)" $normalizedExtraKey }}
+{{- fail (printf "brokerProperties.extra cannot override protected HA or durability property %q" $extraKey) }}
+{{- end }}
 {{- $brokerProperties = append $brokerProperties . }}
 {{- end }}
 
@@ -122,6 +130,7 @@ spec:
     topologySpreadConstraints:
       {{- range .Values.topology.topologySpreadConstraints }}
       - maxSkew: {{ .maxSkew }}
+        minDomains: {{ .minDomains }}
         topologyKey: {{ .topologyKey | quote }}
         whenUnsatisfiable: {{ .whenUnsatisfiable }}
         labelSelector:
@@ -185,7 +194,13 @@ spec:
       {{- toYaml .Values.broker.nodeSelector | nindent 6 }}
     affinity:
       podAntiAffinity:
-        {{- toYaml .Values.topology.podAntiAffinity | nindent 8 }}
+        requiredDuringSchedulingIgnoredDuringExecution:
+          {{- range .Values.topology.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution }}
+          - topologyKey: {{ .topologyKey | quote }}
+            labelSelector:
+              matchLabels:
+                ActiveMQArtemis: {{ $fullname }}
+          {{- end }}
     labels:
       {{- toYaml .Values.broker.labels | nindent 6 }}
     annotations:

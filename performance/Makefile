@@ -10,7 +10,7 @@ RUNTIME_IMAGE_DIGEST ?=
 PROFILE ?= burst
 REPORT_DIR ?= ../reports/performance
 
-.PHONY: help test package build-local-image build-image run-local run-deployed
+.PHONY: help test package build-local-image build-image run-local run-deployed failure-deployed
 
 help:
 	@printf '%s\n' \
@@ -19,10 +19,12 @@ help:
 		'build-local-image Build the development client image' \
 		'build-image       Build the digest-pinned promotion image' \
 		'run-local         Run PROFILE against the local Compose broker' \
-		'run-deployed      Run PROFILE against PERF_URL'
+		'run-deployed      Run PROFILE against PERF_URL' \
+		'failure-deployed  Run the destructive acknowledged-message failover test'
 
 test:
 	$(MAVEN) -B -ntp -f $(CLIENT_DIR)/pom.xml test
+	./test-failure-script.sh
 
 package:
 	$(MAVEN) -B -ntp -f $(CLIENT_DIR)/pom.xml package
@@ -45,3 +47,12 @@ run-local: build-local-image
 
 run-deployed: build-local-image
 	IMAGE="$(IMAGE)" ./run-profile.sh --target deployed --profile "$(PROFILE)" --report-dir "$(REPORT_DIR)"
+
+failure-deployed: build-local-image
+	IMAGE="$(IMAGE)" ./run-failure-test.sh \
+		--context "$(CONTEXT)" \
+		--cluster "$(CLUSTER)" \
+		--namespace "$(NAMESPACE)" \
+		--profile "$(PROFILE)" \
+		--report-dir "$(REPORT_DIR)" \
+		$(FAILURE_ARGS)

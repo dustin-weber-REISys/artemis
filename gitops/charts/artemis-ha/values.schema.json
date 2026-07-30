@@ -19,11 +19,10 @@
     "ha": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["coordinationId", "groupName", "clusterName", "initialReplicationSyncTimeoutMs", "retryReplicationWaitMs", "zookeeperSessionTimeoutMs"],
+      "required": ["coordinationId", "groupName", "initialReplicationSyncTimeoutMs", "retryReplicationWaitMs", "zookeeperSessionTimeoutMs"],
       "properties": {
         "coordinationId": {"type": "string", "minLength": 8, "maxLength": 16, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{7,15}$"},
         "groupName": {"type": "string", "minLength": 1, "maxLength": 50},
-        "clusterName": {"type": "string", "minLength": 1, "maxLength": 50},
         "initialReplicationSyncTimeoutMs": {"type": "integer", "minimum": 1000},
         "retryReplicationWaitMs": {"type": "integer", "minimum": 100},
         "zookeeperSessionTimeoutMs": {"type": "integer", "minimum": 3000}
@@ -54,11 +53,10 @@
     "broker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "resources", "terminationGracePeriodSeconds", "revisionHistoryLimit", "nodeSelector", "tolerations", "labels", "annotations"],
+      "required": ["version", "resources", "revisionHistoryLimit", "nodeSelector", "tolerations", "labels", "annotations"],
       "properties": {
         "version": {"enum": ["2.21.0", "2.22.0", "2.23.0", "2.25.0", "2.26.0", "2.27.0", "2.27.1", "2.28.0", "2.29.0", "2.30.0", "2.31.0", "2.31.2", "2.32.0", "2.33.0", "2.34.0", "2.35.0", "2.36.0", "2.37.0", "2.38.0", "2.39.0", "2.40.0", "2.41.0", "2.42.0", "2.43.0", "2.44.0", "2.50.0", "2.51.0", "2.52.0", "2.53.0"]},
         "resources": {"type": "object", "required": ["requests", "limits"], "properties": {"requests": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}}, "limits": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}}}, "additionalProperties": false},
-        "terminationGracePeriodSeconds": {"type": "integer", "minimum": 30},
         "revisionHistoryLimit": {"type": "integer", "minimum": 0},
         "nodeSelector": {"type": "object", "additionalProperties": {"type": "string"}},
         "tolerations": {"type": "array", "items": {"type": "object"}},
@@ -120,8 +118,19 @@
     "brokerProperties": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["globalMaxSize", "maxDiskUsage", "connectionTtlOverride", "duplicateDetectionIdCacheSize", "persistDuplicateDetectionIds", "addressSettings", "extra"],
+      "required": ["durability", "globalMaxSize", "maxDiskUsage", "connectionTtlOverride", "duplicateDetectionIdCacheSize", "persistDuplicateDetectionIds", "addressSettings", "extra"],
       "properties": {
+        "durability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["journalSyncTransactional", "journalSyncNonTransactional", "journalDatasync", "largeMessageSync"],
+          "properties": {
+            "journalSyncTransactional": {"type": "boolean", "const": true},
+            "journalSyncNonTransactional": {"type": "boolean", "const": true},
+            "journalDatasync": {"type": "boolean", "const": true},
+            "largeMessageSync": {"type": "boolean", "const": true}
+          }
+        },
         "globalMaxSize": {"type": "string", "minLength": 1},
         "maxDiskUsage": {"type": "integer", "minimum": 1, "maximum": 100},
         "connectionTtlOverride": {"type": "integer", "minimum": 0},
@@ -136,8 +145,8 @@
       "additionalProperties": false,
       "required": ["topologySpreadConstraints", "podAntiAffinity", "pdb"],
       "properties": {
-        "topologySpreadConstraints": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["maxSkew", "topologyKey", "whenUnsatisfiable"], "properties": {"maxSkew": {"type": "integer", "minimum": 1}, "topologyKey": {"type": "string", "minLength": 1}, "whenUnsatisfiable": {"enum": ["DoNotSchedule", "ScheduleAnyway"]}}, "additionalProperties": true}},
-        "podAntiAffinity": {"type": "object"},
+        "topologySpreadConstraints": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["maxSkew", "minDomains", "topologyKey", "whenUnsatisfiable"], "properties": {"maxSkew": {"type": "integer", "minimum": 1}, "minDomains": {"type": "integer", "minimum": 2}, "topologyKey": {"type": "string", "minLength": 1}, "whenUnsatisfiable": {"enum": ["DoNotSchedule", "ScheduleAnyway"]}}, "additionalProperties": false}},
+        "podAntiAffinity": {"type": "object", "additionalProperties": false, "required": ["requiredDuringSchedulingIgnoredDuringExecution"], "properties": {"requiredDuringSchedulingIgnoredDuringExecution": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false, "required": ["topologyKey"], "properties": {"topologyKey": {"type": "string", "minLength": 1}}}}}},
         "pdb": {"type": "object", "required": ["maxUnavailable"], "properties": {"maxUnavailable": {"type": ["integer", "string"], "minimum": 0}}, "additionalProperties": false}
       }
     },

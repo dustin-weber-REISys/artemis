@@ -25,7 +25,9 @@ final class CommandLine {
             required("count", "N", "Number of persistent messages to send"),
             optional("start-sequence", "N", "First sequence number (default: 0)"),
             optional("duplicate-id-prefix", "PREFIX", "Artemis duplicate-detection ID prefix"),
-            optional("payload-prefix", "PREFIX", "Message body prefix"));
+            optional("payload-prefix", "PREFIX", "Message body prefix"),
+            optional("payload-bytes", "N", "Exact UTF-8 message-body size (default: 256)"),
+            optional("acknowledgement-ledger", "FILE", "Force-synchronized ledger of successful sends"));
 
     private static final List<Option> CONSUME_OPTIONS = List.of(
             required("expected-count", "N", "Number of unique messages expected"),
@@ -64,7 +66,11 @@ final class CommandLine {
                     nonNegativeLong(values, "start-sequence", 0),
                     positiveLong(values, "count"),
                     values.getOrDefault("duplicate-id-prefix", "validation-duplicate-"),
-                    values.getOrDefault("payload-prefix", "deterministic"));
+                    values.getOrDefault("payload-prefix", "deterministic"),
+                    positiveInteger(values, "payload-bytes", 256),
+                    values.containsKey("acknowledgement-ledger")
+                            ? Path.of(values.get("acknowledgement-ledger"))
+                            : null);
         }
 
         long expectedCount = positiveLong(values, "expected-count");
@@ -220,6 +226,17 @@ final class CommandLine {
         }
     }
 
+    private static int positiveInteger(
+            Map<String, String> values,
+            String name,
+            int defaultValue) {
+        long parsed = positiveLong(values, name, defaultValue);
+        if (parsed > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("--" + name + " is too large");
+        }
+        return (int) parsed;
+    }
+
     private static void appendOptions(StringBuilder text, String heading, List<Option> options) {
         text.append('\n').append(heading).append(":\n");
         for (Option option : options) {
@@ -262,7 +279,9 @@ final class CommandLine {
             long startSequence,
             long count,
             String duplicateIdPrefix,
-            String payloadPrefix) implements Command {
+            String payloadPrefix,
+            int payloadBytes,
+            Path acknowledgementLedger) implements Command {
     }
 
     record ConsumeCommand(

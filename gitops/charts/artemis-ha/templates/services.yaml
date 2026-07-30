@@ -43,3 +43,25 @@ spec:
       port: {{ $consolePort }}
       targetPort: {{ $consolePort }}
       protocol: TCP
+{{- if .Values.monitoring.enabled }}
+---
+# Monitoring must see the passive peer even though client Services intentionally
+# use the active-only readiness gate.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-metrics" $fullname | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+    artemis.example.io/protocol: metrics
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "artemis-ha.brokerSelector" . | nindent 4 }}
+  ports:
+    - name: console
+      port: {{ $consolePort }}
+      targetPort: {{ $consolePort }}
+      protocol: TCP
+{{- end }}

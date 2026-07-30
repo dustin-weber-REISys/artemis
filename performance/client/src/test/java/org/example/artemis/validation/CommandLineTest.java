@@ -2,6 +2,7 @@ package org.example.artemis.validation;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,6 +20,8 @@ class CommandLineTest {
                 "--destination", "validation.queue",
                 "--count", "3",
                 "--start-sequence", "20",
+                "--payload-bytes", "1024",
+                "--acknowledgement-ledger", "/reports/acknowledged.tsv",
                 "--run-id", "run-1"
         });
 
@@ -29,6 +32,8 @@ class CommandLineTest {
         assertEquals("run-1", send.common().runId());
         assertEquals(20, send.startSequence());
         assertEquals(3, send.count());
+        assertEquals(1024, send.payloadBytes());
+        assertEquals(Path.of("/reports/acknowledged.tsv"), send.acknowledgementLedger());
     }
 
     @Test
@@ -112,6 +117,8 @@ class CommandLineTest {
 
         assertTrue(usage.contains("--count N (required)"));
         assertTrue(usage.contains("--start-sequence N"));
+        assertTrue(usage.contains("--payload-bytes N"));
+        assertTrue(usage.contains("--acknowledgement-ledger FILE"));
         assertTrue(usage.contains("--expected-count N (required)"));
         assertTrue(usage.contains("--disconnect-before-ack"));
     }

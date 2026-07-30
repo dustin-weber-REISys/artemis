@@ -3,12 +3,18 @@
 This area is the deployable EKS baseline. It owns:
 
 - [`argocd`](argocd): per-cluster standalone-repository bootstraps and the
-  environment-local 2/4/4 workload topology;
+  environment-local broker-pair catalog, including disabled PP/PR batch
+  placeholders;
 - [`charts`](charts): the Artemis HA and shared ZooKeeper Helm charts;
 - [`environments`](environments): test, non-production, and production values;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
 - [`scripts`](scripts): rendering, schema, topology, and scenario validation;
 - [`docs`](docs): design decisions, environment import guidance, and runbooks.
+
+The
+[`observed production workload baseline`](docs/production-workload-baseline.md)
+captures the consumer footprint, burst behavior, retained backlog, and
+production-derived scenarios that should inform capacity and recovery testing.
 
 Each EKS cluster has its own Argo CD instance. Terraform registers this
 repository, creates the `messaging-platform` AppProject through

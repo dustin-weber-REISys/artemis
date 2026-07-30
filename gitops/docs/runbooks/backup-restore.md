@@ -12,9 +12,9 @@ volume snapshot is not a substitute for tested broker-consistent recovery.
 - Test restore into an isolated namespace with a different coordination ID.
   Never attach a restored volume to both the original and recovery broker.
 - Record the last acknowledged sequence in a validation send report before and
-  after restore. The zero-RPO claim applies to acknowledged durable messages
-  only when the synchronous replication and the approved snapshot/recovery
-  process both provide that guarantee.
+  after restore. A zero-RPO result applies to acknowledged durable messages
+  only for a run whose external ledger reconciles after the approved
+  snapshot/recovery process; the send report alone is only the baseline.
 
 ## Restore outline
 

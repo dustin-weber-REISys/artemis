@@ -2,6 +2,7 @@ package org.example.artemis.validation;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -37,10 +38,12 @@ class RunnerTest {
     void sendRunnerSeparatesAmbiguousOrFailedSendsFromAcknowledgements() throws Exception {
         FakeTransport transport = new FakeTransport(3);
         transport.failSequence = 21;
+        List<Long> ledger = new ArrayList<>();
         ValidationReport report = new DurableSendRunner().run(
                 transport,
-                new DurableSendRunner.Config(20, 3, "msg-", "dup-", "body-",
-                        "run-2", Protocol.AMQP, "validation.queue"));
+                new DurableSendRunner.Config(20, 3, "msg-", "dup-", "body-", 256,
+                        "run-2", Protocol.AMQP, "validation.queue"),
+                (sequence, id) -> ledger.add(sequence));
 
         assertEquals(Operation.SEND, report.context().operation());
         assertEquals(2, report.metrics().acknowledgedCount());
@@ -52,6 +55,19 @@ class RunnerTest {
         assertEquals(RpoStatus.NOT_EVALUATED, report.outcome().rpoStatus());
         assertEquals("msg-00000000000000000020", transport.sent.get(0).id());
         assertEquals("dup-00000000000000000022", transport.sent.get(2).duplicateId());
+        assertEquals(256, transport.sent.get(0).body().getBytes(StandardCharsets.UTF_8).length);
+        assertEquals(List.of(20L, 22L), ledger);
+    }
+
+    @Test
+    void successfulSendReportIsOnlyAnRpoBaseline() throws Exception {
+        ValidationReport report = new DurableSendRunner().run(
+                new FakeTransport(1),
+                new DurableSendRunner.Config(0, 1, "msg-", "dup-", "body-", 256,
+                        "run-3", Protocol.AMQP, "validation.queue"));
+
+        assertEquals(ReportStatus.PASS, report.outcome().status());
+        assertEquals(RpoStatus.NOT_EVALUATED, report.outcome().rpoStatus());
     }
 
     private record Sent(long sequence, String id, String duplicateId, String body) {

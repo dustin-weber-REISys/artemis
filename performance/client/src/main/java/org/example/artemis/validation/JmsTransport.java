@@ -10,6 +10,7 @@ import jakarta.jms.MessageProducer;
 import jakarta.jms.TextMessage;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.qpid.jms.JmsConnectionFactory;
+import org.apache.qpid.jms.policy.JmsDefaultPresettlePolicy;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -30,13 +31,34 @@ public final class JmsTransport implements Transport {
 
     public static JmsTransport connect(Protocol protocol, String url, String username, String password)
             throws Exception {
-        ConnectionFactory factory = switch (protocol) {
-            case OPENWIRE -> new ActiveMQConnectionFactory(url);
-            case AMQP -> new JmsConnectionFactory(url);
-        };
+        ConnectionFactory factory = synchronousFactory(protocol, url);
         String effectiveUsername = username == null || username.isBlank() ? null : username;
         String effectivePassword = password == null || password.isBlank() ? null : password;
         return new JmsTransport(factory.createConnection(effectiveUsername, effectivePassword));
+    }
+
+    static ConnectionFactory synchronousFactory(Protocol protocol, String url) {
+        return switch (protocol) {
+            case OPENWIRE -> {
+                ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(url);
+                // Override URL options so a successful persistent send always
+                // represents a synchronous broker response in this validator.
+                factory.setUseAsyncSend(false);
+                factory.setAlwaysSyncSend(true);
+                factory.setSendAcksAsync(false);
+                yield factory;
+            }
+            case AMQP -> {
+                JmsConnectionFactory factory = new JmsConnectionFactory(url);
+                factory.setForceAsyncSend(false);
+                factory.setForceSyncSend(true);
+                factory.setForceAsyncAcks(false);
+                // Replace any URI-supplied presettle policy with an unsettled
+                // producer/consumer policy so a remote outcome is required.
+                factory.setPresettlePolicy(new JmsDefaultPresettlePolicy());
+                yield factory;
+            }
+        };
     }
 
     @Override

@@ -7,6 +7,9 @@ rendered="$temp_dir/default.yaml"
 autocreate_rendered="$temp_dir/autocreate.yaml"
 expiry_rendered="$temp_dir/expiry.yaml"
 ports_rendered="$temp_dir/ports.yaml"
+prod_rendered="$temp_dir/prod.yaml"
+nonprod_rendered="$temp_dir/nonprod.yaml"
+test_rendered="$temp_dir/test.yaml"
 trap 'rm -rf "$temp_dir"' EXIT
 
 helm_args=(
@@ -28,9 +31,11 @@ removed_values=(
   'replicas=2'
   'ha.mode=competing-primary'
   'ha.automaticFailback=false'
+  'ha.clusterName=my-cluster'
   'zookeeper.enabled=true'
   'persistence.enabled=true'
   'broker.requireLogin=true'
+  'broker.terminationGracePeriodSeconds=120'
   'console.enabled=true'
   'console.port=8161'
   'services.type=ClusterIP'
@@ -43,12 +48,28 @@ for removed_value in "${removed_values[@]}"; do
   fi
 done
 
+for protected_override in \
+  'journalSyncTransactional=false' \
+  'journal-sync-non-transactional=false' \
+  'persistIDCache=false' \
+  'HAPolicyConfiguration.coordinationId=unsafe'; do
+  if helm template invalid "$chart_dir" "${helm_args[@]}" \
+    --set-string "brokerProperties.extra[0]=$protected_override" >/dev/null 2>&1; then
+    echo "expected protected broker property override to fail: $protected_override" >&2
+    exit 1
+  fi
+done
+
 helm template artemis "$chart_dir" --namespace example-messaging "${helm_args[@]}" > "$rendered"
 
 rg -q '^kind: ActiveMQArtemis$' "$rendered"
 rg -q 'HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER' "$rendered"
 rg -q 'HAPolicyConfiguration\.coordinationId=pair-id-test01' "$rendered"
 rg -q 'HAPolicyConfiguration\.distributedManagerConfiguration\.properties\.namespace=artemis/example/example-pair' "$rendered"
+rg -q 'journalSyncTransactional=true' "$rendered"
+rg -q 'journalSyncNonTransactional=true' "$rendered"
+rg -q 'journalDatasync=true' "$rendered"
+rg -q 'largeMessageSync=true' "$rendered"
 rg -q 'addressSettings\.#\.maxDeliveryAttempts=1' "$rendered"
 rg -q 'addressSettings\.#\.redeliveryDelay=0' "$rendered"
 rg -q 'addressSettings\.#\.deadLetterAddress=DLA' "$rendered"
@@ -74,6 +95,7 @@ rg -q 'name: artemis-artemis-ha-amqp' "$rendered"
 rg -q 'name: artemis-artemis-ha-stomp' "$rendered"
 rg -q 'name: artemis-artemis-ha-mqtt' "$rendered"
 rg -q 'name: artemis-artemis-ha-websocket' "$rendered"
+rg -q 'name: artemis-artemis-ha-metrics' "$rendered"
 rg -q 'kind: Ingress' "$rendered"
 rg -q 'kind: NetworkPolicy' "$rendered"
 rg -q 'kind: ServiceMonitor' "$rendered"
@@ -82,8 +104,34 @@ rg -q 'kind: PrometheusRule' "$rendered"
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-console") | .spec.ports[0].port' "$rendered")" == "8161" ]]
+[[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-metrics") | .spec.publishNotReadyAddresses' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.startupProbe.tcpSocket.port' "$rendered")" == "8161" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.livenessProbe.tcpSocket.port' "$rendered")" == "8161" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.topologySpreadConstraints[] | select(.topologyKey == "topology.kubernetes.io/zone") | .minDomains' "$rendered")" == "2" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[] | select(.topologyKey == "topology.kubernetes.io/zone") | .labelSelector.matchLabels.ActiveMQArtemis' "$rendered")" == "artemis-artemis-ha" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$rendered")" == "gp3" ]]
+if rg -q '^kind: StorageClass$' "$rendered"; then
+  echo "default chart unexpectedly rendered a StorageClass" >&2
+  exit 1
+fi
+
+for environment in prod nonprod test; do
+  environment_rendered="$temp_dir/$environment.yaml"
+  helm template "artemis-$environment" "$chart_dir" --namespace example-messaging \
+    "${helm_args[@]}" \
+    -f "$chart_dir/../../environments/$environment/artemis-values.yaml" \
+    > "$environment_rendered"
+done
+
+for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered"; do
+  if rg -q '^kind: StorageClass$' "$environment_rendered"; then
+    echo "Artemis chart unexpectedly rendered a platform-owned StorageClass: $environment_rendered" >&2
+    exit 1
+  fi
+done
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$prod_rendered")" == "PLACEHOLDER_PROD_GP3_STORAGE_CLASS" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$nonprod_rendered")" == "PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$test_rendered")" == "PLACEHOLDER_TEST_GP3_STORAGE_CLASS" ]]
 
 helm template artemis-ports "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
@@ -131,4 +179,5 @@ if rg -n -i '^[[:space:]]*(password|token):[[:space:]]+[^<{]' "$rendered"; then
 fi
 
 kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
+kubeconform -strict -ignore-missing-schemas -summary "$prod_rendered" >/dev/null
 echo "artemis-ha focused chart tests passed"

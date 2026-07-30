@@ -8,7 +8,9 @@ hand.
 The client sends persistent messages synchronously. Each message contains
 deterministic `validation_id`, `validation_sequence`, and `_AMQ_DUPL_ID`
 properties. The underscore-form validation names are valid across both
-OpenWire and AMQP JMS clients. The consumer uses `CLIENT_ACKNOWLEDGE`, can
+OpenWire and AMQP JMS clients. `--payload-bytes` fixes the UTF-8 text-body size
+so storage scenarios do not silently send tiny messages. The consumer uses
+`CLIENT_ACKNOWLEDGE`, can
 close its delivery session before ack, and reports missing, duplicate,
 redelivered, reordered, unexpected, and
 unacknowledged sequence numbers.

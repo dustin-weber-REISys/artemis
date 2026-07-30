@@ -6,27 +6,41 @@ disruption while it is rejoining.
 
 ## Planned failover test
 
-1. Record the send report as the acknowledged durable baseline. Start a
-   consumer with the same expected sequence range.
-2. Run a dry-run plan and inspect the target pod/node before execution:
+Use the verdict-producing performance harness for the active-process and
+active-pod cases. It records each successful persistent send in a
+force-synchronized external ledger, injects the fault under continuous load,
+observes broker `Active` state, and reconciles the ledger after failover.
+
+1. Use a disposable, pre-created durable queue and a client URL with the
+   provider's reconnect/failover transport enabled.
+2. Run a dry-run plan and inspect its target cluster and selector:
 
 ```sh
-./gitops/scripts/eks-scenario.sh --scenario active-broker-pod-delete \
+./performance/run-failure-test.sh \
   --context CONTEXT --cluster CLUSTER --namespace NAMESPACE \
-  --target-pod ACTIVE_BROKER_POD
+  --profile sustained --fault process-kill
 ```
 
-3. For an approved test window only, repeat with `--execute` and exact
+3. For an approved test window only, supply `PERF_URL`, `PERF_USERNAME`, and
+   `PERF_PASSWORD`, then repeat with `--execute` and exact
    `--confirm-context`, `--confirm-cluster`, and `--confirm-namespace` values.
-4. Capture timestamps for broker process loss, passive activation, client
-   recovery, replication synchronization, and first successful send/receive.
-5. Run the consume report to completion. Missing acknowledged IDs are an RPO
-   failure. Duplicate and redelivered IDs are expected observations when a
-   consumer or producer was in flight.
+   Add `--double-failover` to test A active → B active → A active. The harness
+   will not inject the second fault until the original broker has restarted
+   passive, reports `ReplicaSync=true`, and the replacement active has
+   acknowledged another persistent send.
+4. Preserve the generated `failure-run.json`, acknowledgement ledger, raw
+   send/consume reports, preflight topology, and logs.
+5. Treat any missing ledger ID, observed split brain, inconsistent ledger, or
+   missed recovery target as a failed test. Ambiguous sends and valid
+   redeliveries are evidence to retain, not automatically message loss.
 
 Record the measured recovery time against the current target in
 [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml); do
 not silently change the target in an execution record.
+
+`gitops/scripts/eks-scenario.sh` remains the action-only runner for the wider
+manual matrix. Its reports deliberately remain `NOT_EVALUATED`; do not use
+them as message-safety verdicts.
 
 ## Manual failback
 

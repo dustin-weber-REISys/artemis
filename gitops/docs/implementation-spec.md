@@ -83,6 +83,14 @@ defined and validated from the environment-local Artemis ApplicationSets, not
 repeated here. Sandbox is intentionally non-promotable and makes no HA,
 AZ-loss, durability, or upgrade claim.
 
+PE, PP, DM, and PR each use one internal active/passive pair. PP and PR also
+use a distinct external active/passive pair; external clients do not share the
+internal pair. Disabled batch entries in PP and PR preserve a future
+active/passive isolation option without deploying it. Every pair receives a
+topology-owned management hostname, exact OIDC redirect URI, namespace,
+coordination identity, and storage size. See the
+[`workload-cell topology ADR`](adr-workload-cell-topology.md).
+
 ### Stronger isolation
 
 A workload may receive dedicated broker placement and a separate ZooKeeper
@@ -124,6 +132,12 @@ platform responsibilities. Capacity is derived from measured message rate,
 size, retention, paging, replay, replication latency, and recovery time—not
 from prose in this document.
 
+Per-pair volume size is authoritative in the environment topology, while the
+stage-wide disk guardrail is authoritative in the environment values. The
+provisional PP/PR envelope, its assumptions, and its promotion gate are
+recorded once in the
+[`workload-cell topology ADR`](adr-workload-cell-topology.md#storage-envelope).
+
 ### Protocol and destination compatibility
 
 OpenWire is the initial migration interface for existing Classic clients. AMQP
@@ -138,6 +152,12 @@ resources may be created and retained by Artemis according to the chart's
 address policy so per-source failure evidence remains available. Exact routing,
 expiry, redelivery, paging, and auto-creation behavior is authoritative in the
 chart and its focused tests.
+
+The chart documents automatic per-source `DLQ.<address>` and optional
+`EXP.<address>` resources. The present `#` policy is pair-wide. Application
+teams may propose later policy changes, but independent per-team policies on a
+shared pair require an explicit multi-match chart feature and queue-catalog
+review; unrestricted broker-property overrides are not an approved interface.
 
 The required Classic feature inventory and its current results live in
 [`tests/compatibility/classic-6.2.6-inventory.yaml`](../tests/compatibility/classic-6.2.6-inventory.yaml).

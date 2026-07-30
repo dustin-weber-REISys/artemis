@@ -9,16 +9,32 @@ brokerPairs:
   - brokerPairName: nonprod-smktest-eut
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
     coordinationId: np-eut-pair01
+    logicalEnvironment: SMKTEST-EUT
+    trafficClass: internal
+    managementHost: artemis-nonprod-smktest-eut.example.invalid
+    storageSize: 50Gi
     enabled: "false"
   - brokerPairName: nonprod-trn
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
     coordinationId: np-trn-pair01
+    logicalEnvironment: TRN
+    trafficClass: internal
+    managementHost: artemis-nonprod-trn.example.invalid
+    storageSize: 50Gi
     enabled: "false"
   - brokerPairName: nonprod-trn2
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
     coordinationId: np-trn2-pair01
+    logicalEnvironment: TRN2
+    trafficClass: internal
+    managementHost: artemis-nonprod-trn2.example.invalid
+    storageSize: 50Gi
     enabled: "false"
   - brokerPairName: nonprod-pt
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
     coordinationId: np-pt-pair01
+    logicalEnvironment: PT
+    trafficClass: internal
+    managementHost: artemis-nonprod-pt.example.invalid
+    storageSize: 50Gi
     enabled: "false"

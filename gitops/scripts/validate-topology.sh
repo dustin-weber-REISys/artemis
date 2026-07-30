@@ -168,6 +168,21 @@ assert_workload_applicationset() {
       '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.serviceNamespace") | .value' \
       "$file")" \
     '{{.platformNamespace}}'
+  assert_equal "$environment workloads storage size" \
+    "$(yq -r \
+      '.spec.template.spec.source.helm.parameters[] | select(.name == "persistence.size") | .value' \
+      "$file")" \
+    '{{.storageSize}}'
+  assert_equal "$environment workloads management host" \
+    "$(yq -r \
+      '.spec.template.spec.source.helm.parameters[] | select(.name == "console.ingress.host") | .value' \
+      "$file")" \
+    '{{.managementHost}}'
+  assert_equal "$environment workloads Keycloak redirect URI" \
+    "$(yq -r \
+      '.spec.template.spec.source.helm.parameters[] | select(.name == "keycloak.redirectUri") | .value' \
+      "$file")" \
+    'https://{{.managementHost}}/console'
   assert_sync_policy "$file" '.spec.template.spec.syncPolicy' "$environment workloads"
 }
 
@@ -177,9 +192,10 @@ broker_pair_count=0
 all_names=''
 all_namespaces=''
 all_coordination_ids=''
+all_management_hosts=''
 distribution_json=''
 
-for environment_count in test:2 nonprod:4 prod:4; do
+for environment_count in test:2 nonprod:4 prod:8; do
   environment=${environment_count%%:*}
   expected_count=${environment_count##*:}
   topology="$topology_dir/$environment.yaml"
@@ -216,7 +232,7 @@ for environment_count in test:2 nonprod:4 prod:4; do
   assert_equal "$environment broker pair count" "$actual_count" "$expected_count"
   broker_pair_count=$((broker_pair_count + actual_count))
 
-  for required_field in brokerPairName workloadNamespace coordinationId enabled; do
+  for required_field in brokerPairName workloadNamespace coordinationId logicalEnvironment trafficClass managementHost storageSize enabled; do
     assert_equal "$environment broker pairs missing $required_field" \
       "$(FIELD="$required_field" yq -r '
         [.brokerPairs // [] | .[]
@@ -245,6 +261,37 @@ for environment_count in test:2 nonprod:4 prod:4; do
       ] | length
     ' "$topology")" \
     0
+  assert_equal "$environment invalid traffic class count" \
+    "$(yq -r '
+      [.brokerPairs // [] | .[]
+        | select(
+            .trafficClass != "internal"
+            and .trafficClass != "external"
+            and .trafficClass != "batch"
+          )
+      ] | length
+    ' "$topology")" \
+    0
+  assert_equal "$environment invalid management host count" \
+    "$(yq -r '
+      [.brokerPairs // [] | .[]
+        | select(
+            (.managementHost | type) != "!!str"
+            or (.managementHost | test("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$") | not)
+          )
+      ] | length
+    ' "$topology")" \
+    0
+  assert_equal "$environment invalid storage size count" \
+    "$(yq -r '
+      [.brokerPairs // [] | .[]
+        | select(
+            (.storageSize | type) != "!!str"
+            or (.storageSize | test("^[1-9][0-9]*(Mi|Gi|Ti)$") | not)
+          )
+      ] | length
+    ' "$topology")" \
+    0
   assert_equal "$environment broker-pair name prefix mismatch count" \
     "$(PREFIX="^$environment-" yq -r '
       [.brokerPairs // [] | .[]
@@ -259,6 +306,33 @@ $(yq -r '.brokerPairs[].brokerPairName' "$topology")"
 $(yq -r '.brokerPairs[].workloadNamespace' "$topology")"
   all_coordination_ids="$all_coordination_ids
 $(yq -r '.brokerPairs[].coordinationId' "$topology")"
+  all_management_hosts="$all_management_hosts
+$(yq -r '.brokerPairs[].managementHost' "$topology")"
+
+  if [[ "$environment" == prod ]]; then
+    assert_equal 'prod internal pair count' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "internal")] | length' "$topology")" \
+      4
+    assert_equal 'prod internal logical environment coverage' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "internal") | .logicalEnvironment] | unique | sort | join(",")' "$topology")" \
+      'DM,PE,PP,PR'
+    assert_equal 'prod external pair count' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "external")] | length' "$topology")" \
+      2
+    assert_equal 'prod external logical environment coverage' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "external") | .logicalEnvironment] | unique | sort | join(",")' "$topology")" \
+      'PP,PR'
+    assert_equal 'prod batch placeholder count' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "batch")] | length' "$topology")" \
+      2
+    assert_equal 'prod enabled batch placeholder count' \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass == "batch" and .enabled == "true")] | length' "$topology")" \
+      0
+  else
+    assert_equal "$environment non-internal pair count" \
+      "$(yq -r '[.brokerPairs[] | select(.trafficClass != "internal")] | length' "$topology")" \
+      0
+  fi
 
   assert_singleton_application \
     "$operator" "$environment" operator "$environment-arkmq-operator" -20
@@ -303,7 +377,7 @@ $(yq -r '.brokerPairs[].coordinationId' "$topology")"
 done
 
 assert_equal 'cluster bootstrap count' "$cluster_count" 3
-assert_equal 'broker pair count' "$broker_pair_count" 10
+assert_equal 'broker pair count' "$broker_pair_count" 14
 assert_equal 'unique brokerPairName count' \
   "$(unique_line_count "$all_names")" \
   "$broker_pair_count"
@@ -312,6 +386,9 @@ assert_equal 'unique workloadNamespace count' \
   "$broker_pair_count"
 assert_equal 'unique coordinationId count' \
   "$(unique_line_count "$all_coordination_ids")" \
+  "$broker_pair_count"
+assert_equal 'unique managementHost count' \
+  "$(unique_line_count "$all_management_hosts")" \
   "$broker_pair_count"
 
 if rg -n \

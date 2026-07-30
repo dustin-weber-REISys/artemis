@@ -33,6 +33,13 @@ profiles:
   - name: sustained
     messageCount: 100000
     durationSeconds: 900
+  - name: two-million-capacity
+    # Exercises the provisional 500-GiB PP/PR storage envelope.
+    # 2,000,000 x 128 KiB is approximately 244 GiB of body data before message
+    # properties, broker metadata, journal/paging overhead, and headroom.
+    messageCount: 2000000
+    payloadBytes: 131072
+    durationSeconds: 7200
 acceptance:
   missingAcknowledgedSequences: 0
   splitBrainActiveBrokers: 0

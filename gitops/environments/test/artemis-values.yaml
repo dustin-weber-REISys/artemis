@@ -15,10 +15,4 @@ broker:
       cpu: "1"
       memory: 3Gi
 persistence:
-  storageClassName: gp3
-  size: 20Gi
-console:
-  ingress:
-    host: artemis-test.example.invalid
-keycloak:
-  redirectUri: https://artemis-test.example.invalid/console
+  storageClassName: PLACEHOLDER_TEST_GP3_STORAGE_CLASS

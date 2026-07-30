@@ -44,6 +44,19 @@ PERF_PASSWORD="$ARTEMIS_TEST_PASSWORD" \
   make performance-deployed PROFILE=sustained
 ```
 
+For the destructive, acknowledged-message failover check, first review the
+plan and prerequisites:
+
+```sh
+./performance/run-failure-test.sh \
+  --context example-eks \
+  --cluster example-eks-cluster \
+  --namespace example-messaging
+```
+
+See [`performance/README.md`](performance/README.md) for the explicit
+confirmation flags and evidence produced by an execution.
+
 ## Validate the repository
 
 ```sh

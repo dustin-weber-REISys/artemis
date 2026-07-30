@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=8
+check_count=10
 run_check() {
   local label=$1
   local exit_code
@@ -82,6 +82,8 @@ run_check 'Static invariants' \
 run_check 'Scenario definitions' \
   "$repo_root/gitops/scripts/validate-scenarios.sh" \
   --report "$report_dir/scenario-validation.json"
+run_check 'EKS scenario tooling regressions' \
+  "$repo_root/gitops/tests/e2e/test-scenario-tools.sh"
 run_check 'Generated workload topology' \
   "$repo_root/gitops/scripts/validate-topology.sh" \
   --report "$report_dir/topology-validation.json"
@@ -95,6 +97,8 @@ run_check 'ArkMQ operator schema' \
 run_check 'Docker Compose configuration' \
   "$repo_root/local/scripts/validate-compose.sh" \
   --report "$report_dir/compose-validation.json"
+run_check 'Destructive failure-harness regressions' \
+  "$repo_root/performance/test-failure-script.sh"
 run_check 'Java unit tests' \
   "$maven" -B -ntp -f "$client_dir/pom.xml" test
 

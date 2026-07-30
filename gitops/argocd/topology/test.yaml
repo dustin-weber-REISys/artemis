@@ -9,8 +9,16 @@ brokerPairs:
   - brokerPairName: test-sky
     workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
     coordinationId: test-sky-01
+    logicalEnvironment: SKY
+    trafficClass: internal
+    managementHost: artemis-test-sky.example.invalid
+    storageSize: 20Gi
     enabled: "false"
   - brokerPairName: test-sky2
     workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
     coordinationId: test-sky2-01
+    logicalEnvironment: SKY2
+    trafficClass: internal
+    managementHost: artemis-test-sky2.example.invalid
+    storageSize: 20Gi
     enabled: "false"

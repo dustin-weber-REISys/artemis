@@ -46,10 +46,18 @@ public final class Main {
                         common.idPrefix(),
                         send.duplicateIdPrefix(),
                         send.payloadPrefix(),
+                        send.payloadBytes(),
                         common.runId(),
                         common.protocol(),
                         common.destination());
-                report = new DurableSendRunner().run(transport, config);
+                if (send.acknowledgementLedger() == null) {
+                    report = new DurableSendRunner().run(transport, config);
+                } else {
+                    try (AcknowledgementLedger ledger =
+                                 AcknowledgementLedger.open(send.acknowledgementLedger())) {
+                        report = new DurableSendRunner().run(transport, config, ledger);
+                    }
+                }
             } else {
                 CommandLine.ConsumeCommand consume = (CommandLine.ConsumeCommand) command;
                 ConsumeRunner.Config config = new ConsumeRunner.Config(

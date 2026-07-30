@@ -15,7 +15,7 @@ public record ValidationReport(
 
     public static final String SCHEMA_VERSION = "validation.artemis.apache.org/v1";
     public static final String SEND_NOTES =
-            "Persistent send acknowledgement is synchronous; broker-acknowledged IDs are the RPO baseline.";
+            "Persistent send acknowledgement is synchronous; broker-acknowledged IDs are the RPO baseline, not an RPO verdict.";
 
     public ValidationReport {
         Objects.requireNonNull(schemaVersion, "schemaVersion");
@@ -46,7 +46,7 @@ public record ValidationReport(
                 findings,
                 new Outcome(
                         pass ? ReportStatus.PASS : ReportStatus.FAIL,
-                        pass ? RpoStatus.PASS : RpoStatus.NOT_EVALUATED,
+                        RpoStatus.NOT_EVALUATED,
                         SEND_NOTES));
     }
 

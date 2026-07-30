@@ -52,8 +52,9 @@ Complete these checks before changing Argo CD resources:
 - The EBS CSI driver uses its approved IAM role. Artemis and ZooKeeper service
   accounts do not receive AWS permissions merely to mount PVCs.
 - The selected encrypted storage class supports `ReadWriteOnce` and
-  `WaitForFirstConsumer`. Reclaim, snapshot, KMS, cross-account/region restore,
-  and retention policies are approved outside this repository.
+  `WaitForFirstConsumer`, uses `Retain`, and allows volume expansion. Snapshot,
+  KMS, cross-account/region restore, and retention policies are approved
+  outside this repository.
 - A restore has been rehearsed in isolation. Never attach one restored broker
   volume to two broker identities or reuse the original coordination identity
   during an isolated recovery test.

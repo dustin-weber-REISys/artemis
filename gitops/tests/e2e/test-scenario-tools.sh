@@ -117,4 +117,19 @@ yq -e '
 ' "$executed_report" >/dev/null ||
   fail 'executed action report lost safeguard or acceptance semantics'
 
+process_report="$temp_root/process-kill.json"
+env PATH="$fake_bin:$PATH" KUBECTL_LOG="$kubectl_log" "$runner" \
+  --scenario active-broker-process-kill \
+  --context test-context \
+  --cluster test-cluster \
+  --namespace test-namespace \
+  --confirm-context test-context \
+  --confirm-cluster test-cluster \
+  --confirm-namespace test-namespace \
+  --target-pod broker-0 \
+  --execute \
+  --report "$process_report" >/dev/null
+grep -Fq -- '--context test-context --namespace test-namespace exec broker-0 -- kill -KILL 1' "$kubectl_log" ||
+  fail 'process-kill action did not issue SIGKILL to PID 1'
+
 printf '%s\n' 'scenario tooling tests: PASS'

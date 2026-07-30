@@ -100,6 +100,7 @@ topology:
   zoneKey: topology.kubernetes.io/zone
   hostKey: kubernetes.io/hostname
   maxSkew: 1
+  minDomains: 3
   whenUnsatisfiable: DoNotSchedule
 
 podDisruptionBudget:

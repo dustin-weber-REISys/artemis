@@ -45,14 +45,18 @@ spec:
               value: '{{.coordinationId}}'
             - name: ha.groupName
               value: '{{.brokerPairName}}-group'
-            - name: ha.clusterName
-              value: '{{.brokerPairName}}-cluster'
             - name: zookeeper.connectString
               value: '{{.environment}}-shared-zookeeper-zookeeper-client.{{.platformNamespace}}.svc.cluster.local:2181'
             - name: zookeeper.serviceNamespace
               value: '{{.platformNamespace}}'
             - name: zookeeper.curatorNamespace
               value: 'artemis/{{.environment}}/{{.brokerPairName}}'
+            - name: persistence.size
+              value: '{{.storageSize}}'
+            - name: console.ingress.host
+              value: '{{.managementHost}}'
+            - name: keycloak.redirectUri
+              value: 'https://{{.managementHost}}/console'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.workloadNamespace}}'

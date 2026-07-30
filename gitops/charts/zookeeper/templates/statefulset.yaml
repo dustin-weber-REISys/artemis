@@ -47,6 +47,7 @@ spec:
               topologyKey: {{ .Values.topology.hostKey | quote }}
       topologySpreadConstraints:
         - maxSkew: {{ .Values.topology.maxSkew }}
+          minDomains: {{ .Values.topology.minDomains }}
           topologyKey: {{ .Values.topology.zoneKey | quote }}
           whenUnsatisfiable: {{ .Values.topology.whenUnsatisfiable }}
           labelSelector:

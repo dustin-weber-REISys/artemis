@@ -31,7 +31,7 @@ list_actions=0
 
 list_runner_actions() {
   printf '%s\t%s\n' \
-    terminate-pod-process 'Send TERM to PID 1 in one explicitly named pod.' \
+    terminate-pod-process 'Send SIGKILL to PID 1 in one explicitly named pod.' \
     delete-single-pod 'Delete one explicitly named pod without waiting for replacement.' \
     delete-multiple-pods 'Delete at least two explicitly named comma-separated pods.' \
     drain-node 'Drain one explicitly named node with the broker PDB enforced.' \
@@ -152,7 +152,7 @@ write_report() {
       "planned": strenv(REPORT_PLANNED),
       "observation": strenv(REPORT_OBSERVATION),
       "destructiveSafeguard": strenv(REPORT_SAFEGUARD),
-      "rpo": "zero-for-acknowledged-durable"
+      "rpoTarget": "zero-for-acknowledged-durable"
     }' > "$temp_report"
   mv -- "$temp_report" "$report"
   trap - EXIT
@@ -220,9 +220,9 @@ case "$runner_action" in
   terminate-pod-process)
     [[ -n "$target_pod" ]] || { printf '%s\n' '--target-pod is required for this action' >&2; exit 2; }
     target_description=$target_pod
-    planned="send TERM to PID 1 in the explicitly supplied pod"
+    planned="send SIGKILL to PID 1 in the explicitly supplied pod"
     if [[ "$mode" == execute ]]; then
-      kubectl --context "$context" --namespace "$namespace" exec "$target_pod" -- kill -TERM 1
+      kubectl --context "$context" --namespace "$namespace" exec "$target_pod" -- kill -KILL 1
       status=ACTION_EXECUTED
     fi
     ;;

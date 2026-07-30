@@ -3,22 +3,71 @@ environment: prod
 clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
 platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
 
-# Production pairs remain explicit so promotion cannot silently discover or
-# inherit unrelated application namespaces.
+# PE, PP, DM, and PR each receive one internal active/passive pair. PP and PR
+# also receive a separate external pair. Disabled PP/PR batch entries reserve
+# the future workload-isolation pattern without deploying it.
 brokerPairs:
   - brokerPairName: prod-pe
     workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PE
     coordinationId: prod-pe-pair01
+    logicalEnvironment: PE
+    trafficClass: internal
+    managementHost: artemis-pe-internal.example.invalid
+    storageSize: 100Gi
     enabled: "false"
   - brokerPairName: prod-pp
     workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP
     coordinationId: prod-pp-pair01
+    logicalEnvironment: PP
+    trafficClass: internal
+    managementHost: artemis-pp-internal.example.invalid
+    storageSize: 500Gi
+    enabled: "false"
+  - brokerPairName: prod-pp-external
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP_EXTERNAL
+    coordinationId: prod-pp-ext01
+    logicalEnvironment: PP
+    trafficClass: external
+    managementHost: artemis-pp-external.example.invalid
+    storageSize: 500Gi
+    enabled: "false"
+  - brokerPairName: prod-pp-batch
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP_BATCH
+    coordinationId: prod-pp-batch01
+    logicalEnvironment: PP
+    trafficClass: batch
+    managementHost: artemis-pp-batch.example.invalid
+    storageSize: 500Gi
     enabled: "false"
   - brokerPairName: prod-dm
     workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_DM
     coordinationId: prod-dm-pair01
+    logicalEnvironment: DM
+    trafficClass: internal
+    managementHost: artemis-dm-internal.example.invalid
+    storageSize: 100Gi
     enabled: "false"
   - brokerPairName: prod-pr
     workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR
     coordinationId: prod-pr-pair01
+    logicalEnvironment: PR
+    trafficClass: internal
+    managementHost: artemis-pr-internal.example.invalid
+    storageSize: 500Gi
+    enabled: "false"
+  - brokerPairName: prod-pr-external
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR_EXTERNAL
+    coordinationId: prod-pr-ext01
+    logicalEnvironment: PR
+    trafficClass: external
+    managementHost: artemis-pr-external.example.invalid
+    storageSize: 500Gi
+    enabled: "false"
+  - brokerPairName: prod-pr-batch
+    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR_BATCH
+    coordinationId: prod-pr-batch01
+    logicalEnvironment: PR
+    trafficClass: batch
+    managementHost: artemis-pr-batch.example.invalid
+    storageSize: 500Gi
     enabled: "false"

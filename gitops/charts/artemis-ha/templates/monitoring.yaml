@@ -17,7 +17,7 @@ spec:
     matchLabels:
       app.kubernetes.io/name: {{ include "artemis-ha.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
-      artemis.example.io/protocol: console
+      artemis.example.io/protocol: metrics
   endpoints:
     - port: {{ .Values.monitoring.serviceMonitor.port }}
       path: {{ .Values.monitoring.serviceMonitor.path }}
@@ -43,22 +43,22 @@ spec:
       rules:
         - alert: ArtemisBrokerMetricsUnavailable
           expr: >-
-            absent(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-console" (include "artemis-ha.fullname" .) | quote }})
+            absent(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-metrics" (include "artemis-ha.fullname" .) | quote }})
           for: 5m
           labels:
             severity: {{ .Values.monitoring.prometheusRule.severity }}
           annotations:
             summary: Artemis broker metrics are unavailable
-            description: No Prometheus target is reporting for the Artemis console service.
-        - alert: ArtemisActiveBrokerEndpointCountUnexpected
+            description: No Prometheus target is reporting for the Artemis metrics Service.
+        - alert: ArtemisBrokerMetricsTargetCountUnexpected
           expr: >-
-            sum(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-console" (include "artemis-ha.fullname" .) | quote }}}) != 1
+            sum(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-metrics" (include "artemis-ha.fullname" .) | quote }}}) != 2
           for: 2m
           labels:
             severity: critical
           annotations:
-            summary: Artemis pair does not have exactly one active-ready endpoint
-            description: The active-only readiness probe and Service endpoint set must expose exactly one broker.
+            summary: Artemis metrics do not cover both HA peers
+            description: The metrics Service must scrape the active and passive broker pods independently.
         {{- if .Values.monitoring.activeMetricName }}
         - alert: ArtemisActiveBrokerMetricUnexpected
           expr: >-

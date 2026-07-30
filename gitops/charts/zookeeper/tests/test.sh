@@ -43,6 +43,7 @@ rg -q '/data/data/myid' "$rendered"
 rg -q 'key: ActiveMQArtemis' "$rendered"
 rg -q 'operator: Exists' "$rendered"
 rg -q 'maxUnavailable: 1' "$rendered"
+rg -q 'minDomains: 3' "$rendered"
 rg -q 'topologyKey: "topology.kubernetes.io/zone"' "$rendered"
 kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
 

@@ -250,11 +250,12 @@
     },
     "topology": {
       "type": "object",
-      "required": ["zoneKey", "hostKey", "maxSkew", "whenUnsatisfiable"],
+      "required": ["zoneKey", "hostKey", "maxSkew", "minDomains", "whenUnsatisfiable"],
       "properties": {
         "zoneKey": {"type": "string", "minLength": 1},
         "hostKey": {"type": "string", "minLength": 1},
         "maxSkew": {"type": "integer", "const": 1},
+        "minDomains": {"type": "integer", "const": 3},
         "whenUnsatisfiable": {"type": "string", "const": "DoNotSchedule"}
       },
       "additionalProperties": false

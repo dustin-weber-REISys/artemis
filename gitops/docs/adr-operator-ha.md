@@ -7,9 +7,12 @@
 
 ## Context
 
-The deployment needs two persistent Artemis peers with synchronous replication,
+The deployment needs two persistent Artemis peers with coordinated replication,
 ZooKeeper-backed activation locking, active-only client routing, and one
-operator-managed lifecycle. The operator has no typed field representing the
+operator-managed lifecycle. Replication participation in a send response is
+not proof that the passive PVC completed an independent `fsync`; the
+acknowledged-send claim also depends on the active broker's explicitly pinned
+journal/data sync settings. The operator has no typed field representing the
 complete competing-primary lock-manager policy, so the design must either use
 its supported broker-property extension or replace operator reconciliation
 with repository-owned StatefulSets.

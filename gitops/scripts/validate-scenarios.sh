@@ -163,8 +163,22 @@ if [[ -f "$load_profiles" ]] && yq -e '.' "$load_profiles" >/dev/null; then
     [[ -n "$duplicate_profile" ]] || continue
     error "duplicate load profile: $duplicate_profile"
   done <<< "$duplicate_profiles"
-  invalid_profile_numbers=$(yq -r '[.defaults.messageCount, .defaults.payloadBytes, .defaults.durationSeconds, .profiles[]?.messageCount, .profiles[]?.durationSeconds] | map(select(. == null or type != "!!int" or . <= 0)) | length' "$load_profiles")
-  [[ "$invalid_profile_numbers" -eq 0 ]] || error 'load profile counts, payload size, and durations must be positive integers'
+  invalid_default_numbers=$(yq -r '[
+    .defaults.messageCount,
+    .defaults.payloadBytes,
+    .defaults.producerConcurrency,
+    .defaults.consumerConcurrency,
+    .defaults.durationSeconds
+  ] | map(select(. == null or type != "!!int" or . <= 0)) | length' "$load_profiles")
+  invalid_profile_numbers=$(yq -r '[
+    .profiles[]?.messageCount,
+    .profiles[]?.payloadBytes,
+    .profiles[]?.producerConcurrency,
+    .profiles[]?.consumerConcurrency,
+    .profiles[]?.durationSeconds
+  ] | map(select(. != null and (type != "!!int" or . <= 0))) | length' "$load_profiles")
+  [[ "$invalid_default_numbers" -eq 0 && "$invalid_profile_numbers" -eq 0 ]] ||
+    error 'load profile counts, payload size, concurrency, and durations must be positive integers'
 fi
 
 if [[ -f "$compatibility_inventory" ]] && yq -e '.' "$compatibility_inventory" >/dev/null; then

@@ -19,7 +19,6 @@ images:
 ha:
   coordinationId: examplepair01
   groupName: artemis-ha-pair
-  clusterName: my-cluster
   initialReplicationSyncTimeoutMs: 30000
   retryReplicationWaitMs: 2000
   zookeeperSessionTimeoutMs: 18000
@@ -48,7 +47,6 @@ broker:
     limits:
       cpu: "2"
       memory: 4Gi
-  terminationGracePeriodSeconds: 120
   revisionHistoryLimit: 10
   nodeSelector: {}
   tolerations: []
@@ -171,6 +169,14 @@ vault:
   extraAnnotations: {}
 
 brokerProperties:
+  # These are safety invariants, not tunable performance defaults. Keeping
+  # them explicit makes the acknowledged-send durability boundary auditable
+  # across broker upgrades.
+  durability:
+    journalSyncTransactional: true
+    journalSyncNonTransactional: true
+    journalDatasync: true
+    largeMessageSync: true
   globalMaxSize: 512Mi
   maxDiskUsage: 90
   connectionTtlOverride: 60000
@@ -211,9 +217,11 @@ brokerProperties:
 topology:
   topologySpreadConstraints:
     - maxSkew: 1
+      minDomains: 2
       topologyKey: topology.kubernetes.io/zone
       whenUnsatisfiable: DoNotSchedule
     - maxSkew: 1
+      minDomains: 2
       topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: DoNotSchedule
   podAntiAffinity:
@@ -252,8 +260,7 @@ networkPolicy:
 monitoring:
   enabled: true
   pendingMessagesWarningThreshold: 10000
-  # The operator's default exporter exposes queue/JVM metrics, while the
-  # ServiceMonitor sees only active-ready endpoints. Environments may supply
+  # The metrics Service exposes both peers. Environments may supply metric
   # names after adding JMX exporter rules for the Active/ReplicaSync attrs.
   activeMetricName: ""
   replicationSynchronizedMetricName: ""

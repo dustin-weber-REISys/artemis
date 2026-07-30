@@ -18,6 +18,7 @@ requiredCoverage:
   - amqp-compatibility
   - durable-sequenced-backlog
   - active-broker-process-kill
+  - alternating-active-process-kill
   - active-broker-pod-delete
   - active-broker-node-drain
   - active-broker-az-loss-guidance
@@ -35,11 +36,13 @@ requiredCoverage:
   - queue-management
   - per-source-dead-letter
   - sustained-load
+  - production-capacity-envelope
   - safe-manual-failback
 claims:
   safety:
     observable: acknowledged durable IDs have no missing sequences; at most one broker is active
-    rpo: zero for broker-acknowledged durable sends; in-flight sends may be redelivered
+    rpoTarget: zero for broker-acknowledged durable sends; in-flight sends may be redelivered
+    qualification: the target is not a general guarantee and requires a passing destructive run on the exact deployed artifacts
   liveness:
     observable: eligible peer becomes active and the client endpoint recovers within the measured target
     initialRecoveryTargetSeconds: 30
@@ -107,9 +110,29 @@ cases:
       kind: runner-assisted
       runnerAction: terminate-pod-process
     action: terminate the active broker process during production-like send and consume
+    automatedHarness: performance/run-failure-test.sh --fault process-kill
     verification:
+      - the force-synchronized external producer ledger matches the send report
+      - every definitely acknowledged ID is consumed after failover
+      - ambiguous sends are reported separately from acknowledged sends
       - no split brain is observed
       - client endpoint recovery duration is at or below the agreed target
+  - id: alternating-active-process-kill
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: runner-assisted
+      runnerAction: terminate-pod-process
+    action: terminate active A, wait for synchronized A rejoin behind active B, then terminate active B
+    automatedHarness: performance/run-failure-test.sh --fault process-kill --double-failover
+    verification:
+      - B is the only active broker after A is terminated
+      - A restarts passive and reports ReplicaSync=true before B is terminated
+      - A is the only active broker after B is terminated
+      - persistent sends are acknowledged after both leader transitions
+      - every definitely acknowledged ID is consumed
+      - no split brain is observed
   - id: active-broker-pod-delete
     claim: liveness
     destructive: true
@@ -118,6 +141,7 @@ cases:
       kind: runner-assisted
       runnerAction: delete-single-pod
     action: delete the active broker pod during production-like send and consume
+    automatedHarness: performance/run-failure-test.sh --fault pod-delete
     verification:
       - no missing acknowledged IDs
       - redelivered and duplicated IDs are distinguished
@@ -292,6 +316,19 @@ cases:
     action: run sustained and burst load with replication enabled
     verification:
       - throughput, latency, replication lag, paging, and disk evidence are captured
+      - no acknowledged durable IDs are missing
+  - id: production-capacity-envelope
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: run the two-million-capacity profile with production-derived message-size and traffic measurements
+    automatedHarness: performance/run-profile.sh --target deployed --profile two-million-capacity
+    verification:
+      - every message body is 128 KiB and each peer independently retains the replicated backlog
+      - journal, paging, disk guardrail, replication, flow control, and drain-time evidence is captured
+      - the serial repository runner result is supplemented with production-derived concurrency and rate evidence
       - no acknowledged durable IDs are missing
   - id: safe-manual-failback
     claim: liveness

@@ -67,6 +67,20 @@ message_count=$(PROFILE_NAME="$profile" yq -r \
 profile_duration=$(PROFILE_NAME="$profile" yq -r \
   '(.profiles[] | select(.name == strenv(PROFILE_NAME)) | .durationSeconds) // .defaults.durationSeconds' \
   "$profile_catalog")
+payload_bytes=$(PROFILE_NAME="$profile" yq -r \
+  '(.profiles[] | select(.name == strenv(PROFILE_NAME)) | .payloadBytes) // .defaults.payloadBytes' \
+  "$profile_catalog")
+producer_concurrency=$(PROFILE_NAME="$profile" yq -r \
+  '(.profiles[] | select(.name == strenv(PROFILE_NAME)) | .producerConcurrency) // .defaults.producerConcurrency' \
+  "$profile_catalog")
+consumer_concurrency=$(PROFILE_NAME="$profile" yq -r \
+  '(.profiles[] | select(.name == strenv(PROFILE_NAME)) | .consumerConcurrency) // .defaults.consumerConcurrency' \
+  "$profile_catalog")
+[[ "$producer_concurrency" == 1 && "$consumer_concurrency" == 1 ]] || {
+  printf 'profile %s requires unsupported concurrency (producer=%s, consumer=%s); this runner is serial\n' \
+    "$profile" "$producer_concurrency" "$consumer_concurrency" >&2
+  exit 2
+}
 protocol=${PERF_PROTOCOL:-$(yq -r '.defaults.protocol' "$profile_catalog")}
 destination=${PERF_DESTINATION:-"performance.$profile"}
 
@@ -114,10 +128,12 @@ docker_env=(
   --env "PERF_RUN_ID=$run_id"
   --env "PERF_ID_PREFIX=$id_prefix"
   --env "PERF_MESSAGE_COUNT=$message_count"
+  --env "PERF_PAYLOAD_BYTES=$payload_bytes"
+  --env "PERF_ACKNOWLEDGEMENT_LEDGER=/reports/acknowledged.tsv"
 )
 
-printf 'performance profile: %s (%s messages; %ss profile guidance)\n' \
-  "$profile" "$message_count" "$profile_duration"
+printf 'performance profile: %s (%s messages x %s payload bytes; %ss duration guidance)\n' \
+  "$profile" "$message_count" "$payload_bytes" "$profile_duration"
 printf 'target: %s; protocol: %s; destination: %s\n' \
   "$target" "$protocol" "$destination"
 
@@ -138,6 +154,8 @@ docker run --rm \
       --id-prefix "$PERF_ID_PREFIX" \
       --duplicate-id-prefix "$PERF_RUN_ID-duplicate-" \
       --count "$PERF_MESSAGE_COUNT" \
+      --payload-bytes "$PERF_PAYLOAD_BYTES" \
+      --acknowledgement-ledger "$PERF_ACKNOWLEDGEMENT_LEDGER" \
       --output /reports/send.json
   '
 
@@ -166,6 +184,7 @@ REPORT_PROTOCOL=$protocol \
 REPORT_DESTINATION=$destination \
 REPORT_RUN_ID=$run_id \
 REPORT_MESSAGE_COUNT=$message_count \
+REPORT_PAYLOAD_BYTES=$payload_bytes \
 REPORT_PROFILE_DURATION=$profile_duration \
   yq -n -o=json -I=2 '{
     "schemaVersion": "validation.artemis.apache.org/performance-run/v1",
@@ -175,7 +194,11 @@ REPORT_PROFILE_DURATION=$profile_duration \
     "destination": strenv(REPORT_DESTINATION),
     "runId": strenv(REPORT_RUN_ID),
     "messageCount": (strenv(REPORT_MESSAGE_COUNT) | tonumber),
+    "payloadBytes": (strenv(REPORT_PAYLOAD_BYTES) | tonumber),
+    "producerConcurrency": 1,
+    "consumerConcurrency": 1,
     "profileDurationSeconds": (strenv(REPORT_PROFILE_DURATION) | tonumber),
+    "acknowledgementLedger": "acknowledged.tsv",
     "sendReport": "send.json",
     "consumeReport": "consume.json"
   }' > "$report_dir/run.json"
