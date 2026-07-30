@@ -1,8 +1,8 @@
-# Failover and manual failback
+# Failover and controlled role reversal
 
-The initial policy is automatic failover and controlled manual failback.
-`allow-failback` remains disabled so a recovered peer cannot create a second
-disruption while it is rejoining.
+The competing-primary pair fails over automatically. The chart exposes no
+separate automatic-failback switch: a recovered peer must rejoin passive, and
+operators may reverse roles only after synchronization and change approval.
 
 ## Planned failover test
 
@@ -42,7 +42,7 @@ not silently change the target in an execution record.
 manual matrix. Its reports deliberately remain `NOT_EVALUATED`; do not use
 them as message-safety verdicts.
 
-## Manual failback
+## Controlled role reversal
 
 1. Do not fail back while the recovered broker is catching up. Verify its PVC,
    journal, replication connection, and synchronized state.

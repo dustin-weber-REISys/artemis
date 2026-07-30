@@ -163,7 +163,8 @@ copied property inventory. At minimum, resolve:
   dead-letter, expiry, paging, and auto-creation policy; and
 - monitoring discovery labels, metric availability, and alert routing.
 
-Automatic failback remains disabled until the failback runbook has passed.
+Do not add a separate automatic-failback override. Runtime acceptance must
+show the recovered peer rejoining passive before any controlled role reversal.
 Do not enable optional filesystem, TLS, or authentication modes without
 verifying both endpoints and the exact runtime image.
 
@@ -173,9 +174,10 @@ For each workload, bind a least-privilege Vault role to the rendered broker
 service account and namespace, provide the CA Secret, and verify the injector's
 Kubernetes token flow when service-account token automount is disabled.
 
-The current chart can request a credential file, but it does not prove that
-the operator or Artemis uses that file as its effective administrative
-identity. Before production, implement and test an approved bridge:
+The current chart can request a credential file when `vault.enabled` is set,
+but the option defaults off because it does not prove that the operator or
+Artemis uses that file as its effective administrative identity. Before
+enabling it, implement and test an approved bridge:
 
 - platform synchronization to the exact Kubernetes Secret shape consumed by
   the operator;

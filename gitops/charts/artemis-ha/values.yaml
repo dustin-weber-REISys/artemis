@@ -151,7 +151,10 @@ keycloak:
   extraEnv: []
 
 vault:
-  enabled: true
+  # Injection is opt-in because the chart does not yet connect this file to
+  # the broker's effective administrative identity. Enable it only with the
+  # approved Vault-to-Artemis bridge described in the import guide.
+  enabled: false
   role: example-messaging
   tlsSecretName: example-vault-tls
   caCertPath: /vault/tls/ca.crt

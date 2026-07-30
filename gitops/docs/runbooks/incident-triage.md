@@ -14,7 +14,7 @@ or redelivered in-flight messages.
    synchronized state, and ZooKeeper sessions/quorum.
 3. Check queue depth, delivering/unacknowledged count, blocked producers,
    paging/disk, JVM heap/GC, file descriptors, and reconnect errors.
-4. Freeze upgrades, rollouts, purge/move operations, and automatic failback.
+4. Freeze upgrades, rollouts, purge/move operations, and broker role reversals.
    Do not delete PVCs or force a second broker active.
 5. Preserve structured logs, Kubernetes events, metrics, Argo history, and the
    latest validation reports.

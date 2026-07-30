@@ -109,7 +109,7 @@ cases:
     execution:
       kind: runner-assisted
       runnerAction: terminate-pod-process
-    action: terminate the active broker process during production-like send and consume
+    action: terminate the active broker process during continuous persistent sends, then reconcile the backlog
     automatedHarness: performance/run-failure-test.sh --fault process-kill
     verification:
       - the force-synchronized external producer ledger matches the send report
@@ -140,7 +140,7 @@ cases:
     execution:
       kind: runner-assisted
       runnerAction: delete-single-pod
-    action: delete the active broker pod during production-like send and consume
+    action: delete the active broker pod during continuous persistent sends, then reconcile the backlog
     automatedHarness: performance/run-failure-test.sh --fault pod-delete
     verification:
       - no missing acknowledged IDs
@@ -155,7 +155,7 @@ cases:
     action: cordon and drain the active broker node with the PDB enforced
     verification:
       - the passive peer activates once
-      - the recovered pod is synchronized before manual failback
+      - the recovered pod is synchronized before a controlled role reversal
   - id: active-broker-az-loss-guidance
     claim: liveness
     destructive: true
@@ -336,7 +336,7 @@ cases:
     eksRequired: true
     execution:
       kind: manual-procedure
-    action: synchronize the recovered peer and perform a controlled manual failback
+    action: synchronize the recovered peer and perform a controlled role reversal
     verification:
       - active/passive state changes once
       - client recovery and message accounting remain within target

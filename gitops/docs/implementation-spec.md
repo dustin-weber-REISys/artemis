@@ -78,15 +78,17 @@ cluster connections, federation, and bridges are absent unless separately
 designed and approved.
 
 Each EKS cluster runs its own Argo CD instance and consumes only its matching
-bootstrap and topology file. The current generated workload distribution is
-defined and validated from the environment-local Artemis ApplicationSets, not
-repeated here. Sandbox is intentionally non-promotable and makes no HA,
-AZ-loss, durability, or upgrade claim.
+bootstrap and topology file. The intended workload inventory is defined and
+validated from the environment-local topology files and ApplicationSets, not
+repeated here. The ApplicationSet generates only topology entries whose
+`enabled` field is `"true"`; the assignment below is design intent, not
+evidence that a pair is currently deployed. Sandbox is intentionally
+non-promotable and makes no HA, AZ-loss, durability, or upgrade claim.
 
-PE, PP, DM, and PR each use one internal active/passive pair. PP and PR also
-use a distinct external active/passive pair; external clients do not share the
-internal pair. Disabled batch entries in PP and PR preserve a future
-active/passive isolation option without deploying it. Every pair receives a
+The accepted production topology assigns PE, PP, DM, and PR one internal
+active/passive pair each, plus a distinct external pair for PP and PR.
+External clients do not share the internal pair. PP and PR also retain
+disabled batch placeholders. When enabled, every pair receives a
 topology-owned management hostname, exact OIDC redirect URI, namespace,
 coordination identity, and storage size. See the
 [`workload-cell topology ADR`](adr-workload-cell-topology.md).
@@ -112,8 +114,9 @@ See the
 The ArkMQ operator remains responsible for StatefulSet lifecycle, broker PVCs,
 and generated discovery resources. The chart supplies the competing-primary
 lock-manager policy through operator-supported broker properties and rejects
-unsafe topology combinations. Automatic failback stays disabled; failback is a
-controlled operation after the recovered peer is synchronized.
+unsafe topology combinations. The chart does not expose a separate automatic
+failback switch. Acceptance requires a recovered peer to rejoin passive and
+permits a controlled role reversal only after synchronization.
 
 The selected operator does not prove that its operand image contains the
 required lock-manager classes or that active-only readiness works on the

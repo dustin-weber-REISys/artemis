@@ -1,8 +1,0 @@
-schemaVersion: validation.artemis.apache.org/artifact-alias/v1
-kind: ArtifactAlias
-deprecated: true
-replacement: acceptance-plan.yaml
-description: >-
-  Compatibility marker for repository checks that predate the acceptance-plan
-  taxonomy. The replacement is a manual acceptance plan, not an automated E2E
-  scenario suite.

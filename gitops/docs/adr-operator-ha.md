@@ -69,8 +69,8 @@ Primary technical evidence:
 The operator does not type-check the lock-manager property tree or prove that
 the selected image contains the Curator implementation. It also does not make
 rendered YAML proof of split-brain safety. The chart therefore constrains the
-shape, keeps automatic failback disabled, and delegates controlled failback to
-the runbook after synchronization.
+shape, exposes no separate automatic-failback override, and delegates any
+controlled role reversal to the runbook after synchronization.
 
 Runtime acceptance on the exact mirrored artifacts must prove:
 
@@ -81,7 +81,7 @@ Runtime acceptance on the exact mirrored artifacts must prove:
 - the passive peer is excluded from client service while its process remains
   healthy;
 - acknowledged durable message accounting and the recovery target pass;
-- the recovered peer synchronizes before manual failback; and
+- the recovered peer synchronizes before a controlled role reversal; and
 - the selected metrics and logs expose activation and replication evidence.
 
 The upstream image is preferred. A thin derivative is allowed only when runtime

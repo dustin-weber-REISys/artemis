@@ -7,6 +7,7 @@ rendered="$temp_dir/default.yaml"
 autocreate_rendered="$temp_dir/autocreate.yaml"
 expiry_rendered="$temp_dir/expiry.yaml"
 ports_rendered="$temp_dir/ports.yaml"
+vault_rendered="$temp_dir/vault.yaml"
 prod_rendered="$temp_dir/prod.yaml"
 nonprod_rendered="$temp_dir/nonprod.yaml"
 test_rendered="$temp_dir/test.yaml"
@@ -85,7 +86,10 @@ if rg -q 'addressSettings\.#\.(expiryAddress|autoCreateExpiryResources|expiryQue
   exit 1
 fi
 rg -q 'console/jolokia/read/org\.apache\.activemq\.artemis:broker=%22\$\{APPLICATION_NAME\}%22/Active' "$rendered"
-rg -q 'vault.hashicorp.com/agent-pre-populate-only: "true"' "$rendered"
+if rg -q 'vault.hashicorp.com/' "$rendered"; then
+  echo "default chart unexpectedly enabled the incomplete Vault integration" >&2
+  exit 1
+fi
 rg -q -- '-Dhawtio\.oidcConfig=/amq/extra/configmaps/artemis-artemis-ha-hawtio-oidc/hawtio-oidc\.properties' "$rendered"
 rg -q 'code_challenge_method = S256' "$rendered"
 rg -q 'provider = https://keycloak.example.invalid/realms/example' "$rendered"
@@ -172,6 +176,13 @@ rg -q 'addressSettings\.#\.expiryAddress=ExpiryQueue' "$expiry_rendered"
 rg -q 'addressSettings\.#\.autoCreateExpiryResources=true' "$expiry_rendered"
 rg -q 'addressSettings\.#\.expiryQueuePrefix=EXP\.' "$expiry_rendered"
 rg -q 'addressSettings\.#\.expiryQueueSuffix=' "$expiry_rendered"
+
+helm template artemis-vault "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  --set 'vault.enabled=true' \
+  > "$vault_rendered"
+rg -q 'vault.hashicorp.com/agent-pre-populate-only: "true"' "$vault_rendered"
+rg -q 'vault.hashicorp.com/agent-inject-secret-broker-credentials: kubernetes/example/example-messaging' "$vault_rendered"
 
 if rg -n -i '^[[:space:]]*(password|token):[[:space:]]+[^<{]' "$rendered"; then
   echo "rendered output contains a literal credential-like value" >&2

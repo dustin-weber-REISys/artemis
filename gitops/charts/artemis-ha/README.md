@@ -28,11 +28,18 @@ publishes both broker endpoints so Prometheus can scrape the passive peer even
 though client Services retain the active-only readiness gate. ZooKeeper's
 companion chart requires three eligible zone domains for its three voters.
 
-Environment values must supply a pair-unique `ha.coordinationId`, a unique
-ZooKeeper curator namespace, the external ZooKeeper connection and selectors,
-mirrored image repositories, ingress identity, and the approved policy
-sources. Run `./tests/test.sh` for focused rendering, schema, port-coherence,
-and Kubernetes resource validation.
+Each workload's effective configuration must supply a pair-unique
+`ha.coordinationId`, a unique ZooKeeper curator namespace, the external
+ZooKeeper connection and selectors, mirrored image repositories, ingress
+identity, and the approved policy sources. The ApplicationSet supplies the
+pair-specific fields from `argocd/topology`; environment overlays supply
+stage-wide fields. Run `./tests/test.sh` for focused rendering, schema,
+port-coherence, and Kubernetes resource validation.
+
+Vault injection defaults off. The optional annotations only request a
+pod-local credential file; they do not make it the broker's effective
+administrative identity. Enable `vault.enabled` only after the environment
+provides and tests the approved Vault-to-Artemis bridge.
 
 ## Storage
 

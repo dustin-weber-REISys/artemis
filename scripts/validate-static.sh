@@ -13,7 +13,31 @@ while (($#)); do
 done
 
 errors=0
-required_files='Makefile local/Makefile local/compose.yaml local/.env.example local/scripts/validate-compose.sh gitops/Makefile gitops/scripts/validate-topology.sh gitops/tests/topology/test.sh gitops/tests/e2e/scenarios.yaml gitops/tests/e2e/test-scenario-tools.sh gitops/tests/compatibility/classic-6.2.6-inventory.yaml gitops/tests/e2e/manifests/replication-isolation-deny.yaml gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml performance/Makefile performance/build-local-image.sh performance/client/Dockerfile performance/client/Dockerfile.local performance/client/Dockerfile.prebuilt performance/client/pom.xml performance/profiles/sustained-load.yaml performance/run-profile.sh performance/run-failure-test.sh performance/test-failure-script.sh'
+required_files='
+Makefile
+local/Makefile
+local/compose.yaml
+local/.env.example
+local/scripts/validate-compose.sh
+gitops/Makefile
+gitops/scripts/validate-topology.sh
+gitops/tests/topology/test.sh
+gitops/tests/e2e/acceptance-plan.yaml
+gitops/tests/e2e/test-scenario-tools.sh
+gitops/tests/compatibility/classic-6.2.6-inventory.yaml
+gitops/tests/e2e/manifests/replication-isolation-deny.yaml
+gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml
+performance/Makefile
+performance/build-local-image.sh
+performance/client/Dockerfile
+performance/client/Dockerfile.local
+performance/client/Dockerfile.prebuilt
+performance/client/pom.xml
+performance/profiles/sustained-load-profiles.yaml
+performance/run-profile.sh
+performance/run-failure-test.sh
+performance/test-failure-script.sh
+'
 for relative_file in $required_files; do
   if [[ ! -f "$repo_root/$relative_file" ]]; then
     printf 'missing required file: %s\n' "$relative_file" >&2
@@ -22,7 +46,13 @@ for relative_file in $required_files; do
 done
 
 if command -v yq >/dev/null 2>&1; then
-  for yaml_file in "$repo_root/local/compose.yaml" "$repo_root/gitops/tests/compatibility/classic-6.2.6-inventory.yaml" "$repo_root/performance/profiles/sustained-load.yaml" "$repo_root/gitops/tests/chart/validation-policy.yaml" "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
+  for yaml_file in \
+    "$repo_root/local/compose.yaml" \
+    "$repo_root/gitops/tests/compatibility/classic-6.2.6-inventory.yaml" \
+    "$repo_root/performance/profiles/sustained-load-profiles.yaml" \
+    "$repo_root/gitops/tests/chart/validation-policy.yaml" \
+    "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
+    "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
     yq -e '.' "$yaml_file" >/dev/null || {
       printf 'invalid YAML: %s\n' "${yaml_file#"$repo_root/"}" >&2
       errors=$((errors + 1))
