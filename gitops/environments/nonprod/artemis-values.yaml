@@ -15,3 +15,19 @@ broker:
       memory: 6Gi
 persistence:
   storageClassName: PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
+
+# Reuse the same existing legacy Hawtio client and realm as test in preprod
+# Keycloak. Redirect URIs remain pair-specific ApplicationSet parameters.
+keycloak:
+  enabled: true
+  displayName: Legacy Hawtio Preprod
+  issuerUrl: https://keycloak-preprod.example.invalid/realms/PLACEHOLDER_LEGACY_HAWTIO_REALM
+  clientId: PLACEHOLDER_PREPROD_LEGACY_HAWTIO_CLIENT_ID
+  scopes: openid profile email
+  rolesPath: realm_access.roles
+  viewerRole: PLACEHOLDER_LEGACY_HAWTIO_VIEWER_ROLE
+  administratorRole: PLACEHOLDER_LEGACY_HAWTIO_ADMINISTRATOR_ROLE
+  namespace: PLACEHOLDER_PREPROD_KEYCLOAK_NAMESPACE
+  podSelector:
+    app.kubernetes.io/name: keycloak
+  port: 8443

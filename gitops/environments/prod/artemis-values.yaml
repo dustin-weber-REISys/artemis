@@ -15,6 +15,21 @@ broker:
       memory: 6Gi
 persistence:
   storageClassName: PLACEHOLDER_PROD_GP3_STORAGE_CLASS
+keycloak:
+  # Reuse the existing production legacy Hawtio client and realm for every
+  # production broker namespace. Redirect URIs remain pair-specific.
+  enabled: true
+  displayName: Legacy Hawtio Production
+  issuerUrl: https://keycloak-prod.example.invalid/realms/PLACEHOLDER_LEGACY_HAWTIO_REALM
+  clientId: PLACEHOLDER_PROD_LEGACY_HAWTIO_CLIENT_ID
+  scopes: openid profile email
+  rolesPath: realm_access.roles
+  viewerRole: PLACEHOLDER_LEGACY_HAWTIO_VIEWER_ROLE
+  administratorRole: PLACEHOLDER_LEGACY_HAWTIO_ADMINISTRATOR_ROLE
+  namespace: PLACEHOLDER_PROD_KEYCLOAK_NAMESPACE
+  podSelector:
+    app.kubernetes.io/name: keycloak
+  port: 8443
 brokerProperties:
   # Preserve operating headroom and block producers before the dedicated
   # broker volume approaches exhaustion.
