@@ -153,11 +153,12 @@ aws ecr describe-images \
   --query 'imageDetails[0].{digest:imageDigest,mediaType:artifactMediaType,tags:imageTags}'
 ```
 
-The repository includes [`Jenkinsfile.helm-transfer`](../../Jenkinsfile.helm-transfer)
-for this operation. Configure the Jenkins job to use that script path. It uses
-the same `PLACEHOLDER_SHARED_LIB` ECR login and `TO_REPO` environment selector
-as the container-image transfer job, then runs
-[`transfer-helm-chart.sh`](../scripts/transfer-helm-chart.sh) with these build
+The repository includes the
+[`ECR-TransferHelmChart` seed definition](../../jobs/ecr/ecrTransferHelmChart.groovy),
+its [Scripted Pipeline](../../resources/ecr/ecrHelmChartTransfer.groovy), and the
+[`transfer-helm-chart.sh`](../../resources/ecr/transfer-helm-chart.sh) helper.
+The pipeline uses the same `PLACEHOLDER_SHARED_LIB` ECR login and `TO_REPO`
+environment selector as the container-image transfer job, with these build
 parameters:
 
 | Parameter | Example | Meaning |
@@ -167,13 +168,13 @@ parameters:
 | `FROM_CHART_VERSION` | `2.2.0` | Exact version to transfer |
 | `TO_REPO` | `nonprod` | Destination environment resolved by the shared library |
 | `TO_CHART_REPOSITORY` | `artemis/helm/arkmq-org-broker-operator` | Exact destination ECR repository |
-| `AWS_REGION` | `us-east-1` | Destination ECR region |
 
 The selected Jenkins agent must provide `aws` and Helm 3, and the shared-library
 login must leave destination AWS credentials available to subsequent shell
 steps. The pipeline rejects mutable repositories and existing version tags,
 uses a build-local Helm registry credential file, and verifies the pushed
-artifact's Helm media type before succeeding.
+artifact's Helm media type before succeeding. The destination region is fixed
+to `us-east-1` in the pipeline rather than exposed as a build parameter.
 
 The promotion record must include the upstream location, upstream and ECR
 digests, version, license, signature/provenance result, rendered-manifest
