@@ -336,9 +336,31 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
 
   assert_singleton_application \
     "$operator" "$environment" operator "$environment-arkmq-operator" -20
+  expected_operator_oci_repository=PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    expected_operator_oci_repository=PLACEHOLDER_PROD_HELM_OCI_REPOSITORY
+  fi
+  assert_equal "$environment operator source count" \
+    "$(yq -r '.spec.sources | length' "$operator")" \
+    2
+  assert_equal "$environment operator OCI repository" \
+    "$(yq -r '.spec.sources[0].repoURL // ""' "$operator")" \
+    "$expected_operator_oci_repository"
+  assert_equal "$environment operator chart" \
+    "$(yq -r '.spec.sources[0].chart // ""' "$operator")" \
+    arkmq-org-broker-operator
+  assert_equal "$environment operator chart version" \
+    "$(yq -r '.spec.sources[0].targetRevision // ""' "$operator")" \
+    2.2.0
+  assert_equal "$environment operator release name" \
+    "$(yq -r '.spec.sources[0].helm.releaseName // ""' "$operator")" \
+    "$environment-arkmq-operator"
   assert_equal "$environment operator values path" \
     "$(yq -r '.spec.sources[0].helm.valueFiles[0] // ""' "$operator")" \
     "\$values/gitops/environments/$environment/operator-values.yaml"
+  assert_equal "$environment operator values source ref" \
+    "$(yq -r '.spec.sources[1].ref // ""' "$operator")" \
+    values
   assert_singleton_application \
     "$zookeeper" "$environment" ZooKeeper "$environment-shared-zookeeper" -10
   assert_equal "$environment ZooKeeper release name" \

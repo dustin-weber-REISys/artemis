@@ -8,10 +8,11 @@ metadata:
 spec:
   project: messaging-platform
   sources:
-    - repoURL: PLACEHOLDER_ECR_REGISTRY
-      chart: PLACEHOLDER_MIRRORED_ARKMQ_OPERATOR_CHART
-      targetRevision: 2.2.0
+    - repoURL: PLACEHOLDER_PROD_HELM_OCI_REPOSITORY
+      chart: arkmq-org-broker-operator
+      targetRevision: "2.2.0"
       helm:
+        releaseName: prod-arkmq-operator
         valueFiles:
           - $values/gitops/environments/prod/operator-values.yaml
     - repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git

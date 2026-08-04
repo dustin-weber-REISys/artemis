@@ -3,9 +3,9 @@
 # shared-ZooKeeper service parameters per generated Application.
 images:
   broker:
-    repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
+    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
   init:
-    repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
+    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
 broker:
   resources:
     requests:

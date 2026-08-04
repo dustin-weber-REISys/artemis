@@ -58,6 +58,71 @@ if command -v yq >/dev/null 2>&1; then
       errors=$((errors + 1))
     }
   done
+
+  assert_yaml_value() {
+    local label=$1
+    local expression=$2
+    local yaml_file=$3
+    local expected=$4
+    local actual
+    actual=$(yq -r "$expression" "$yaml_file")
+    if [[ "$actual" != "$expected" ]]; then
+      printf '%s: expected %s, got %s\n' "$label" "$expected" "$actual" >&2
+      errors=$((errors + 1))
+    fi
+  }
+
+  for environment in test nonprod; do
+    assert_yaml_value "$environment operator ECR repository" \
+      '.arkmq-org-broker-operator.controllerManager.manager.image.repository' \
+      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator'
+    assert_yaml_value "$environment operator init-image ECR repository" \
+      '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository' \
+      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init'
+    assert_yaml_value "$environment operator broker-image ECR repository" \
+      '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository' \
+      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
+    assert_yaml_value "$environment broker ECR repository" \
+      '.images.broker.repository' \
+      "$repo_root/gitops/environments/$environment/artemis-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
+    assert_yaml_value "$environment init ECR repository" \
+      '.images.init.repository' \
+      "$repo_root/gitops/environments/$environment/artemis-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init'
+    assert_yaml_value "$environment ZooKeeper ECR image" \
+      '.image.registry + "/" + .image.repository' \
+      "$repo_root/gitops/environments/$environment/zookeeper-values.yaml" \
+      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper'
+  done
+
+  assert_yaml_value 'prod operator ECR repository' \
+    '.arkmq-org-broker-operator.controllerManager.manager.image.repository' \
+    "$repo_root/gitops/environments/prod/operator-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/arkmq-operator'
+  assert_yaml_value 'prod operator init-image ECR repository' \
+    '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository' \
+    "$repo_root/gitops/environments/prod/operator-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init'
+  assert_yaml_value 'prod operator broker-image ECR repository' \
+    '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository' \
+    "$repo_root/gitops/environments/prod/operator-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
+  assert_yaml_value 'prod broker ECR repository' \
+    '.images.broker.repository' \
+    "$repo_root/gitops/environments/prod/artemis-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
+  assert_yaml_value 'prod init ECR repository' \
+    '.images.init.repository' \
+    "$repo_root/gitops/environments/prod/artemis-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init'
+  assert_yaml_value 'prod ZooKeeper ECR image' \
+    '.image.registry + "/" + .image.repository' \
+    "$repo_root/gitops/environments/prod/zookeeper-values.yaml" \
+    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/zookeeper'
 else
   printf '%s\n' 'yq unavailable; YAML syntax checks skipped' >&2
 fi

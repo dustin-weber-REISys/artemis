@@ -1,6 +1,8 @@
 # Nonprod increases capacity for release-candidate and failure testing.
 
 image:
+  registry: PLACEHOLDER_NONPROD_ECR_REGISTRY
+  repository: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
   # Promote the exact digest that passed the test acceptance suite.
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 

@@ -36,16 +36,23 @@ The existing EKS Terraform inputs map to Artemis as follows:
 | `argocd_additional_projects` | Create the least-privilege `messaging-platform` AppProject before the Artemis root Application is reconciled. |
 | `argocd_repos` | Create one root Artemis Application using the matching bootstrap path, Git repository, and approved branch, tag, or commit. |
 
-The mirrored operator OCI/ECR repository must also be registered through the
-platform's existing Argo CD registry credential mechanism. That credential may
-be managed separately from `standalone_argocd_repos`; use the contract exposed
-by the owning Terraform module rather than assuming the Git-repository input
-also configures OCI authentication.
+The approved ArkMQ Operator chart is promoted to the private ECR Helm/OCI
+namespace documented in
+[`Helm chart mirroring to ECR`](../docs/helm-ecr-mirroring.md). The operator
+Applications use Argo CD multiple sources: ECR supplies the immutable chart
+version and Git supplies the environment values. Operator container images
+still come from the approved private ECR repositories configured in those
+values.
+
+The mirrored Helm namespace must also be registered through the platform's
+Argo CD OCI credential mechanism. ECR authorization tokens are short-lived;
+do not capture one as a long-lived Terraform value or secret. Use the owning
+platform's approved credential refresh integration.
 
 The Terraform-managed `messaging-platform` project must allow:
 
-- the standalone Artemis Git repository and mirrored operator OCI repository
-  as sources;
+- the standalone Artemis Git repository and the environment's exact private
+  Helm/OCI namespace as sources;
 - `https://kubernetes.default.svc` as the only destination server;
 - the local platform namespace and the workload namespaces listed in that
   cluster's topology file; and
@@ -92,5 +99,9 @@ Do not copy these raw ApplicationSet manifests into an outer Helm
 `templates/` directory without escaping the ApplicationSet Go-template
 expressions. The intended root source is the raw YAML bootstrap directory.
 
-Replace every placeholder before sync. Git/OCI credentials, AppProject policy,
-and secret values remain outside this repository.
+Replace `PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY` and
+`PLACEHOLDER_PROD_HELM_OCI_REPOSITORY` with values shaped like
+`123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/artemis/helm`; Argo CD's
+Helm-style OCI `repoURL` intentionally omits `oci://` and the chart name.
+Replace every other placeholder before sync. Git/OCI credentials, AppProject
+policy, and secret values remain outside this repository.

@@ -76,8 +76,9 @@ Complete these checks before changing Argo CD resources:
 
 The canonical local workflow is in the root [`README`](../README.md#validate),
 [`Makefile`](../Makefile), and [`scripts`](../scripts). Install the tools those
-files check, and give CI access to approved operator/chart sources or internal
-mirrors.
+files check. Secure CI must set `ARKMQ_OPERATOR_CHART` to the approved ECR OCI
+reference when validating the operator contract; the public upstream default
+is for connected development and initial import only.
 
 Cluster verification additionally needs the approved AWS, Kubernetes, Argo CD,
 OCI-copy, signing, SBOM, and vulnerability-scanning tools selected by the
@@ -113,8 +114,8 @@ namespaces, cluster identity, and registry locations.
 In the cluster's Terraform configuration:
 
 1. register the Artemis Git repository through `standalone_argocd_repos`, and
-   register the private OCI repository through the owning module's existing
-   Argo CD registry credential mechanism;
+   register the private Helm OCI namespace through the owning module's
+   credential mechanism;
 2. create the `messaging-platform` project through
    `argocd_additional_projects`;
 3. add one Artemis root entry to `argocd_repos` whose source path is exactly
@@ -127,7 +128,7 @@ Application uses `https://kubernetes.default.svc`. The standalone repository
 must not create or modify the AppProject that authorizes its own Applications.
 
 The Terraform project must allow the local platform and workload namespaces,
-the Artemis Git and mirrored OCI sources, and the exact cluster-scoped kinds
+the Artemis Git and mirrored Helm OCI sources, and the exact cluster-scoped kinds
 rendered by the approved ArkMQ chart. Because the current operator values set
 `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
@@ -231,7 +232,7 @@ parent bootstrap or a phased procedure enforces health checks.
 1. Approve artifacts and all AWS, cluster, identity, secret, observability, and
    backup prerequisites.
 2. In each cluster's Terraform, configure this standalone Git repository,
-   private-OCI credentials, the `messaging-platform` project through
+   private Helm OCI credentials, the `messaging-platform` project through
    `argocd_additional_projects`, and the root Application through
    `argocd_repos`, pointing only to that cluster's bootstrap path and approved
    revision.

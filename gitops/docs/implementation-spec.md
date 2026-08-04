@@ -218,7 +218,7 @@ for acknowledged messages, and follow
 | --- | --- |
 | AWS/platform | Account, network, EKS, IAM, node capacity, EBS CSI, storage classes, KMS, snapshots, and restore infrastructure |
 | Supply chain | ECR repositories, mirroring, SBOM, scanning, signing, provenance, and promotion evidence |
-| GitOps platform | Per-cluster Argo CD installation, standalone repository/OCI credentials, local root Application, project policy, and bootstrap control |
+| GitOps platform | Per-cluster Argo CD installation, standalone Git/OCI credentials, local root Application, project policy, and bootstrap control |
 | Security/Vault | Secret values, Vault auth mounts, policies, roles, certificate material, and approved secret materialization |
 | Identity | Keycloak realm, public clients, redirect URIs, claims, groups, and role assignments |
 | Application owners | Queue catalog, client identities, compatibility evidence, traffic quiescence, cutover, and business reconciliation |

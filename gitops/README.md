@@ -5,7 +5,8 @@ This area is the deployable EKS baseline. It owns:
 - [`argocd`](argocd): per-cluster standalone-repository bootstraps and the
   environment-local broker-pair catalog, including disabled PP/PR batch
   placeholders;
-- [`charts`](charts): the Artemis HA and shared ZooKeeper Helm charts;
+- [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
+  charts;
 - [`environments`](environments): test, non-production, and production values;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
 - [`scripts`](scripts): rendering, schema, topology, and scenario validation;

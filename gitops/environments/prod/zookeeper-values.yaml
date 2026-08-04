@@ -1,6 +1,8 @@
 # Prod capacity and storage class are promoted independently.
 
 image:
+  registry: PLACEHOLDER_PROD_ECR_REGISTRY
+  repository: PLACEHOLDER_PROD_ECR_REPOSITORY/zookeeper
   # Promote only the immutable digest validated in nonprod.
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 

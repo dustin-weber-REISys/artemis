@@ -2,9 +2,9 @@
 # final capacity is confirmed from nonprod load results.
 images:
   broker:
-    repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
+    repository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
   init:
-    repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
+    repository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init
 broker:
   resources:
     requests:

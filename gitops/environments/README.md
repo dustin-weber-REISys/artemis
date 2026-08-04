@@ -7,6 +7,13 @@ infrastructure references, resource defaults, observability integration, and
 the explicit image digest used for independent promotion. Pair-specific
 Artemis identity and capacity live in [`argocd/topology`](../argocd/topology).
 
+Container registries follow the AWS account boundary. Test and nonprod use
+`PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY`, while
+prod uses `PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY`.
+This applies to the ArkMQ operator, its related broker images, the Artemis
+workload images, and ZooKeeper. Artifact digests remain independently promoted
+and immutable even though the registry and repository paths change for prod.
+
 The test and nonprod Artemis overlays reuse the existing legacy Hawtio client
 and realm in preprod Keycloak. The prod overlay reuses the existing legacy
 Hawtio client and realm in production Keycloak for every production workload

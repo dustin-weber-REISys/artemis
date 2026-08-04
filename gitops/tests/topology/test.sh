@@ -154,6 +154,27 @@ assert_bootstrap_rejected \
   'nonprod operator local destination: expected https://kubernetes.default.svc, got https://remote.invalid'
 
 assert_bootstrap_rejected \
+  wrong-operator-chart \
+  test \
+  operator-application.yaml \
+  '.spec.sources[0].chart = "unapproved-chart"' \
+  'test operator chart: expected arkmq-org-broker-operator, got unapproved-chart'
+
+assert_bootstrap_rejected \
+  wrong-operator-oci-repository \
+  prod \
+  operator-application.yaml \
+  '.spec.sources[0].repoURL = "quay.io/arkmq-org/helm-charts"' \
+  'prod operator OCI repository: expected PLACEHOLDER_PROD_HELM_OCI_REPOSITORY, got quay.io/arkmq-org/helm-charts'
+
+assert_bootstrap_rejected \
+  mismatched-operator-values-revision \
+  prod \
+  operator-application.yaml \
+  '.spec.sources[1].targetRevision = "other-revision"' \
+  'prod operator Git values revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
+
+assert_bootstrap_rejected \
   wrong-topology-file \
   prod \
   artemis-workloads-applicationset.yaml \
