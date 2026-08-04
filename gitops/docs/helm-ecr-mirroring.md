@@ -169,12 +169,18 @@ parameters:
 | `TO_REPO` | `nonprod` | Destination environment resolved by the shared library |
 | `TO_CHART_REPOSITORY` | `artemis/helm/arkmq-org-broker-operator` | Exact destination ECR repository |
 
-The selected Jenkins agent must provide `aws` and Helm 3, and the shared-library
-login must leave destination AWS credentials available to subsequent shell
-steps. The pipeline rejects mutable repositories and existing version tags,
-uses a build-local Helm registry credential file, and verifies the pushed
-artifact's Helm media type before succeeding. The destination region is fixed
-to `us-east-1` in the pipeline rather than exposed as a build parameter.
+The shared library selects the destination AWS account, provides AWS CLI
+access, and authenticates Docker. Chart pull and push run in a pinned Helm-only
+image mirrored to each destination ECR. Helm reads the host Docker login through
+a read-only registry-config mount. ECR repository immutability rejects an
+existing chart version. The destination region is fixed to `us-east-1` rather
+than exposed as a parameter.
+
+Use `alpine/helm:<approved-version>` as the Helm runtime image, then mirror it
+into each environment's ECR and replace the pipeline's image and digest
+placeholders. The image includes the POSIX shell and Alpine utilities required
+by the transfer script. Pin and promote the reviewed digest, not a floating
+tag.
 
 The promotion record must include the upstream location, upstream and ECR
 digests, version, license, signature/provenance result, rendered-manifest
