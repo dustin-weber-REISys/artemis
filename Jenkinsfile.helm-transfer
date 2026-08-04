@@ -1,0 +1,69 @@
+@Library('PLACEHOLDER_SHARED_LIB') _
+
+import PLACEHOLDER_ECR_IMPORT
+
+properties([
+    disableConcurrentBuilds(),
+    parameters([
+        string(
+            name: 'FROM_REPO',
+            defaultValue: 'oci://quay.io/arkmq-org/helm-charts',
+            description: 'Source OCI namespace, including the oci:// prefix'
+        ),
+        string(
+            name: 'FROM_CHART',
+            defaultValue: 'arkmq-org-broker-operator',
+            description: 'Source Helm chart name'
+        ),
+        string(
+            name: 'FROM_CHART_VERSION',
+            defaultValue: '2.2.0',
+            description: 'Exact Helm chart version to transfer'
+        ),
+        choice(
+            name: 'TO_REPO',
+            choices: ['nonprod', 'prod'],
+            description: 'Destination ECR environment understood by the shared Jenkins library'
+        ),
+        string(
+            name: 'TO_CHART_REPOSITORY',
+            defaultValue: 'artemis/helm/arkmq-org-broker-operator',
+            description: 'Exact destination ECR repository; its final segment must match the chart name'
+        ),
+        string(
+            name: 'AWS_REGION',
+            defaultValue: 'us-east-1',
+            description: 'AWS region containing the destination ECR repository'
+        )
+    ])
+])
+
+def fromRepo = params.FROM_REPO ?: 'oci://quay.io/arkmq-org/helm-charts'
+def fromChart = params.FROM_CHART ?: 'arkmq-org-broker-operator'
+def fromChartVersion = params.FROM_CHART_VERSION ?: '2.2.0'
+def toRepo = params.TO_REPO ?: 'nonprod'
+def toChartRepository = params.TO_CHART_REPOSITORY ?: 'artemis/helm/arkmq-org-broker-operator'
+def awsRegion = params.AWS_REGION ?: 'us-east-1'
+
+node('NonProd-Slave') {
+    stage('Checkout') {
+        checkout scm
+    }
+
+    stage('Transfer Helm Chart') {
+        // Keep destination account selection consistent with ECR-TransferImage.
+        ECR.login(this, toRepo)
+
+        withEnv([
+            "FROM_REPO=${fromRepo}",
+            "FROM_CHART=${fromChart}",
+            "FROM_CHART_VERSION=${fromChartVersion}",
+            "TO_CHART_REPOSITORY=${toChartRepository}",
+            "AWS_REGION=${awsRegion}"
+        ]) {
+            sh(label: 'Pull, push, and verify Helm chart', script: '''
+                gitops/scripts/transfer-helm-chart.sh
+            ''')
+        }
+    }
+}

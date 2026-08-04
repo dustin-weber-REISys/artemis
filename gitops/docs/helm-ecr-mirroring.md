@@ -58,7 +58,7 @@ resource "aws_ecr_repository" "helm_repo" {
 
   encryption_configuration {
     encryption_type = "KMS"
-    kms_key         = aws_kms_key.elis-ecr.arn
+    kms_key         = aws_kms_key.PLACEHOLDER_PROJECT-ecr.arn
   }
 
   lifecycle {
@@ -153,6 +153,28 @@ aws ecr describe-images \
   --query 'imageDetails[0].{digest:imageDigest,mediaType:artifactMediaType,tags:imageTags}'
 ```
 
+The repository includes [`Jenkinsfile.helm-transfer`](../../Jenkinsfile.helm-transfer)
+for this operation. Configure the Jenkins job to use that script path. It uses
+the same `PLACEHOLDER_SHARED_LIB` ECR login and `TO_REPO` environment selector
+as the container-image transfer job, then runs
+[`transfer-helm-chart.sh`](../scripts/transfer-helm-chart.sh) with these build
+parameters:
+
+| Parameter | Example | Meaning |
+| --- | --- | --- |
+| `FROM_REPO` | `oci://quay.io/arkmq-org/helm-charts` | Source OCI namespace |
+| `FROM_CHART` | `arkmq-org-broker-operator` | Chart name |
+| `FROM_CHART_VERSION` | `2.2.0` | Exact version to transfer |
+| `TO_REPO` | `nonprod` | Destination environment resolved by the shared library |
+| `TO_CHART_REPOSITORY` | `artemis/helm/arkmq-org-broker-operator` | Exact destination ECR repository |
+| `AWS_REGION` | `us-east-1` | Destination ECR region |
+
+The selected Jenkins agent must provide `aws` and Helm 3, and the shared-library
+login must leave destination AWS credentials available to subsequent shell
+steps. The pipeline rejects mutable repositories and existing version tags,
+uses a build-local Helm registry credential file, and verifies the pushed
+artifact's Helm media type before succeeding.
+
 The promotion record must include the upstream location, upstream and ECR
 digests, version, license, signature/provenance result, rendered-manifest
 policy result, approval, and import date. Promote the same bytes to production;
@@ -165,8 +187,8 @@ values:
 
 | Placeholder | Example value; no `oci://` prefix |
 | --- | --- |
-| `PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY` | `123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/artemis/helm` |
-| `PLACEHOLDER_PROD_HELM_OCI_REPOSITORY` | `210987654321.dkr.ecr.us-gov-west-1.amazonaws.com/artemis/helm` |
+| `PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis/helm` |
+| `PLACEHOLDER_PROD_HELM_OCI_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis/helm` |
 
 Argo CD appends the configured chart name
 `arkmq-org-broker-operator`. The `messaging-platform` AppProject must allow the
