@@ -42,59 +42,47 @@ if [[ ! $AWS_REGION =~ ^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$ ]]; then
 fi
 
 destination_chart=${TO_CHART_REPOSITORY##*/}
-destination_namespace=${TO_CHART_REPOSITORY%/*}
 if [[ $destination_chart != "$FROM_CHART" ]]; then
   printf 'destination chart name must match source chart: expected %s, got %s\n' \
     "$FROM_CHART" "$destination_chart" >&2
   exit 2
 fi
-if [[ $destination_namespace == "$TO_CHART_REPOSITORY" ]]; then
-  destination_namespace=''
-fi
 
-repository_mutability=$(aws ecr describe-repositories \
+repository_info=$(aws ecr describe-repositories \
   --region "$AWS_REGION" \
   --repository-names "$TO_CHART_REPOSITORY" \
-  --query 'repositories[0].imageTagMutability' \
+  --query 'repositories[0].[imageTagMutability,repositoryUri]' \
   --output text)
+read -r repository_mutability repository_uri <<<"$repository_info"
 if [[ $repository_mutability != IMMUTABLE ]]; then
   printf 'destination ECR repository must be immutable: %s is %s\n' \
     "$TO_CHART_REPOSITORY" "$repository_mutability" >&2
   exit 1
 fi
+if [[ -z $repository_uri || $repository_uri == None || $repository_uri != */* ]]; then
+  printf '%s\n' 'AWS did not return a valid ECR repository URI' >&2
+  exit 1
+fi
+ecr_registry=${repository_uri%%/*}
+destination_ref="oci://${repository_uri%/*}"
 
-describe_error=$(mktemp "${TMPDIR:-/tmp}/helm-transfer-describe.XXXXXX")
-if aws ecr describe-images \
+if describe_output=$(aws ecr describe-images \
   --region "$AWS_REGION" \
   --repository-name "$TO_CHART_REPOSITORY" \
   --image-ids "imageTag=$FROM_CHART_VERSION" \
-  >/dev/null 2>"$describe_error"; then
+  2>&1); then
   printf 'chart version already exists in immutable repository: %s:%s\n' \
     "$TO_CHART_REPOSITORY" "$FROM_CHART_VERSION" >&2
-  rm -f -- "$describe_error"
   exit 1
 fi
-if ! grep -q 'ImageNotFoundException' "$describe_error"; then
+if [[ $describe_output != *ImageNotFoundException* ]]; then
   printf '%s\n' 'unable to determine whether the destination chart version exists' >&2
-  cat "$describe_error" >&2
-  rm -f -- "$describe_error"
-  exit 1
-fi
-rm -f -- "$describe_error"
-
-ecr_registry=$(aws ecr get-authorization-token \
-  --region "$AWS_REGION" \
-  --query 'authorizationData[0].proxyEndpoint' \
-  --output text)
-ecr_registry=${ecr_registry#https://}
-if [[ -z $ecr_registry || $ecr_registry == None ]]; then
-  printf '%s\n' 'AWS did not return an ECR registry endpoint' >&2
+  printf '%s\n' "$describe_output" >&2
   exit 1
 fi
 
 transfer_dir=$(mktemp -d "${WORKSPACE_TMP:-${TMPDIR:-/tmp}}/helm-transfer.XXXXXX")
 cleanup() {
-  helm registry logout "$ecr_registry" >/dev/null 2>&1 || true
   rm -rf -- "$transfer_dir"
 }
 trap cleanup EXIT
@@ -120,31 +108,21 @@ aws ecr get-login-password --region "$AWS_REGION" |
     --password-stdin \
     "$ecr_registry"
 
-destination_ref="oci://$ecr_registry"
-if [[ -n $destination_namespace ]]; then
-  destination_ref="$destination_ref/$destination_namespace"
-fi
-
 printf 'Pushing %s to %s\n' "$FROM_CHART_VERSION" "$destination_ref"
 helm push "${chart_packages[0]}" "$destination_ref"
 
-artifact_media_type=$(aws ecr describe-images \
+artifact_info=$(aws ecr describe-images \
   --region "$AWS_REGION" \
   --repository-name "$TO_CHART_REPOSITORY" \
   --image-ids "imageTag=$FROM_CHART_VERSION" \
-  --query 'imageDetails[0].artifactMediaType' \
+  --query 'imageDetails[0].[artifactMediaType,imageDigest]' \
   --output text)
+read -r artifact_media_type artifact_digest <<<"$artifact_info"
 if [[ $artifact_media_type != application/vnd.cncf.helm.config.v1+json ]]; then
   printf 'unexpected ECR artifact media type: %s\n' "$artifact_media_type" >&2
   exit 1
 fi
 
-artifact_digest=$(aws ecr describe-images \
-  --region "$AWS_REGION" \
-  --repository-name "$TO_CHART_REPOSITORY" \
-  --image-ids "imageTag=$FROM_CHART_VERSION" \
-  --query 'imageDetails[0].imageDigest' \
-  --output text)
 if [[ -z $artifact_digest || $artifact_digest == None ]]; then
   printf '%s\n' 'AWS did not return a digest for the transferred chart' >&2
   exit 1
