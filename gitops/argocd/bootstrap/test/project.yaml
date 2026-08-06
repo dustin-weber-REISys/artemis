@@ -9,7 +9,6 @@ spec:
   description: Artemis messaging platform workloads in the test cluster
   sourceRepos:
     - https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-    - quay.io/arkmq-org/helm-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: PLACEHOLDER_PLATFORM_NAMESPACE

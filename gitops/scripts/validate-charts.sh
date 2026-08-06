@@ -29,6 +29,7 @@ fi
 
 command -v helm >/dev/null 2>&1 || { printf '%s\n' 'helm is required when charts are present' >&2; exit 2; }
 command -v kubeconform >/dev/null 2>&1 || { printf '%s\n' 'kubeconform is required when charts are present' >&2; exit 2; }
+command -v yq >/dev/null 2>&1 || { printf '%s\n' 'yq is required when charts are present' >&2; exit 2; }
 
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-chart-validation.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
@@ -57,15 +58,25 @@ validate_chart_values() {
 }
 
 while IFS= read -r chart_file; do
-  chart_dir=$(dirname -- "$chart_file")
+  source_chart_dir=$(dirname -- "$chart_file")
+  chart_dir=$source_chart_dir
   chart_count=$((chart_count + 1))
   chart_name=$(basename -- "$chart_dir")
+  if [[ "$(yq -r '.dependencies | length' "$chart_file")" -gt 0 ]]; then
+    chart_dir="$temp_dir/$chart_name"
+    cp -R "$source_chart_dir/." "$chart_dir"
+    if ! helm dependency build "$chart_dir"; then
+      printf 'Helm dependency build failed: %s\n' "$chart_name" >&2
+      errors=$((errors + 1))
+      continue
+    fi
+  fi
   rendered="$temp_dir/$chart_name.yaml"
   validate_chart_values \
     "$chart_dir" "$chart_name" "$rendered" \
     ${values_args[@]+"${values_args[@]}"}
 
-  focused_test="$chart_dir/tests/test.sh"
+  focused_test="$source_chart_dir/tests/test.sh"
   if [[ -x "$focused_test" ]] && ! "$focused_test"; then
     printf 'focused chart tests failed: %s\n' "$chart_name" >&2
     errors=$((errors + 1))

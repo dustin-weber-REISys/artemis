@@ -5,8 +5,6 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 operator_manifest_url=${ARKMQ_OPERATOR_MANIFEST_URL:-https://github.com/arkmq-org/arkmq-org-broker-operator/releases/download/v2.2.0/activemq-artemis-operator.yaml}
 operator_manifest_sha256=${ARKMQ_OPERATOR_MANIFEST_SHA256:-ae8ce2672e1cb17dc888e249b076c08e5fb4c44f8cc90dcaef067e86bb4b49f3}
-operator_chart=${ARKMQ_OPERATOR_CHART:-oci://quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator}
-operator_chart_version=${ARKMQ_OPERATOR_CHART_VERSION:-2.2.0}
 
 for command_name in curl helm kubeconform yq; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -19,7 +17,6 @@ temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-operator-schema.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
 manifest="$temp_dir/activemq-artemis-operator.yaml"
 schema="$temp_dir/activemqartemis-v1beta1.json"
-operator_chart_dir="$temp_dir/arkmq-org-broker-operator"
 
 curl -fsSL "$operator_manifest_url" -o "$manifest"
 if command -v sha256sum >/dev/null 2>&1; then
@@ -41,8 +38,9 @@ yq -o=json '
   | .schema.openAPIV3Schema
 ' "$manifest" > "$schema"
 
-helm pull "$operator_chart" --version "$operator_chart_version" \
-  --untar --untardir "$temp_dir" >/dev/null
+operator_chart_dir="$temp_dir/arkmq-operator"
+cp -R "$repo_root/charts/arkmq-operator/." "$operator_chart_dir"
+helm dependency build "$operator_chart_dir" >/dev/null
 
 for environment in test nonprod prod; do
   ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
@@ -67,11 +65,21 @@ for environment in test nonprod prod; do
   helm template validation-operator "$operator_chart_dir" \
     --namespace example-platform \
     --values "$repo_root/operator-values.yaml" \
-    --set-string "controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "global.requiredLabels.env=$environment" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$operator_rendered"
   kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
+
+  for required_label in app contact env fismaid; do
+    if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .metadata.labels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]] || \
+       [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.template.metadata.labels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]]; then
+      printf '%s operator Deployment is missing required label %s\n' \
+        "$environment" "$required_label" >&2
+      exit 1
+    fi
+  done
 
   init_env="RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_$compact_version"
   broker_env="RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_$compact_version"

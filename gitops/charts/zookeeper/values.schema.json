@@ -61,12 +61,12 @@
       "type": "object",
       "required": ["app", "contact", "env", "fismaid"],
       "properties": {
-        "app": {"type": "string", "minLength": 1},
-        "contact": {"type": "string", "minLength": 1},
-        "env": {"type": "string", "minLength": 1},
-        "fismaid": {"type": "string", "minLength": 1}
+        "app": {"$ref": "#/definitions/labelValue"},
+        "contact": {"$ref": "#/definitions/labelValue"},
+        "env": {"$ref": "#/definitions/labelValue"},
+        "fismaid": {"$ref": "#/definitions/labelValue"}
       },
-      "additionalProperties": {"type": "string"}
+      "additionalProperties": {"$ref": "#/definitions/labelValue"}
     },
     "serviceAccount": {
       "type": "object",
@@ -476,6 +476,12 @@
   ],
   "additionalProperties": false,
   "definitions": {
+    "labelValue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$"
+    },
     "duration": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ms|s|m|h|d|w|y)$"

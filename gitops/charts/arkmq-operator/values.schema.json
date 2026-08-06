@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["global"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["requiredLabels"],
+      "properties": {
+        "requiredLabels": {
+          "type": "object",
+          "required": ["app", "contact", "env", "fismaid"],
+          "properties": {
+            "app": {"$ref": "#/$defs/labelValue"},
+            "contact": {"$ref": "#/$defs/labelValue"},
+            "env": {"$ref": "#/$defs/labelValue"},
+            "fismaid": {"$ref": "#/$defs/labelValue"}
+          },
+          "additionalProperties": {"$ref": "#/$defs/labelValue"}
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "labelValue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$"
+    }
+  },
+  "additionalProperties": true
+}

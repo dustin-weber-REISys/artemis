@@ -157,22 +157,22 @@ assert_bootstrap_rejected \
   wrong-operator-chart \
   test \
   operator-application.yaml \
-  '.spec.sources[0].chart = "unapproved-chart"' \
-  'test operator chart: expected arkmq-org-broker-operator, got unapproved-chart'
+  '.spec.source.path = "gitops/charts/unapproved-operator"' \
+  'test operator wrapper path: expected gitops/charts/arkmq-operator, got gitops/charts/unapproved-operator'
 
 assert_bootstrap_rejected \
   wrong-operator-oci-repository \
   prod \
   operator-application.yaml \
-  '.spec.sources[0].repoURL = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm"' \
-  'prod operator OCI repository: expected quay.io/arkmq-org/helm-charts, got PLACEHOLDER_PROD_ECR_REPOSITORY/helm'
+  '.spec.source.repoURL = "https://example.invalid/unapproved.git"' \
+  'prod operator Git repository: expected https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git, got https://example.invalid/unapproved.git'
 
 assert_bootstrap_rejected \
   mismatched-operator-values-revision \
   prod \
   operator-application.yaml \
-  '.spec.sources[1].targetRevision = "other-revision"' \
-  'prod operator Git values revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
+  '.spec.source.targetRevision = "other-revision"' \
+  'prod operator Git revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
 
 assert_bootstrap_rejected \
   wrong-topology-file \
@@ -213,7 +213,7 @@ assert_bootstrap_rejected \
   wrong-project-oci-repository \
   prod \
   project.yaml \
-  '.spec.sourceRepos[1] = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm"' \
+  '.spec.sourceRepos += ["quay.io/arkmq-org/helm-charts"]' \
   'prod project approved sources'
 
 assert_bootstrap_rejected \

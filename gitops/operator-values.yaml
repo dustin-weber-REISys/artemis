@@ -1,12 +1,13 @@
 # Immutable ArkMQ operator release shared by every environment at this Git
 # revision. Argo CD supplies the selected ECR repository locations.
-controllerManager:
-  manager:
-    image:
-      tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
-      pullPolicy: IfNotPresent
-clusterScoped: true
-watchNamespaces: []
-crds:
-  apply: true
-  keep: true
+arkmq-org-broker-operator:
+  controllerManager:
+    manager:
+      image:
+        tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
+        pullPolicy: IfNotPresent
+  clusterScoped: true
+  watchNamespaces: []
+  crds:
+    apply: true
+    keep: true

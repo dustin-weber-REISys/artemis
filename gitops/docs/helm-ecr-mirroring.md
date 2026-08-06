@@ -196,22 +196,22 @@ Runtime image locations are derived from two ECR base placeholders:
 | `PLACEHOLDER_NONPROD_ECR_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 | `PLACEHOLDER_PROD_ECR_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 
-The checked-in Applications currently pull the pinned operator chart directly
-from `quay.io/arkmq-org/helm-charts`, so their `messaging-platform` AppProjects
-allow that exact repository URL. The ECR base
-placeholders continue to supply operator and operand image repositories.
+The checked-in operator wrapper currently resolves its pinned dependency from
+`quay.io/arkmq-org/helm-charts`. The operator Applications themselves use the
+Artemis Git repository as their source. The ECR base placeholders continue to
+supply operator and operand image repositories.
 
-When private chart mirroring is resumed, change each operator Application
-`repoURL` to the matching `<ECR base>/helm` namespace and change the project
-allowlist entry to the same `<ECR base>/helm` namespace before enabling
-the credential flow below.
+When private chart mirroring is resumed, change the wrapper's dependency
+repository to the matching `<ECR base>/helm` namespace before enabling the
+credential flow below.
 
 Register each ECR chart namespace as a Helm repository with OCI enabled, but
 provide authentication once per registry through an Argo CD repository
 credential template. Argo CD applies that template to every repository URL
 with the registry hostname as its prefix, including charts owned by other
-applications. Individual `AppProject.sourceRepos` allowlists remain the
-authorization boundary for which chart repositories each application may use.
+applications. The operator Application's source remains Git, so its
+`AppProject.sourceRepos` entry remains the Git repository; repo-server
+credentials separately authorize the wrapper's dependency fetch.
 
 Do not store the output of `aws ecr get-login-password` as a long-lived
 Terraform secret: ECR authorization tokens expire. Connect the repo-server to
@@ -238,7 +238,7 @@ The caller needs `ecr:GetAuthorizationToken`; its Kubernetes identity needs
 only `get`, `create`, `patch`, and `update` access to the
 `ecr-helm-oci-creds` Secret in the Argo CD namespace. The credential-template
 URL is the ECR registry hostname without `https://`, `oci://`, a namespace, or
-a chart name. Repository definitions and Application `repoURL` values must not
+a chart name. Repository definitions and the wrapper dependency must not
 contain credentials of their own, because Argo CD only applies a matching
 credential template when repository-specific credentials are absent.
 
@@ -255,9 +255,13 @@ precedence over a matching credential template, so leaving the old ECR token
 in place would cause Artemis to fail when that token expires even though the
 shared template is current.
 
-For secure CI, override the public development default used by contract tests:
+For secure CI, update and lock the wrapper dependency before running contract
+tests:
 
 ```sh
-export ARKMQ_OPERATOR_CHART="oci://$ECR_REGISTRY/artemis/helm/arkmq-org-broker-operator"
+export ARKMQ_OPERATOR_REPOSITORY="oci://$ECR_REGISTRY/artemis/helm"
+yq -i '.dependencies[0].repository = strenv(ARKMQ_OPERATOR_REPOSITORY)' \
+  gitops/charts/arkmq-operator/Chart.yaml
+helm dependency update gitops/charts/arkmq-operator
 make validate-operator-schema
 ```

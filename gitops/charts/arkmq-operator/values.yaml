@@ -1,0 +1,6 @@
+global:
+  requiredLabels:
+    app: artemis
+    contact: PLACEHOLDER_ARTEMIS_CONTACT
+    env: PLACEHOLDER_ENVIRONMENT
+    fismaid: PLACEHOLDER_ARTEMIS_FISMAID

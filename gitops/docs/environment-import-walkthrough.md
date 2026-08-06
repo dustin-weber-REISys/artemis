@@ -21,6 +21,12 @@ the enterprise ownership and system identifiers required by Gatekeeper. The
 ZooKeeper and Artemis environment overlays set the required `env` label
 explicitly. The Artemis chart passes these labels through
 `spec.deploymentPlan.labels` for the operator-generated broker workloads.
+All four values are Kubernetes label values, so they must be 63 characters or
+fewer, use only letters, digits, `.`, `_`, or `-`, and begin and end with a
+letter or digit. In particular, do not use a raw email address for `contact`:
+`@` is not legal in a label value. Use the enterprise-approved label-safe
+contact identifier instead; keep a human-readable email in an annotation or
+the enterprise ownership system when one is also required.
 
 The local-cluster bootstraps are authoritative in
 [`argocd/bootstrap`](../argocd/bootstrap), and each cluster's broker-pair
@@ -82,9 +88,10 @@ Complete these checks before changing Argo CD resources:
 
 The canonical local workflow is in the root [`README`](../README.md#validate),
 [`Makefile`](../Makefile), and [`scripts`](../scripts). Install the tools those
-files check. Secure CI must set `ARKMQ_OPERATOR_CHART` to the approved ECR OCI
-reference when validating the operator contract; the public upstream default
-is for connected development and initial import only.
+files check. The wrapper dependency in `charts/arkmq-operator/Chart.yaml` must
+point to the approved ECR OCI namespace before a restricted-environment
+promotion; the public upstream reference is for connected development and
+initial import.
 
 Cluster verification additionally needs the approved AWS, Kubernetes, Argo CD,
 OCI-copy, signing, SBOM, and vulnerability-scanning tools selected by the
@@ -114,15 +121,16 @@ repository name appears equivalent.
 Update the selected directory under
 [`argocd/bootstrap`](../argocd/bootstrap) and its matching
 [`topology`](../argocd/topology) file with the approved Argo namespace,
-Git/OCI sources, immutable revision policy, local platform namespace, workload
+Git source, immutable revision policy, local platform namespace, workload
 namespaces, and cluster identity. Replace the matching nonprod or prod ECR base
-placeholder for the image repositories in the bootstrap manifests. The ArkMQ
-operator chart itself is pulled from the public Quay OCI namespace.
+placeholder for the image repositories in the bootstrap manifests. The
+repository-owned operator wrapper resolves its pinned ArkMQ dependency from
+the public Quay OCI namespace.
 
 In the cluster's Terraform configuration:
 
 1. register the Artemis Git repository through `standalone_argocd_repos`; the
-   public Quay Helm OCI source does not require ECR chart credentials;
+   wrapper's public Quay dependency does not require ECR chart credentials;
 2. add one Artemis root entry to `argocd_repos` whose source path is exactly
    `gitops/argocd/bootstrap/<environment>`; and
 3. use the same approved branch, tag, or commit for the root entry and every
@@ -134,10 +142,8 @@ creates its `messaging-platform` AppProject at sync wave `-30`, before any
 Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
-Artemis Git source, the public Helm OCI chart source
-(`quay.io/arkmq-org/helm-charts`, exactly matching the Application's
-`repoURL`), and the exact
-cluster-scoped kinds rendered by the approved ArkMQ chart. Because the current
+Artemis Git source, and the exact cluster-scoped kinds rendered by the approved
+ArkMQ chart. Because the current
 operator values set `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
 
@@ -247,9 +253,9 @@ parent bootstrap or a phased procedure enforces health checks.
    backup prerequisites.
 2. In each cluster's Terraform, configure this standalone Git repository and
    the root Application through `argocd_repos`, pointing only to that cluster's
-   bootstrap path and approved revision. Confirm Argo CD can reach the public
-   Quay OCI source; no ECR Helm token is required. The bootstrap creates the
-   `messaging-platform` project.
+   bootstrap path and approved revision. Confirm Argo CD can resolve the
+   wrapper's public Quay OCI dependency; no ECR Helm token is required. The
+   bootstrap creates the `messaging-platform` project.
 3. Create Vault policies/roles/data references, Keycloak clients, TLS
    material, and the namespace/pod labels required by policy.
 4. Run the canonical repository validation and inspect effective rendered

@@ -26,6 +26,11 @@ if helm template invalid "$chart_dir" \
   echo "expected missing HA identity and ZooKeeper connection to fail" >&2
   exit 1
 fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'commonLabels.contact=ELISSkynet@uscis.dhs.gov' >/dev/null 2>&1; then
+  echo "expected an email address used as a label value to fail" >&2
+  exit 1
+fi
 
 removed_values=(
   'operator.version=2.2.0'

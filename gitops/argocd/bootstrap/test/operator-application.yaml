@@ -7,24 +7,23 @@ metadata:
     argocd.argoproj.io/sync-wave: "-20"
 spec:
   project: messaging-platform
-  sources:
-    - repoURL: quay.io/arkmq-org/helm-charts
-      chart: arkmq-org-broker-operator
-      targetRevision: "2.2.0"
-      helm:
-        releaseName: test-arkmq-operator
-        valueFiles:
-          - $values/gitops/operator-values.yaml
-        parameters:
-          - name: controllerManager.manager.image.repository
-            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator
-          - name: controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
-            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
-          - name: controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository
-            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
-    - repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-      targetRevision: PLACEHOLDER_GITOPS_REVISION
-      ref: values
+  source:
+    repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+    targetRevision: PLACEHOLDER_GITOPS_REVISION
+    path: gitops/charts/arkmq-operator
+    helm:
+      releaseName: test-arkmq-operator
+      valueFiles:
+        - ../../operator-values.yaml
+      parameters:
+        - name: global.requiredLabels.env
+          value: test
+        - name: arkmq-org-broker-operator.controllerManager.manager.image.repository
+          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator
+        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
+          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
+        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository
+          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
   destination:
     server: https://kubernetes.default.svc
     namespace: PLACEHOLDER_PLATFORM_NAMESPACE

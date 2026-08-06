@@ -20,6 +20,11 @@ if helm template invalid "$chart_dir" --set enabled=false >/dev/null 2>&1; then
   printf '%s\n' 'expected the removed disabled-chart composition to fail' >&2
   exit 1
 fi
+if helm template invalid "$chart_dir" \
+  --set-string 'commonLabels.contact=ELISSkynet@uscis.dhs.gov' >/dev/null 2>&1; then
+  printf '%s\n' 'expected an email address used as a label value to fail' >&2
+  exit 1
+fi
 for unsafe_override in \
   persistence.enabled=false \
   podDisruptionBudget.enabled=false \

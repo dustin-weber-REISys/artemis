@@ -47,7 +47,6 @@ assert_project() {
   environment=$2
   topology=$3
   expected_git_repository=$4
-  expected_oci_repository=$5
 
   assert_equal "$environment project apiVersion" \
     "$(yq -r '.apiVersion // ""' "$file")" \
@@ -65,9 +64,7 @@ assert_project() {
     "$(yq -r '.metadata.annotations."argocd.argoproj.io/sync-wave" // ""' "$file")" \
     -30
 
-  expected_sources=$(printf '%s\n' \
-    "$expected_git_repository" \
-    "$expected_oci_repository" | sort)
+  expected_sources=$expected_git_repository
   actual_sources=$(yq -r '.spec.sourceRepos[]' "$file" | sort)
   assert_equal "$environment project approved sources" \
     "$actual_sources" "$expected_sources"
@@ -395,43 +392,33 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_singleton_application \
     "$operator" "$environment" operator "$environment-arkmq-operator" -20
   expected_ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
-  expected_operator_oci_repository=quay.io/arkmq-org/helm-charts
   if [[ "$environment" == prod ]]; then
     expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
   fi
-  assert_equal "$environment operator source count" \
-    "$(yq -r '.spec.sources | length' "$operator")" \
-    2
-  assert_equal "$environment operator OCI repository" \
-    "$(yq -r '.spec.sources[0].repoURL // ""' "$operator")" \
-    "$expected_operator_oci_repository"
-  assert_equal "$environment operator chart" \
-    "$(yq -r '.spec.sources[0].chart // ""' "$operator")" \
-    arkmq-org-broker-operator
-  assert_equal "$environment operator chart version" \
-    "$(yq -r '.spec.sources[0].targetRevision // ""' "$operator")" \
-    2.2.0
+  assert_equal "$environment operator wrapper path" \
+    "$(yq -r '.spec.source.path // ""' "$operator")" \
+    gitops/charts/arkmq-operator
   assert_equal "$environment operator release name" \
-    "$(yq -r '.spec.sources[0].helm.releaseName // ""' "$operator")" \
+    "$(yq -r '.spec.source.helm.releaseName // ""' "$operator")" \
     "$environment-arkmq-operator"
   assert_equal "$environment operator values file count" \
-    "$(yq -r '.spec.sources[0].helm.valueFiles | length' "$operator")" \
+    "$(yq -r '.spec.source.helm.valueFiles | length' "$operator")" \
     1
   assert_equal "$environment operator release values path" \
-    "$(yq -r '.spec.sources[0].helm.valueFiles[0] // ""' "$operator")" \
-    '$values/gitops/operator-values.yaml'
+    "$(yq -r '.spec.source.helm.valueFiles[0] // ""' "$operator")" \
+    '../../operator-values.yaml'
+  assert_equal "$environment operator required env label" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "global.requiredLabels.env") | .value' "$operator")" \
+    "$environment"
   assert_equal "$environment operator image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.image.repository") | .value' "$operator")" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"
   assert_equal "$environment operator init-image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-init"
   assert_equal "$environment operator broker-image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-kubernetes"
-  assert_equal "$environment operator values source ref" \
-    "$(yq -r '.spec.sources[1].ref // ""' "$operator")" \
-    values
   assert_singleton_application \
     "$zookeeper" "$environment" ZooKeeper "$environment-shared-zookeeper" -10
   assert_equal "$environment ZooKeeper release name" \
@@ -450,8 +437,8 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
 
   git_revision=$(yq -r \
     '.spec.generators[0].matrix.generators[0].git.revision // ""' "$workloads")
-  assert_equal "$environment operator Git values revision" \
-    "$(yq -r '.spec.sources[1].targetRevision // ""' "$operator")" \
+  assert_equal "$environment operator Git revision" \
+    "$(yq -r '.spec.source.targetRevision // ""' "$operator")" \
     "$git_revision"
   assert_equal "$environment ZooKeeper Git revision" \
     "$(yq -r '.spec.source.targetRevision // ""' "$zookeeper")" \
@@ -462,14 +449,14 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment workload source repository" \
     "$(yq -r '.spec.template.spec.source.repoURL // ""' "$workloads")" \
     "$git_repo"
-  assert_equal "$environment operator Git values repository" \
-    "$(yq -r '.spec.sources[1].repoURL // ""' "$operator")" \
+  assert_equal "$environment operator Git repository" \
+    "$(yq -r '.spec.source.repoURL // ""' "$operator")" \
     "$git_repo"
   assert_equal "$environment ZooKeeper Git repository" \
     "$(yq -r '.spec.source.repoURL // ""' "$zookeeper")" \
     "$git_repo"
   assert_project \
-    "$project" "$environment" "$topology" "$git_repo" "$expected_operator_oci_repository"
+    "$project" "$environment" "$topology" "$git_repo"
 
   if [[ -n "$distribution_json" ]]; then
     distribution_json="$distribution_json,"
