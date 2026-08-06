@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: messaging-platform
+  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
+spec:
+  description: Artemis messaging platform workloads in the nonproduction cluster
+  sourceRepos:
+    - https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+    - PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    - server: https://kubernetes.default.svc
+      namespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
+    - server: https://kubernetes.default.svc
+      namespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
+    - server: https://kubernetes.default.svc
+      namespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
+    - server: https://kubernetes.default.svc
+      namespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding

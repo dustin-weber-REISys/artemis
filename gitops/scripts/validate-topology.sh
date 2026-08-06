@@ -42,6 +42,59 @@ assert_equal() {
   fi
 }
 
+assert_project() {
+  file=$1
+  environment=$2
+  topology=$3
+  expected_git_repository=$4
+  expected_oci_repository=$5
+
+  assert_equal "$environment project apiVersion" \
+    "$(yq -r '.apiVersion // ""' "$file")" \
+    'argoproj.io/v1alpha1'
+  assert_equal "$environment project kind" \
+    "$(yq -r '.kind // ""' "$file")" \
+    AppProject
+  assert_equal "$environment project name" \
+    "$(yq -r '.metadata.name // ""' "$file")" \
+    messaging-platform
+  assert_equal "$environment project namespace" \
+    "$(yq -r '.metadata.namespace // ""' "$file")" \
+    PLACEHOLDER_ARGOCD_NAMESPACE
+  assert_equal "$environment project sync wave" \
+    "$(yq -r '.metadata.annotations."argocd.argoproj.io/sync-wave" // ""' "$file")" \
+    -30
+
+  expected_sources=$(printf '%s\n' \
+    "$expected_git_repository" "$expected_oci_repository" | sort)
+  actual_sources=$(yq -r '.spec.sourceRepos[]' "$file" | sort)
+  assert_equal "$environment project approved sources" \
+    "$actual_sources" "$expected_sources"
+
+  expected_namespaces=$(
+    yq -r '.platformNamespace, .brokerPairs[].workloadNamespace' "$topology" | sort
+  )
+  actual_namespaces=$(yq -r '.spec.destinations[].namespace' "$file" | sort)
+  assert_equal "$environment project approved namespaces" \
+    "$actual_namespaces" "$expected_namespaces"
+  destination_count=$(yq -r '.spec.destinations | length' "$file")
+  assert_equal "$environment project local destination count" \
+    "$(yq -r \
+      '[.spec.destinations[] | select(.server == "https://kubernetes.default.svc")] | length' \
+      "$file")" \
+    "$destination_count"
+
+  expected_cluster_resources=$(printf '%s\n' \
+    '|Namespace' \
+    'apiextensions.k8s.io|CustomResourceDefinition' \
+    'rbac.authorization.k8s.io|ClusterRole' \
+    'rbac.authorization.k8s.io|ClusterRoleBinding' | sort)
+  actual_cluster_resources=$(yq -r \
+    '.spec.clusterResourceWhitelist[] | .group + "|" + .kind' "$file" | sort)
+  assert_equal "$environment project cluster resource allowlist" \
+    "$actual_cluster_resources" "$expected_cluster_resources"
+}
+
 unique_line_count() {
   printf '%s\n' "$1" | sed '/^$/d' | sort -u | wc -l | tr -d ' '
 }
@@ -200,16 +253,17 @@ for environment_count in test:2 nonprod:4 prod:8; do
   expected_count=${environment_count##*:}
   topology="$topology_dir/$environment.yaml"
   environment_bootstrap="$bootstrap_dir/$environment"
+  project="$environment_bootstrap/project.yaml"
   operator="$environment_bootstrap/operator-application.yaml"
   zookeeper="$environment_bootstrap/zookeeper-application.yaml"
   workloads="$environment_bootstrap/artemis-workloads-applicationset.yaml"
 
-  for required_path in "$topology" "$operator" "$zookeeper" "$workloads"; do
+  for required_path in "$topology" "$project" "$operator" "$zookeeper" "$workloads"; do
     if [[ ! -f "$required_path" ]]; then
       record_error "topology input not found: $required_path"
     fi
   done
-  if [[ ! -f "$topology" || ! -f "$operator" || ! -f "$zookeeper" || ! -f "$workloads" ]]; then
+  if [[ ! -f "$topology" || ! -f "$project" || ! -f "$operator" || ! -f "$zookeeper" || ! -f "$workloads" ]]; then
     continue
   fi
 
@@ -391,6 +445,8 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment ZooKeeper Git repository" \
     "$(yq -r '.spec.source.repoURL // ""' "$zookeeper")" \
     "$git_repo"
+  assert_project \
+    "$project" "$environment" "$topology" "$git_repo" "$expected_operator_oci_repository"
 
   if [[ -n "$distribution_json" ]]; then
     distribution_json="$distribution_json,"
@@ -419,16 +475,9 @@ if rg -n \
   record_error 'cross-cluster destination data remains in cluster-local topology or bootstrap manifests'
 fi
 
-while IFS= read -r bootstrap_manifest; do
-  if yq -r 'select(.kind == "AppProject") | .kind' "$bootstrap_manifest" \
-      | grep -qx AppProject; then
-    record_error "repository-owned AppProject is forbidden; Terraform owns project policy: $bootstrap_manifest"
-  fi
-done < <(find "$bootstrap_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
-
 status=PASS
 [[ "$errors" -eq 0 ]] || status=FAIL
-printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"deployment-topology","status":"%s","clusters":%d,"brokerPairs":%d,"distribution":{%s},"projectOwner":"terraform","errors":%d,"topologyDirectory":"%s","bootstrapDirectory":"%s"}\n' \
+printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"deployment-topology","status":"%s","clusters":%d,"brokerPairs":%d,"distribution":{%s},"projectOwner":"bootstrap","errors":%d,"topologyDirectory":"%s","bootstrapDirectory":"%s"}\n' \
   "$status" "$cluster_count" "$broker_pair_count" "$distribution_json" "$errors" \
   "${topology_dir#"$repo_root/"}" "${bootstrap_dir#"$repo_root/"}" > "$report"
 printf '%s\n' \

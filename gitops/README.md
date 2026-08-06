@@ -18,11 +18,11 @@ captures the consumer footprint, burst behavior, retained backlog, and
 production-derived scenarios that should inform capacity and recovery testing.
 
 Each EKS cluster has its own Argo CD instance. Terraform registers this
-repository, creates the `messaging-platform` AppProject through
-`argocd_additional_projects`, and creates one root Application pointing to
-`gitops/argocd/bootstrap/<environment>`. All child destinations use the local
-cluster server `https://kubernetes.default.svc`; this repository does not
-create its own AppProject.
+repository and creates one root Application pointing to
+`gitops/argocd/bootstrap/<environment>`. The selected bootstrap creates its
+environment-local `messaging-platform` AppProject before its child
+Applications. All child destinations use the local cluster server
+`https://kubernetes.default.svc`.
 
 Argo CD paths are repository-relative and therefore include the `gitops/`
 prefix. Helm values files remain relative to their chart directories.

@@ -2,9 +2,9 @@
 
 This repository is consumed as a standalone GitOps repository by one Argo CD
 3.4.x installation in each EKS cluster. Cluster Terraform owns Argo CD itself,
-repository credentials, the `messaging-platform` AppProject/RBAC boundary, and
-the root `Application` that points at exactly one environment bootstrap
-directory.
+repository credentials, and the root `Application` that points at exactly one
+environment bootstrap directory. The selected bootstrap owns the
+`messaging-platform` AppProject policy used by its child Applications.
 
 | Argo CD instance | Root Application source path |
 | --- | --- |
@@ -14,6 +14,7 @@ directory.
 
 Every bootstrap directory contains:
 
+- one `AppProject` for the environment-local `messaging-platform` policy;
 - one ordinary `Application` for the cluster's ArkMQ operator;
 - one ordinary `Application` for the cluster's shared ZooKeeper ensemble; and
 - one `ApplicationSet` that generates only that cluster's Artemis broker-pair
@@ -33,7 +34,6 @@ The existing EKS Terraform inputs map to Artemis as follows:
 | Terraform-owned input | Artemis contract |
 | --- | --- |
 | `standalone_argocd_repos` | Register the standalone Artemis Git repository with the cluster-local Argo CD instance. |
-| `argocd_additional_projects` | Create the least-privilege `messaging-platform` AppProject before the Artemis root Application is reconciled. |
 | `argocd_repos` | Create one root Artemis Application using the matching bootstrap path, Git repository, and approved branch, tag, or commit. |
 
 The approved ArkMQ Operator chart is promoted to the private ECR Helm/OCI
@@ -49,7 +49,7 @@ Argo CD OCI credential mechanism. ECR authorization tokens are short-lived;
 do not capture one as a long-lived Terraform value or secret. Use the owning
 platform's approved credential refresh integration.
 
-The Terraform-managed `messaging-platform` project must allow:
+The bootstrap-managed `messaging-platform` project allows:
 
 - the standalone Artemis Git repository and the environment's exact private
   Helm/OCI namespace as sources;
@@ -62,10 +62,10 @@ The Terraform-managed `messaging-platform` project must allow:
   minimum; admission or other cluster-scoped kinds must be derived from the
   mirrored chart rather than guessed.
 
-The root Application should use the `default` project only for bootstrap. The
-operator, ZooKeeper, and generated Artemis Applications continue to reference
-the Terraform-created `messaging-platform` project. The standalone repository
-must not create or modify its own AppProject.
+The root Application uses the `default` project for bootstrap. Sync wave `-30`
+creates the environment-local `messaging-platform` project before the operator,
+ZooKeeper, and generated Artemis Applications reference it. Repository and OCI
+credentials remain platform-owned and must exist before the root sync.
 
 Set `PLACEHOLDER_GITOPS_REVISION` in the bootstrap manifests to the exact
 branch, tag, or commit configured for the root entry in `argocd_repos`. The
@@ -77,8 +77,8 @@ workload source must all use that same environment revision.
 Sync-wave annotations communicate dependency intent, but the first deployment
 must still be health-gated:
 
-1. apply Terraform and verify the `messaging-platform` project, repository
-   credentials, and root Application exist;
+1. apply Terraform and verify repository credentials and the root Application
+   exist, then sync the root to create the `messaging-platform` project;
 2. sync the operator Application, then wait for the operator and required
    CRDs;
 3. sync ZooKeeper, then verify placement, persistent volumes, quorum, policy,

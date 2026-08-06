@@ -210,11 +210,25 @@ assert_bootstrap_rejected \
   'nonprod workloads automated prune: expected true, got false'
 
 assert_bootstrap_rejected \
-  repository-owned-project \
+  wrong-project-oci-repository \
   prod \
-  operator-application.yaml \
-  '.kind = "AppProject"' \
-  'repository-owned AppProject is forbidden; Terraform owns project policy'
+  project.yaml \
+  '.spec.sourceRepos[1] = "quay.io/arkmq-org/helm-charts"' \
+  'prod project approved sources'
+
+assert_bootstrap_rejected \
+  remote-project-destination \
+  test \
+  project.yaml \
+  '.spec.destinations[0].server = "https://remote.invalid"' \
+  'test project local destination count: expected 3, got 2'
+
+assert_bootstrap_rejected \
+  missing-project-cluster-resource \
+  nonprod \
+  project.yaml \
+  'del(.spec.clusterResourceWhitelist[0])' \
+  'nonprod project cluster resource allowlist'
 
 assert_bootstrap_rejected \
   mismatched-zookeeper-revision \
@@ -265,10 +279,26 @@ if rg -n \
 fi
 
 for environment in test nonprod prod; do
+  project="$bootstrap_dir/$environment/project.yaml"
   workloads="$bootstrap_dir/$environment/artemis-workloads-applicationset.yaml"
   operator="$bootstrap_dir/$environment/operator-application.yaml"
   zookeeper="$bootstrap_dir/$environment/zookeeper-application.yaml"
 
+  assert_yaml_value \
+    "$environment project kind" \
+    '.kind' \
+    "$project" \
+    AppProject
+  assert_yaml_value \
+    "$environment project name" \
+    '.metadata.name' \
+    "$project" \
+    messaging-platform
+  assert_yaml_value \
+    "$environment project sync wave" \
+    '.metadata.annotations."argocd.argoproj.io/sync-wave"' \
+    "$project" \
+    -30
   assert_yaml_value \
     "$environment operator kind" \
     '.kind' \
@@ -315,13 +345,6 @@ for environment in test nonprod prod; do
     "$workloads" \
     'https://{{.managementHost}}/console'
 done
-
-if find "$bootstrap_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) \
-    -exec yq -r 'select(.kind == "AppProject") | .kind' {} \; \
-    | grep -qx AppProject; then
-  printf '%s\n' 'bootstrap contains an AppProject owned by the standalone repository' >&2
-  exit 1
-fi
 
 if [[ -f "$repo_root/argocd/topology/catalog.yaml" ]] \
     || find "$repo_root/argocd/applications" -type f -print -quit 2>/dev/null | grep -q .; then

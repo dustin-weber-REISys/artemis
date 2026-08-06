@@ -29,7 +29,7 @@ volatile values into an environment checklist.
 | --- | --- |
 | AWS/EKS | Platform team supplies the local cluster, network paths, node capacity, placement labels, EBS CSI, encrypted delayed-binding storage, KMS, and restore capability. |
 | Artifact supply chain | Platform team supplies private registry/chart access and evidence for exact mirrored digests, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
-| Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git/OCI credentials, project policy, the Terraform-created root Application, and a controlled bootstrap mechanism. |
+| Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git/OCI credentials, the Terraform-created root Application, and a controlled bootstrap mechanism. The selected repository bootstrap supplies project policy. |
 | Vault and certificates | Security/platform team supplies auth mounts, least-privilege policies and roles, CA/TLS material, workload-bound secret references, and any Secret synchronization. |
 | Keycloak and ingress | Identity/network teams supply public OIDC clients, exact redirect URIs, claims and role mappings, DNS, TLS Secrets, ingress labels, and reachable issuer/JWKS endpoints. |
 | Observability and backup | Operations supplies Prometheus discovery, log collection and retention, alarms, snapshots, restore procedures, and on-call ownership. |
@@ -116,19 +116,18 @@ In the cluster's Terraform configuration:
 1. register the Artemis Git repository through `standalone_argocd_repos`, and
    register the private Helm OCI namespace through the owning module's
    credential mechanism;
-2. create the `messaging-platform` project through
-   `argocd_additional_projects`;
-3. add one Artemis root entry to `argocd_repos` whose source path is exactly
+2. add one Artemis root entry to `argocd_repos` whose source path is exactly
    `gitops/argocd/bootstrap/<environment>`; and
-4. use the same approved branch, tag, or commit for the root entry and every
+3. use the same approved branch, tag, or commit for the root entry and every
    `PLACEHOLDER_GITOPS_REVISION` in that environment's child manifests.
 
 Do not register the other EKS clusters as destinations. Every child
-Application uses `https://kubernetes.default.svc`. The standalone repository
-must not create or modify the AppProject that authorizes its own Applications.
+Application uses `https://kubernetes.default.svc`. The environment bootstrap
+creates its `messaging-platform` AppProject at sync wave `-30`, before any
+Application references the project.
 
-The Terraform project must allow the local platform and workload namespaces,
-the Artemis Git and mirrored Helm OCI sources, and the exact cluster-scoped kinds
+The bootstrap project allows the local platform and workload namespaces, the
+Artemis Git and mirrored Helm OCI sources, and the exact cluster-scoped kinds
 rendered by the approved ArkMQ chart. Because the current operator values set
 `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
@@ -232,18 +231,17 @@ parent bootstrap or a phased procedure enforces health checks.
 1. Approve artifacts and all AWS, cluster, identity, secret, observability, and
    backup prerequisites.
 2. In each cluster's Terraform, configure this standalone Git repository,
-   private Helm OCI credentials, the `messaging-platform` project through
-   `argocd_additional_projects`, and the root Application through
+   private Helm OCI credentials, and the root Application through
    `argocd_repos`, pointing only to that cluster's bootstrap path and approved
-   revision.
+   revision. The bootstrap creates the `messaging-platform` project.
 3. Create Vault policies/roles/data references, Keycloak clients, TLS
    material, and the namespace/pod labels required by policy.
 4. Run the canonical repository validation and inspect effective rendered
    manifests for placeholders, secret values, identity collisions, mutable
    images, and incorrect selectors.
-5. Verify Terraform created the local `messaging-platform` AppProject and that
-   its effective source, destination, and cluster-resource policy matches the
-   rendered operator and the approved topology.
+5. Verify the root sync created the local `messaging-platform` AppProject and
+   that its effective source, destination, and cluster-resource policy matches
+   the rendered operator and the approved topology.
 6. Sync the operator Application and wait for the operator and its CRDs to
    become healthy.
 7. Sync the ZooKeeper Application and verify placement, separate PVCs, quorum,

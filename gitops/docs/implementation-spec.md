@@ -32,7 +32,8 @@ changeable implementation facts belong in executable files:
 | Concern | Authoritative source |
 | --- | --- |
 | Local-cluster child Applications, workloads, namespaces, and coordination identities | [`argocd/bootstrap`](../argocd/bootstrap) and [`argocd/topology`](../argocd/topology) |
-| Argo CD repository credentials, `messaging-platform` AppProject policy, and root Application | Per-cluster EKS Terraform inputs |
+| Argo CD repository credentials and root Application | Per-cluster EKS Terraform inputs |
+| `messaging-platform` AppProject policy | Matching environment directory under [`argocd/bootstrap`](../argocd/bootstrap) |
 | Current component and image versions | Chart values, schemas, and environment overlays under [`charts`](../charts) and [`environments`](../environments) |
 | Supported Artemis operands | [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json) |
 | Rendered broker and ZooKeeper behavior | Chart templates under [`charts`](../charts) |
@@ -218,12 +219,12 @@ for acknowledged messages, and follow
 | --- | --- |
 | AWS/platform | Account, network, EKS, IAM, node capacity, EBS CSI, storage classes, KMS, snapshots, and restore infrastructure |
 | Supply chain | ECR repositories, mirroring, SBOM, scanning, signing, provenance, and promotion evidence |
-| GitOps platform | Per-cluster Argo CD installation, standalone Git/OCI credentials, local root Application, project policy, and bootstrap control |
+| GitOps platform | Per-cluster Argo CD installation, standalone Git/OCI credentials, local root Application, and bootstrap control |
 | Security/Vault | Secret values, Vault auth mounts, policies, roles, certificate material, and approved secret materialization |
 | Identity | Keycloak realm, public clients, redirect URIs, claims, groups, and role assignments |
 | Application owners | Queue catalog, client identities, compatibility evidence, traffic quiescence, cutover, and business reconciliation |
 | Operations | Monitoring selection, log collection, alarms, backup policy, incident command, and production approval |
-| This repository | Artemis charts and versions, local-cluster Argo composition, workload topology, schemas, environment baselines, validation harness, ADRs, and runbooks |
+| This repository | Artemis charts and versions, local-cluster Argo composition and project policy, workload topology, schemas, environment baselines, validation harness, ADRs, and runbooks |
 
 ## Validation and promotion gates
 
