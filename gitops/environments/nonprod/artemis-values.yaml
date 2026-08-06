@@ -1,10 +1,5 @@
 # Release-candidate capacity with the same HA and ZooKeeper coordination
-# semantics as test and prod.
-images:
-  broker:
-    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
-  init:
-    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
+# semantics as test and prod. The ApplicationSet supplies image repositories.
 broker:
   resources:
     requests:

@@ -1,11 +1,5 @@
-# Generic workload overlay consumed by the Artemis HA chart. The test
-# cluster's local ApplicationSet supplies namespace, coordination ID, and
-# shared-ZooKeeper service parameters per generated Application.
-images:
-  broker:
-    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
-  init:
-    repository: PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
+# The test cluster's local ApplicationSet supplies image repositories,
+# namespace, coordination ID, and shared-ZooKeeper service parameters.
 broker:
   resources:
     requests:

@@ -15,6 +15,9 @@ spec:
       releaseName: nonprod-shared-zookeeper
       valueFiles:
         - ../../environments/nonprod/zookeeper-values.yaml
+      parameters:
+        - name: image.repository
+          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
   destination:
     server: https://kubernetes.default.svc
     namespace: PLACEHOLDER_PLATFORM_NAMESPACE

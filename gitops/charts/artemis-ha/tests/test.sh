@@ -120,9 +120,15 @@ if rg -q '^kind: StorageClass$' "$rendered"; then
 fi
 
 for environment in prod nonprod test; do
+  ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
+  fi
   environment_rendered="$temp_dir/$environment.yaml"
   helm template "artemis-$environment" "$chart_dir" --namespace example-messaging \
     "${helm_args[@]}" \
+    --set-string "images.broker.repository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "images.init.repository=$ecr_repository/activemq-artemis-broker-init" \
     -f "$chart_dir/../../environments/$environment/artemis-values.yaml" \
     > "$environment_rendered"
 done

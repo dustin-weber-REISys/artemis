@@ -8,13 +8,20 @@ metadata:
 spec:
   project: messaging-platform
   sources:
-    - repoURL: PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY
+    - repoURL: PLACEHOLDER_NONPROD_ECR_REPOSITORY/helm
       chart: arkmq-org-broker-operator
       targetRevision: "2.2.0"
       helm:
         releaseName: nonprod-arkmq-operator
         valueFiles:
-          - $values/gitops/environments/nonprod/operator-values.yaml
+          - $values/gitops/operator-values.yaml
+        parameters:
+          - name: arkmq-org-broker-operator.controllerManager.manager.image.repository
+            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator
+          - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
+            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
+          - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository
+            value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
     - repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
       targetRevision: PLACEHOLDER_GITOPS_REVISION
       ref: values

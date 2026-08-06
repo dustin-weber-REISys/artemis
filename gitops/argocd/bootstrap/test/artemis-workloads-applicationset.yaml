@@ -41,6 +41,10 @@ spec:
           valueFiles:
             - ../../environments/{{.environment}}/artemis-values.yaml
           parameters:
+            - name: images.broker.repository
+              value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
+            - name: images.init.repository
+              value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
             - name: ha.coordinationId
               value: '{{.coordinationId}}'
             - name: ha.groupName

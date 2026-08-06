@@ -45,9 +45,15 @@ helm pull "$operator_chart" --version "$operator_chart_version" \
   --untar --untardir "$temp_dir" >/dev/null
 
 for environment in test nonprod prod; do
+  ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
+  fi
   rendered="$temp_dir/artemis-$environment.yaml"
   broker_cr="$temp_dir/artemis-$environment-cr.yaml"
   helm template validation "$repo_root/charts/artemis-ha" \
+    --set-string "images.broker.repository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "images.init.repository=$ecr_repository/activemq-artemis-broker-init" \
     --values "$repo_root/environments/$environment/artemis-values.yaml" \
     > "$rendered"
   yq 'select(.kind == "ActiveMQArtemis")' "$rendered" > "$broker_cr"
@@ -56,7 +62,10 @@ for environment in test nonprod prod; do
   operator_rendered="$temp_dir/operator-$environment.yaml"
   helm template validation-operator "$operator_chart_dir" \
     --namespace example-platform \
-    --values "$repo_root/environments/$environment/operator-values.yaml" \
+    --values "$repo_root/operator-values.yaml" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$operator_rendered"
   kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
 done

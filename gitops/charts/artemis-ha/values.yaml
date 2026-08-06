@@ -3,15 +3,13 @@
 
 images:
   broker:
-    # Replace this example mirror with the environment's ECR repository.
+    # Argo CD replaces this example with the selected ECR repository.
     repository: example.invalid/ecr-mirror/activemq-artemis-broker-kubernetes
-    tag: artemis.2.53.0
     digest: sha256:6855d008e0a11b5110395ac321daaf69cfde24e36188c50e2b0291069e5a6234
     pullPolicy: IfNotPresent
   init:
-    # Replace this example mirror with the environment's ECR repository.
+    # Argo CD replaces this example with the selected ECR repository.
     repository: example.invalid/ecr-mirror/activemq-artemis-broker-init
-    tag: artemis.2.53.0
     digest: sha256:97967beea913ae9f4deb84de0be71247d3c3d7cb325b7f7a45c1257521997f83
     pullPolicy: IfNotPresent
   imagePullSecrets: []

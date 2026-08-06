@@ -189,23 +189,66 @@ do not rebuild or repackage between environments.
 
 ## Artemis and Argo CD wiring
 
-The operator Applications in `gitops/argocd/bootstrap` expect these placeholder
-values:
+All image and Helm locations are derived from two ECR base placeholders:
 
-| Placeholder | Example value; no `oci://` prefix |
+| Placeholder | Example value; no `oci://` prefix or artifact name |
 | --- | --- |
-| `PLACEHOLDER_NONPROD_HELM_OCI_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis/helm` |
-| `PLACEHOLDER_PROD_HELM_OCI_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis/helm` |
+| `PLACEHOLDER_NONPROD_ECR_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis` |
+| `PLACEHOLDER_PROD_ECR_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 
-Argo CD appends the configured chart name
+The checked-in Applications append `/helm`, and Argo CD appends the chart name
 `arkmq-org-broker-operator`. The `messaging-platform` AppProject must allow the
-exact Git URL and the matching ECR Helm namespace in `sourceRepos`.
+exact Git URL and the resulting
+`<ECR Helm namespace>/arkmq-org-broker-operator` source in `sourceRepos`.
 
-Register the ECR namespace as a Helm repository with OCI enabled. Do not store
-the output of `aws ecr get-login-password` as a long-lived Terraform secret:
-ECR authorization tokens expire. Connect the repo-server to the Gov platform's
-approved ECR credential-refresh mechanism and grant only the ECR read actions
-needed to retrieve approved artifacts.
+Register each ECR chart namespace as a Helm repository with OCI enabled, but
+provide authentication once per registry through an Argo CD repository
+credential template. Argo CD applies that template to every repository URL
+with the registry hostname as its prefix, including charts owned by other
+applications. Individual `AppProject.sourceRepos` allowlists remain the
+authorization boundary for which chart repositories each application may use.
+
+Do not store the output of `aws ecr get-login-password` as a long-lived
+Terraform secret: ECR authorization tokens expire. Connect the repo-server to
+the Gov platform's approved ECR credential-refresh mechanism and grant the
+refresh identity read access only to approved Helm repositories. The ECR token
+inherits the IAM principal's permissions, so a shared credential must not use
+a broad write-capable role.
+
+The repository provides a refresh helper that obtains a new token without
+printing it and applies a registry-wide Argo CD Helm/OCI `repo-creds` Secret.
+Invoke it from the platform-owned scheduler at least once every ten hours and
+once during bootstrap:
+
+```sh
+export ARGOCD_NAMESPACE=argocd
+export AWS_REGION=us-east-1
+export ECR_REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com
+export ARGOCD_REPO_CREDS_SECRET=ecr-helm-oci-creds
+export KUBECTL_CONTEXT=PLACEHOLDER_TEST_KUBECTL_CONTEXT
+gitops/scripts/refresh-argocd-ecr-credential.sh
+```
+
+The caller needs `ecr:GetAuthorizationToken`; its Kubernetes identity needs
+only `get`, `create`, `patch`, and `update` access to the
+`ecr-helm-oci-creds` Secret in the Argo CD namespace. The credential-template
+URL is the ECR registry hostname without `https://`, `oci://`, a namespace, or
+a chart name. Repository definitions and Application `repoURL` values must not
+contain credentials of their own, because Argo CD only applies a matching
+credential template when repository-specific credentials are absent.
+
+Run the helper once per ECR registry used by an Argo CD instance. If an
+instance must access multiple accounts or regions, give each invocation a
+different `ARGOCD_REPO_CREDS_SECRET` value. Do not place any generated Secret
+or password in Git.
+
+When migrating an existing installation, apply and verify the shared
+`repo-creds` Secret first. Then remove the legacy `artemis-ecr-helm` repository
+Secret, or remove its `username` and `password` fields if the platform retains
+it as a repository definition. A repository-specific credential takes
+precedence over a matching credential template, so leaving the old ECR token
+in place would cause Artemis to fail when that token expires even though the
+shared template is current.
 
 For secure CI, override the public development default used by contract tests:
 

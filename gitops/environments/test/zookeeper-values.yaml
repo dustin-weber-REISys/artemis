@@ -1,10 +1,5 @@
 # Test uses smaller capacity while retaining the chart's quorum safeguards.
-
-image:
-  registry: PLACEHOLDER_NONPROD_ECR_REGISTRY
-  repository: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
-  # The exact mirrored digest is promoted unchanged to nonprod and prod.
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+# The Argo CD Application supplies the nonprod image repository.
 
 persistence:
   storageClass: PLACEHOLDER_TEST_GP3_STORAGE_CLASS

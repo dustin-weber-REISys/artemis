@@ -165,10 +165,9 @@
     "image": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "required": ["repository", "digest", "pullPolicy"],
       "properties": {
-        "repository": {"type": "string", "pattern": "^([a-z0-9][a-z0-9./_-]*|PLACEHOLDER_(NONPROD|PROD)_ECR_REGISTRY/PLACEHOLDER_(NONPROD|PROD)_ECR_REPOSITORY/[a-z0-9][a-z0-9._/-]*)$"},
-        "tag": {"type": "string", "minLength": 1},
+        "repository": {"type": "string", "pattern": "^([a-z0-9][a-z0-9./_-]*|PLACEHOLDER_(NONPROD|PROD)_ECR_REPOSITORY/[a-z0-9][a-z0-9._/-]*)$"},
         "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
         "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
       }

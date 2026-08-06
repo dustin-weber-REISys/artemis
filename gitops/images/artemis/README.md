@@ -6,6 +6,7 @@ digests are authoritative in
 [`charts/artemis-ha/values.yaml`](../../charts/artemis-ha/values.yaml), with
 supported operands constrained by
 [`values.schema.json`](../../charts/artemis-ha/values.schema.json).
+The Argo CD bootstrap supplies one of the two private ECR base locations.
 
 Private-registry promotion must preserve or re-approve the verified digest and
 retain license, SBOM, scan, signature, and provenance evidence. Build a thin

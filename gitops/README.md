@@ -7,7 +7,10 @@ This area is the deployable EKS baseline. It owns:
   placeholders;
 - [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
   charts;
-- [`environments`](environments): test, non-production, and production values;
+- [`operator-values.yaml`](operator-values.yaml): the shared immutable ArkMQ
+  operator release pins;
+- [`environments`](environments): test, non-production, and production runtime
+  values without image locations or release pins;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
 - [`scripts`](scripts): rendering, schema, topology, and scenario validation;
 - [`docs`](docs): design decisions, environment import guidance, and runbooks.

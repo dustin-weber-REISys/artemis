@@ -32,8 +32,9 @@ Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external
 ZooKeeper connection and selectors, mirrored image repositories, ingress
 identity, and the approved policy sources. The ApplicationSet supplies the
-pair-specific fields from `argocd/topology`; environment overlays supply
-stage-wide fields. Run `./tests/test.sh` for focused rendering, schema,
+pair-specific fields from `argocd/topology`; Argo parameters supply image
+locations; environment overlays supply stage-wide runtime fields. Run
+`./tests/test.sh` for focused rendering, schema,
 port-coherence, and Kubernetes resource validation.
 
 Vault injection defaults off. The optional annotations only request a

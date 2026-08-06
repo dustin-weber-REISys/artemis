@@ -109,7 +109,8 @@ Update the selected directory under
 [`argocd/bootstrap`](../argocd/bootstrap) and its matching
 [`topology`](../argocd/topology) file with the approved Argo namespace,
 Git/OCI sources, immutable revision policy, local platform namespace, workload
-namespaces, cluster identity, and registry locations.
+namespaces, and cluster identity. Replace the matching nonprod or prod ECR base
+placeholder in the bootstrap manifests.
 
 In the cluster's Terraform configuration:
 
@@ -127,7 +128,8 @@ creates its `messaging-platform` AppProject at sync wave `-30`, before any
 Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
-Artemis Git and mirrored Helm OCI sources, and the exact cluster-scoped kinds
+Artemis Git source, the effective mirrored Helm OCI chart source
+(`<repository>/arkmq-org-broker-operator`), and the exact cluster-scoped kinds
 rendered by the approved ArkMQ chart. Because the current operator values set
 `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
@@ -150,10 +152,15 @@ namespaces in the matching topology file. Put workload-specific console,
 Vault, client allowlist, queue, capacity, or alert differences in explicit
 workload configuration or ApplicationSet parameters.
 
+Artifact tags and digests are shared release data, not environment data. Keep
+repository-owned image pins in chart defaults and external chart pins under
+[`operator-values.yaml`](../operator-values.yaml), then promote them by
+advancing the environment's approved Git revision.
+
 Review the effective schema and rendered manifest rather than following a
 copied property inventory. At minimum, resolve:
 
-- private image repositories and approved digests;
+- the selected ECR base repository and approved release digests;
 - persistent storage and placement;
 - pair-unique HA and ZooKeeper identities;
 - unique workload namespace, service, console, TLS, Keycloak, and Vault

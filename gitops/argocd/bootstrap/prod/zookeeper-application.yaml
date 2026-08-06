@@ -15,6 +15,9 @@ spec:
       releaseName: prod-shared-zookeeper
       valueFiles:
         - ../../environments/prod/zookeeper-values.yaml
+      parameters:
+        - name: image.repository
+          value: PLACEHOLDER_PROD_ECR_REPOSITORY/zookeeper
   destination:
     server: https://kubernetes.default.svc
     namespace: PLACEHOLDER_PLATFORM_NAMESPACE

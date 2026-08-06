@@ -6,6 +6,11 @@ repository_dir=$(CDPATH= cd -- "$chart_dir/../.." && pwd)
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/zookeeper-test.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
 
+command -v yq >/dev/null 2>&1 || {
+  printf '%s\n' 'yq is required' >&2
+  exit 2
+}
+
 helm lint "$chart_dir" >/dev/null
 if helm template invalid "$chart_dir" --set replicaCount=2 >/dev/null 2>&1; then
   printf '%s\n' 'expected a two-member quorum to fail' >&2
@@ -33,6 +38,11 @@ if helm template invalid "$chart_dir" \
 fi
 
 rendered="$work_dir/default.yaml"
+image_digest=$(yq -r '.image.digest // ""' "$chart_dir/values.yaml")
+if [[ ! "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  printf '%s\n' 'ZooKeeper chart values must define a sha256 image digest' >&2
+  exit 1
+fi
 helm template zookeeper "$chart_dir" --namespace example-platform > "$rendered"
 rg -q '^kind: StatefulSet$' "$rendered"
 rg -q 'replicas: 3' "$rendered"
@@ -49,10 +59,17 @@ kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
 
 for environment in test nonprod prod; do
   values="$repository_dir/environments/$environment/zookeeper-values.yaml"
+  ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
+  fi
   environment_rendered="$work_dir/$environment.yaml"
-  helm lint "$chart_dir" --values "$values" >/dev/null
+  helm lint "$chart_dir" \
+    --set-string "image.repository=$ecr_repository/zookeeper" \
+    --values "$values" >/dev/null
   helm template "$environment-zookeeper" "$chart_dir" \
     --namespace example-platform \
+    --set-string "image.repository=$ecr_repository/zookeeper" \
     --values "$values" > "$environment_rendered"
   rg -q 'replicas: 3' "$environment_rendered"
   rg -q 'volumeClaimTemplates:' "$environment_rendered"

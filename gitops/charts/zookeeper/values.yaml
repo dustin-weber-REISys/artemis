@@ -3,9 +3,8 @@ replicaCount: 3
 
 image:
   # Mirror Docker Official Image docker.io/library/zookeeper:3.9.5 into ECR and
-  # replace the explicit placeholders below during environment promotion.
-  registry: PLACEHOLDER_ECR_REGISTRY
-  repository: PLACEHOLDER_ECR_REPOSITORY/zookeeper
+  # Argo CD replaces this example with the selected ECR repository.
+  repository: example.invalid/ecr-mirror/zookeeper
   tag: 3.9.5
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   pullPolicy: IfNotPresent

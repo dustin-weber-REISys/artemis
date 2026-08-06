@@ -3,7 +3,6 @@ name: zookeeper
 description: A small repository-owned Apache ZooKeeper ensemble chart for Artemis coordination
 type: application
 version: 0.1.0
-appVersion: "3.9.5"
 home: https://zookeeper.apache.org/
 sources:
   - https://github.com/apache/zookeeper

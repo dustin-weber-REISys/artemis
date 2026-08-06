@@ -1,10 +1,5 @@
-# Production keeps the promotion topology and tested artifact references;
-# final capacity is confirmed from nonprod load results.
-images:
-  broker:
-    repository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
-  init:
-    repository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init
+# Production capacity is confirmed from nonprod load results. The
+# ApplicationSet supplies production image repositories.
 broker:
   resources:
     requests:

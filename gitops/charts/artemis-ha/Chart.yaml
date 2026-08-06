@@ -3,7 +3,6 @@ name: artemis-ha
 description: Generic two-peer Apache ActiveMQ Artemis HA pair managed by the ArkMQ Broker Operator
 type: application
 version: 0.3.0
-appVersion: "2.53.0"
 keywords:
   - activemq-artemis
   - messaging

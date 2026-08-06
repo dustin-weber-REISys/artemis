@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=10
+check_count=11
 run_check() {
   local label=$1
   local exit_code
@@ -89,6 +89,8 @@ run_check 'Generated workload topology' \
   --report "$report_dir/topology-validation.json"
 run_check 'Topology regression tests' \
   "$repo_root/gitops/tests/topology/test.sh"
+run_check 'Argo CD ECR credential refresh regressions' \
+  "$repo_root/gitops/tests/argocd/test-ecr-credential-refresh.sh"
 run_check 'Helm charts and overlays' \
   "$repo_root/gitops/scripts/validate-charts.sh" \
   --report "$report_dir/chart-validation.json"

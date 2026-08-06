@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help test test-topology package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help test test-topology test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 		'GitOps and Helm:' \
 		'  validate-topology Validate the broker-pair catalog and Argo bootstrap' \
 		'  test-topology     Exercise topology validation regression cases' \
+		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \
 		'  validate-charts   Lint and render the Helm charts' \
 		'  validate-scenarios Validate the EKS acceptance definitions' \
 		'  validate-operator-schema Validate broker CRs against ArkMQ 2.2.0' \
@@ -81,6 +82,9 @@ validate-topology:
 
 test-topology:
 	$(MAKE) -C gitops test-topology
+
+test-argocd-ecr-credentials:
+	$(MAKE) -C gitops test-argocd-ecr-credentials
 
 validate-charts:
 	$(MAKE) -C gitops validate-charts REPORT_DIR="$(abspath $(REPORT_DIR))"

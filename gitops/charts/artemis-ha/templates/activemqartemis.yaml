@@ -82,10 +82,6 @@
 {{- if empty .Values.zookeeper.connectString }}
 {{- fail "zookeeper.connectString is required and must identify the external ensemble" }}
 {{- end }}
-{{- if ne (printf "artemis.%s" .Values.broker.version) .Values.images.broker.tag }}
-{{- fail "images.broker.tag must match broker.version so the operator operand matrix and image are auditable" }}
-{{- end }}
-
 apiVersion: broker.amq.io/v1beta1
 kind: ActiveMQArtemis
 metadata:
@@ -111,8 +107,8 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- end }}
   deploymentPlan:
-    image: {{ include "artemis-ha.image" .Values.images.broker | quote }}
-    initImage: {{ include "artemis-ha.image" .Values.images.init | quote }}
+    image: {{ include "artemis-ha.image" (dict "image" .Values.images.broker "tag" (printf "artemis.%s" .Values.broker.version)) | quote }}
+    initImage: {{ include "artemis-ha.image" (dict "image" .Values.images.init "tag" (printf "artemis.%s" .Values.broker.version)) | quote }}
     imagePullSecrets:
       {{- toYaml .Values.images.imagePullSecrets | nindent 6 }}
     # This chart is deliberately a durable, authenticated, two-peer HA pair.

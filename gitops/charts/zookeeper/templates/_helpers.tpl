@@ -21,7 +21,7 @@ StatefulSet selector is immutable after creation.
 {{- define "zookeeper.labels" -}}
 helm.sh/chart: {{ include "zookeeper.chart" . }}
 {{ include "zookeeper.selectorLabels" . }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+app.kubernetes.io/version: {{ .Values.image.tag | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
@@ -39,7 +39,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "zookeeper.image" -}}
-{{- printf "%s/%s:%s@%s" (trimSuffix "/" .Values.image.registry) (trimPrefix "/" .Values.image.repository) .Values.image.tag .Values.image.digest -}}
+{{- printf "%s:%s@%s" (trimSuffix "/" .Values.image.repository) .Values.image.tag .Values.image.digest -}}
 {{- end -}}
 
 {{- define "zookeeper.headlessServiceName" -}}

@@ -20,8 +20,11 @@ local/compose.yaml
 local/.env.example
 local/scripts/validate-compose.sh
 gitops/Makefile
+gitops/operator-values.yaml
 gitops/scripts/validate-topology.sh
+gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/tests/topology/test.sh
+gitops/tests/argocd/test-ecr-credential-refresh.sh
 gitops/tests/e2e/acceptance-plan.yaml
 gitops/tests/e2e/test-scenario-tools.sh
 gitops/tests/compatibility/classic-6.2.6-inventory.yaml
@@ -59,70 +62,32 @@ if command -v yq >/dev/null 2>&1; then
     }
   done
 
-  assert_yaml_value() {
+  assert_yaml_pattern() {
     local label=$1
     local expression=$2
     local yaml_file=$3
-    local expected=$4
+    local expected_pattern=$4
     local actual
     actual=$(yq -r "$expression" "$yaml_file")
-    if [[ "$actual" != "$expected" ]]; then
-      printf '%s: expected %s, got %s\n' "$label" "$expected" "$actual" >&2
+    if [[ ! "$actual" =~ $expected_pattern ]]; then
+      printf '%s: value does not match required pattern: %s\n' "$label" "$expected_pattern" >&2
       errors=$((errors + 1))
     fi
   }
 
-  for environment in test nonprod; do
-    assert_yaml_value "$environment operator ECR repository" \
-      '.arkmq-org-broker-operator.controllerManager.manager.image.repository' \
-      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator'
-    assert_yaml_value "$environment operator init-image ECR repository" \
-      '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository' \
-      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init'
-    assert_yaml_value "$environment operator broker-image ECR repository" \
-      '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository' \
-      "$repo_root/gitops/environments/$environment/operator-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
-    assert_yaml_value "$environment broker ECR repository" \
-      '.images.broker.repository' \
-      "$repo_root/gitops/environments/$environment/artemis-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
-    assert_yaml_value "$environment init ECR repository" \
-      '.images.init.repository' \
-      "$repo_root/gitops/environments/$environment/artemis-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init'
-    assert_yaml_value "$environment ZooKeeper ECR image" \
-      '.image.registry + "/" + .image.repository' \
-      "$repo_root/gitops/environments/$environment/zookeeper-values.yaml" \
-      'PLACEHOLDER_NONPROD_ECR_REGISTRY/PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper'
-  done
+  assert_yaml_pattern 'ZooKeeper release image digest' \
+    '.image.digest // ""' \
+    "$repo_root/gitops/charts/zookeeper/values.yaml" \
+    '^sha256:[0-9a-f]{64}$'
+  assert_yaml_pattern 'operator release image digest' \
+    '.arkmq-org-broker-operator.controllerManager.manager.image.tag // ""' \
+    "$repo_root/gitops/operator-values.yaml" \
+    '^2[.]2[.]0@sha256:[0-9a-f]{64}$'
 
-  assert_yaml_value 'prod operator ECR repository' \
-    '.arkmq-org-broker-operator.controllerManager.manager.image.repository' \
-    "$repo_root/gitops/environments/prod/operator-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/arkmq-operator'
-  assert_yaml_value 'prod operator init-image ECR repository' \
-    '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository' \
-    "$repo_root/gitops/environments/prod/operator-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init'
-  assert_yaml_value 'prod operator broker-image ECR repository' \
-    '.arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository' \
-    "$repo_root/gitops/environments/prod/operator-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
-  assert_yaml_value 'prod broker ECR repository' \
-    '.images.broker.repository' \
-    "$repo_root/gitops/environments/prod/artemis-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes'
-  assert_yaml_value 'prod init ECR repository' \
-    '.images.init.repository' \
-    "$repo_root/gitops/environments/prod/artemis-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init'
-  assert_yaml_value 'prod ZooKeeper ECR image' \
-    '.image.registry + "/" + .image.repository' \
-    "$repo_root/gitops/environments/prod/zookeeper-values.yaml" \
-    'PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/zookeeper'
+  if rg -n '^[[:space:]]*(image|images|tag|digest):' "$repo_root/gitops/environments" >/dev/null; then
+    printf '%s\n' 'environment values must not contain image locations or release pins' >&2
+    errors=$((errors + 1))
+  fi
 else
   printf '%s\n' 'yq unavailable; YAML syntax checks skipped' >&2
 fi

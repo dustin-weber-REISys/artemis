@@ -53,11 +53,11 @@ This is peer traffic, independent of the configurable client acceptors.
 {{- end -}}
 
 {{- define "artemis-ha.image" -}}
-{{- $image := . -}}
+{{- $image := .image -}}
 {{- if $image.digest -}}
-{{- printf "%s:%s@%s" $image.repository $image.tag $image.digest -}}
+{{- printf "%s:%s@%s" $image.repository .tag $image.digest -}}
 {{- else -}}
-{{- printf "%s:%s" $image.repository $image.tag -}}
+{{- printf "%s:%s" $image.repository .tag -}}
 {{- end -}}
 {{- end -}}
 

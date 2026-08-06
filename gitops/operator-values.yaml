@@ -1,14 +1,12 @@
-# Promote the exact operator and related-image digests approved in nonprod.
+# Immutable ArkMQ operator release shared by every environment at this Git
+# revision. Argo CD supplies the selected ECR repository locations.
 arkmq-org-broker-operator:
   controllerManager:
     manager:
       image:
-        repository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/arkmq-operator
         tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
         pullPolicy: IfNotPresent
       relatedImages:
-        activemqArtemisBrokerInitRepository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init
-        activemqArtemisBrokerKubernetesRepository: PLACEHOLDER_PROD_ECR_REGISTRY/PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
         activemqArtemisBrokerInit2530:
           digest: sha256:97967beea913ae9f4deb84de0be71247d3c3d7cb325b7f7a45c1257521997f83
         activemqArtemisBrokerKubernetes2530:
