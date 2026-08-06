@@ -64,6 +64,12 @@ done
 helm template artemis "$chart_dir" --namespace example-messaging "${helm_args[@]}" > "$rendered"
 
 rg -q '^kind: ActiveMQArtemis$' "$rendered"
+for required_label in app contact env fismaid; do
+  yq -e "select(.kind == \"ActiveMQArtemis\") | .metadata.labels.\"$required_label\" != null" \
+    "$rendered" >/dev/null
+  yq -e "select(.kind == \"ActiveMQArtemis\") | .spec.deploymentPlan.labels.\"$required_label\" != null" \
+    "$rendered" >/dev/null
+done
 rg -q 'HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER' "$rendered"
 rg -q 'HAPolicyConfiguration\.coordinationId=pair-id-test01' "$rendered"
 rg -q 'HAPolicyConfiguration\.distributedManagerConfiguration\.properties\.namespace=artemis/example/example-pair' "$rendered"
@@ -133,6 +139,11 @@ for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered
     echo "Artemis chart unexpectedly rendered a platform-owned StorageClass: $environment_rendered" >&2
     exit 1
   fi
+done
+for environment in prod nonprod test; do
+  environment_rendered="$temp_dir/$environment.yaml"
+  yq -e "select(.kind == \"ActiveMQArtemis\") | (.metadata.labels.env == \"$environment\") and (.spec.deploymentPlan.labels.env == \"$environment\")" \
+    "$environment_rendered" >/dev/null
 done
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$prod_rendered")" == "PLACEHOLDER_PROD_GP3_STORAGE_CLASS" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$nonprod_rendered")" == "PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS" ]]

@@ -1,5 +1,8 @@
 # Release-candidate capacity with the same HA and ZooKeeper coordination
 # semantics as test and prod.
+commonLabels:
+  env: nonprod
+
 broker:
   resources:
     requests:

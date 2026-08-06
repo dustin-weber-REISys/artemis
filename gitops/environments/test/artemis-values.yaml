@@ -1,5 +1,8 @@
 # The test cluster's local ApplicationSet supplies namespace, coordination ID,
 # and shared-ZooKeeper service parameters.
+commonLabels:
+  env: test
+
 broker:
   resources:
     requests:

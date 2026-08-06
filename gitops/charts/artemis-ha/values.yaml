@@ -1,6 +1,14 @@
 # This file is intentionally generic. Environment overlays must provide the
 # external ZooKeeper connection string and a pair-unique coordination ID.
 
+# Required enterprise resource labels. Replace the ownership and system ID
+# placeholders during environment import; keep env aligned with the overlay.
+commonLabels:
+  app: artemis
+  contact: PLACEHOLDER_ARTEMIS_CONTACT
+  env: PLACEHOLDER_ENVIRONMENT
+  fismaid: PLACEHOLDER_ARTEMIS_FISMAID
+
 ha:
   coordinationId: examplepair01
   groupName: artemis-ha-pair

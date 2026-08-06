@@ -1,6 +1,7 @@
 {{- $fullname := include "artemis-ha.crName" . -}}
 {{- $consolePort := include "artemis-ha.consolePort" . | int -}}
 {{- $podAnnotations := deepCopy .Values.broker.annotations -}}
+{{- $brokerLabels := mergeOverwrite (deepCopy .Values.broker.labels) .Values.commonLabels -}}
 {{- if .Values.vault.enabled }}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject" "true" -}}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-pre-populate-only" "true" -}}
@@ -194,7 +195,7 @@ spec:
                 ActiveMQArtemis: {{ $fullname }}
           {{- end }}
     labels:
-      {{- toYaml .Values.broker.labels | nindent 6 }}
+      {{- toYaml $brokerLabels | nindent 6 }}
     annotations:
       {{- toYaml $podAnnotations | nindent 6 }}
     podDisruptionBudget:

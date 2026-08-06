@@ -18,7 +18,9 @@ endpoint, all-zero digest, or secret value.
 
 Replace `PLACEHOLDER_ARTEMIS_CONTACT` and `PLACEHOLDER_ARTEMIS_FISMAID` with
 the enterprise ownership and system identifiers required by Gatekeeper. The
-ZooKeeper environment overlays set the required `env` label explicitly.
+ZooKeeper and Artemis environment overlays set the required `env` label
+explicitly. The Artemis chart passes these labels through
+`spec.deploymentPlan.labels` for the operator-generated broker workloads.
 
 The local-cluster bootstraps are authoritative in
 [`argocd/bootstrap`](../argocd/bootstrap), and each cluster's broker-pair

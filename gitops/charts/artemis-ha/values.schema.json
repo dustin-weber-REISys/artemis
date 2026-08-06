@@ -2,10 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["ha", "zookeeper", "persistence", "broker", "security", "acceptors", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
+  "required": ["commonLabels", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
   "properties": {
     "nameOverride": {"type": "string", "maxLength": 63},
     "fullnameOverride": {"type": "string", "maxLength": 63},
+    "commonLabels": {
+      "type": "object",
+      "required": ["app", "contact", "env", "fismaid"],
+      "properties": {
+        "app": {"type": "string", "minLength": 1},
+        "contact": {"type": "string", "minLength": 1},
+        "env": {"type": "string", "minLength": 1},
+        "fismaid": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": {"type": "string"}
+    },
     "ha": {
       "type": "object",
       "additionalProperties": false,

@@ -24,6 +24,9 @@ app.kubernetes.io/name: {{ include "artemis-ha.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: artemis-ha
+{{ with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end -}}
 
 {{- define "artemis-ha.selectorLabels" -}}

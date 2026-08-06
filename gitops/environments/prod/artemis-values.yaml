@@ -1,4 +1,7 @@
 # Production capacity is confirmed from nonprod load results.
+commonLabels:
+  env: prod
+
 broker:
   resources:
     requests:
