@@ -28,8 +28,8 @@ volatile values into an environment checklist.
 | Layer | Owner and handoff required before sync |
 | --- | --- |
 | AWS/EKS | Platform team supplies the local cluster, network paths, node capacity, placement labels, EBS CSI, encrypted delayed-binding storage, KMS, and restore capability. |
-| Artifact supply chain | Platform team supplies private registry/chart access and evidence for exact mirrored digests, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
-| Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git/OCI credentials, the Terraform-created root Application, and a controlled bootstrap mechanism. The selected repository bootstrap supplies project policy. |
+| Artifact supply chain | Platform team supplies private image-registry access and evidence for exact image digests and the pinned public chart version, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
+| Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git credentials and public OCI access, the Terraform-created root Application, and a controlled bootstrap mechanism. The selected repository bootstrap supplies project policy. |
 | Vault and certificates | Security/platform team supplies auth mounts, least-privilege policies and roles, CA/TLS material, workload-bound secret references, and any Secret synchronization. |
 | Keycloak and ingress | Identity/network teams supply public OIDC clients, exact redirect URIs, claims and role mappings, DNS, TLS Secrets, ingress labels, and reachable issuer/JWKS endpoints. |
 | Observability and backup | Operations supplies Prometheus discovery, log collection and retention, alarms, snapshots, restore procedures, and on-call ownership. |
@@ -110,13 +110,13 @@ Update the selected directory under
 [`topology`](../argocd/topology) file with the approved Argo namespace,
 Git/OCI sources, immutable revision policy, local platform namespace, workload
 namespaces, and cluster identity. Replace the matching nonprod or prod ECR base
-placeholder in the bootstrap manifests.
+placeholder for the image repositories in the bootstrap manifests. The ArkMQ
+operator chart itself is pulled from the public Quay OCI namespace.
 
 In the cluster's Terraform configuration:
 
-1. register the Artemis Git repository through `standalone_argocd_repos`, and
-   register the private Helm OCI namespace through the owning module's
-   credential mechanism;
+1. register the Artemis Git repository through `standalone_argocd_repos`; the
+   public Quay Helm OCI source does not require ECR chart credentials;
 2. add one Artemis root entry to `argocd_repos` whose source path is exactly
    `gitops/argocd/bootstrap/<environment>`; and
 3. use the same approved branch, tag, or commit for the root entry and every
@@ -128,10 +128,10 @@ creates its `messaging-platform` AppProject at sync wave `-30`, before any
 Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
-Artemis Git source, the effective mirrored Helm OCI chart source
-(`<repository>/arkmq-org-broker-operator`), and the exact cluster-scoped kinds
-rendered by the approved ArkMQ chart. Because the current operator values set
-`clusterScoped: true`, the allowlist includes `Namespace`,
+Artemis Git source, the public Helm OCI chart source
+(`quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`), and the exact
+cluster-scoped kinds rendered by the approved ArkMQ chart. Because the current
+operator values set `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
 
 Keep the operator's cluster scope, CRD ownership, and watch scope as
@@ -238,10 +238,11 @@ parent bootstrap or a phased procedure enforces health checks.
 
 1. Approve artifacts and all AWS, cluster, identity, secret, observability, and
    backup prerequisites.
-2. In each cluster's Terraform, configure this standalone Git repository,
-   private Helm OCI credentials, and the root Application through
-   `argocd_repos`, pointing only to that cluster's bootstrap path and approved
-   revision. The bootstrap creates the `messaging-platform` project.
+2. In each cluster's Terraform, configure this standalone Git repository and
+   the root Application through `argocd_repos`, pointing only to that cluster's
+   bootstrap path and approved revision. Confirm Argo CD can reach the public
+   Quay OCI source; no ECR Helm token is required. The bootstrap creates the
+   `messaging-platform` project.
 3. Create Vault policies/roles/data references, Keycloak clients, TLS
    material, and the namespace/pod labels required by policy.
 4. Run the canonical repository validation and inspect effective rendered

@@ -36,25 +36,23 @@ The existing EKS Terraform inputs map to Artemis as follows:
 | `standalone_argocd_repos` | Register the standalone Artemis Git repository with the cluster-local Argo CD instance. |
 | `argocd_repos` | Create one root Artemis Application using the matching bootstrap path, Git repository, and approved branch, tag, or commit. |
 
-The approved ArkMQ Operator chart is promoted to the private ECR Helm/OCI
-namespace documented in
-[`Helm chart mirroring to ECR`](../docs/helm-ecr-mirroring.md). The operator
-Applications use Argo CD multiple sources: ECR supplies the immutable chart
-version and Git supplies shared release pins. Two ECR base placeholders in the
-bootstrap manifests supply the nonprod and prod repository locations. Runtime
+The ArkMQ Operator chart is pulled directly from the public upstream OCI
+namespace at `quay.io/arkmq-org/helm-charts`. The operator Applications use
+Argo CD multiple sources: Quay supplies the pinned chart version and Git
+supplies shared release values. Operator and operand image locations remain
+environment-specific ECR placeholders in the bootstrap manifests. Runtime
 environment values do not repeat image locations, tags, or digests.
 
-The mirrored Helm namespace must also be registered through the platform's
-Argo CD OCI repository mechanism. Authentication is supplied by one
-registry-wide `repo-creds` credential template per ECR registry, shared by all
-matching Helm/OCI sources on that Argo CD instance. ECR authorization tokens
-are short-lived; do not capture one as a long-lived Terraform value or secret.
-Use the owning platform's approved credential refresh integration.
+The public chart source does not require the ECR Helm credential-refresh
+integration. The separate ECR mirroring design remains documented in
+[`Helm chart mirroring to ECR`](../docs/helm-ecr-mirroring.md) for a future
+switch back to the private source.
 
 The bootstrap-managed `messaging-platform` project allows:
 
 - the standalone Artemis Git repository and the operator chart's effective
-  private Helm/OCI source (`<repository>/arkmq-org-broker-operator`);
+  public Helm/OCI source
+  (`quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`);
 - `https://kubernetes.default.svc` as the only destination server;
 - the local platform namespace and the workload namespaces listed in that
   cluster's topology file; and
@@ -66,13 +64,9 @@ The bootstrap-managed `messaging-platform` project allows:
 
 The root Application uses the `default` project for bootstrap. Sync wave `-30`
 creates the environment-local `messaging-platform` project before the operator,
-ZooKeeper, and generated Artemis Applications reference it. Repository and OCI
-credentials remain platform-owned and must exist before the root sync.
-
-Existing installations must remove credentials from any Artemis-specific ECR
-repository Secret after the registry-wide template is available. Argo CD does
-not apply a credential template when the matching repository definition still
-contains its own username or password.
+ZooKeeper, and generated Artemis Applications reference it. Git and private
+image-registry credentials remain platform-owned and must exist before the
+root sync; the public operator chart source needs no ECR Helm token.
 
 Set `PLACEHOLDER_GITOPS_REVISION` in the bootstrap manifests to the exact
 branch, tag, or commit configured for the root entry in `argocd_repos`. The
@@ -109,9 +103,8 @@ expressions. The intended root source is the raw YAML bootstrap directory.
 Replace `PLACEHOLDER_NONPROD_ECR_REPOSITORY` and
 `PLACEHOLDER_PROD_ECR_REPOSITORY` with full ECR prefixes shaped like
 `123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/artemis`. The checked-in
-configuration appends image names or `/helm`; Argo CD's Helm-style OCI
-`repoURL` intentionally omits `oci://` and the chart name.
-Replace every other placeholder before sync. The registry-wide credential
-template supplies authentication only; each AppProject must still allow its
-exact Git and OCI sources. Git/OCI credentials, AppProject policy, and secret
-values remain outside this repository.
+configuration appends image names. The public Helm-style OCI `repoURL`
+intentionally omits `oci://` and the chart name. Replace every other
+placeholder before sync. Each AppProject must allow its exact Git and OCI
+sources. Git and private image-registry credentials, AppProject policy, and
+secret values remain outside this repository.

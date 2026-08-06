@@ -395,10 +395,9 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_singleton_application \
     "$operator" "$environment" operator "$environment-arkmq-operator" -20
   expected_ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
-  expected_operator_oci_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY/helm
+  expected_operator_oci_repository=quay.io/arkmq-org/helm-charts
   if [[ "$environment" == prod ]]; then
     expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
-    expected_operator_oci_repository=PLACEHOLDER_PROD_ECR_REPOSITORY/helm
   fi
   assert_equal "$environment operator source count" \
     "$(yq -r '.spec.sources | length' "$operator")" \

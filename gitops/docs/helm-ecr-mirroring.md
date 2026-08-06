@@ -1,6 +1,6 @@
 # Helm chart mirroring to ECR
 
-Status: platform handoff  
+Status: deferred while the POC uses the public upstream chart source
 Applies to: Gov nonproduction and production ECR Terraform
 
 ## Repository contract
@@ -189,17 +189,22 @@ do not rebuild or repackage between environments.
 
 ## Artemis and Argo CD wiring
 
-All image and Helm locations are derived from two ECR base placeholders:
+Runtime image locations are derived from two ECR base placeholders:
 
 | Placeholder | Example value; no `oci://` prefix or artifact name |
 | --- | --- |
 | `PLACEHOLDER_NONPROD_ECR_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 | `PLACEHOLDER_PROD_ECR_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 
-The checked-in Applications append `/helm`, and Argo CD appends the chart name
-`arkmq-org-broker-operator`. The `messaging-platform` AppProject must allow the
-exact Git URL and the resulting
-`<ECR Helm namespace>/arkmq-org-broker-operator` source in `sourceRepos`.
+The checked-in Applications currently pull the pinned operator chart directly
+from `quay.io/arkmq-org/helm-charts`, so their `messaging-platform` AppProjects
+allow `quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`. The ECR base
+placeholders continue to supply operator and operand image repositories.
+
+When private chart mirroring is resumed, change each operator Application
+`repoURL` to the matching `<ECR base>/helm` namespace and change the project
+allowlist entry to `<ECR base>/helm/arkmq-org-broker-operator` before enabling
+the credential flow below.
 
 Register each ECR chart namespace as a Helm repository with OCI enabled, but
 provide authentication once per registry through an Argo CD repository

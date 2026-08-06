@@ -164,8 +164,8 @@ assert_bootstrap_rejected \
   wrong-operator-oci-repository \
   prod \
   operator-application.yaml \
-  '.spec.sources[0].repoURL = "quay.io/arkmq-org/helm-charts"' \
-  'prod operator OCI repository: expected PLACEHOLDER_PROD_ECR_REPOSITORY/helm, got quay.io/arkmq-org/helm-charts'
+  '.spec.sources[0].repoURL = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm"' \
+  'prod operator OCI repository: expected quay.io/arkmq-org/helm-charts, got PLACEHOLDER_PROD_ECR_REPOSITORY/helm'
 
 assert_bootstrap_rejected \
   mismatched-operator-values-revision \
@@ -213,7 +213,7 @@ assert_bootstrap_rejected \
   wrong-project-oci-repository \
   prod \
   project.yaml \
-  '.spec.sourceRepos[1] = "quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator"' \
+  '.spec.sourceRepos[1] = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm/arkmq-org-broker-operator"' \
   'prod project approved sources'
 
 assert_bootstrap_rejected \
