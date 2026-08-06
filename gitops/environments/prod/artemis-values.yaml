@@ -1,5 +1,4 @@
-# Production capacity is confirmed from nonprod load results. The
-# ApplicationSet supplies production image repositories.
+# Production capacity is confirmed from nonprod load results.
 broker:
   resources:
     requests:

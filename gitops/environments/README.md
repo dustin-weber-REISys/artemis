@@ -10,9 +10,9 @@ Pair-specific Artemis identity and capacity live in
 Image locations and release pins do not belong in environment overlays.
 The Argo CD bootstraps use one nonprod and one prod ECR base placeholder; test
 and nonprod share the nonprod location. Repository-owned chart defaults and
-[`operator-values.yaml`](../operator-values.yaml) define immutable artifact
-versions and digests once per Git revision. Each cluster promotes those pins
-by selecting an approved revision.
+the pinned ArkMQ operator chart define the Artemis version-to-digest mapping;
+[`operator-values.yaml`](../operator-values.yaml) pins the operator container
+itself. Each cluster promotes those pins by selecting an approved revision.
 
 The test and nonprod Artemis overlays reuse the existing legacy Hawtio client
 and realm in preprod Keycloak. The prod overlay reuses the existing legacy

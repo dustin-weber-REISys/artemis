@@ -30,10 +30,11 @@ companion chart requires three eligible zone domains for its three voters.
 
 Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external
-ZooKeeper connection and selectors, mirrored image repositories, ingress
-identity, and the approved policy sources. The ApplicationSet supplies the
-pair-specific fields from `argocd/topology`; Argo parameters supply image
-locations; environment overlays supply stage-wide runtime fields. Run
+ZooKeeper connection and selectors, ingress identity, and the approved policy
+sources. The operator maps `broker.version` to the immutable private broker and
+init images configured by its pinned chart. The ApplicationSet supplies the
+pair-specific fields from `argocd/topology`; environment overlays supply
+stage-wide runtime fields. Run
 `./tests/test.sh` for focused rendering, schema,
 port-coherence, and Kubernetes resource validation.
 

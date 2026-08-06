@@ -152,10 +152,11 @@ namespaces in the matching topology file. Put workload-specific console,
 Vault, client allowlist, queue, capacity, or alert differences in explicit
 workload configuration or ApplicationSet parameters.
 
-Artifact tags and digests are shared release data, not environment data. Keep
-repository-owned image pins in chart defaults and external chart pins under
-[`operator-values.yaml`](../operator-values.yaml), then promote them by
-advancing the environment's approved Git revision.
+Artifact tags and digests are shared release data, not environment data. The
+pinned ArkMQ chart maps the Artemis `broker.version` to its broker and init
+digests; [`operator-values.yaml`](../operator-values.yaml) pins the operator
+container. Promote them together by advancing the environment's approved Git
+revision.
 
 Review the effective schema and rendered manifest rather than following a
 copied property inventory. At minimum, resolve:

@@ -107,6 +107,7 @@ rg -q 'kind: PrometheusRule' "$rendered"
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.size' "$rendered")" == "2" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan | has("image") or has("initImage")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-console") | .spec.ports[0].port' "$rendered")" == "8161" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-metrics") | .spec.publishNotReadyAddresses' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.startupProbe.tcpSocket.port' "$rendered")" == "8161" ]]
@@ -120,15 +121,9 @@ if rg -q '^kind: StorageClass$' "$rendered"; then
 fi
 
 for environment in prod nonprod test; do
-  ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
-  if [[ "$environment" == prod ]]; then
-    ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
-  fi
   environment_rendered="$temp_dir/$environment.yaml"
   helm template "artemis-$environment" "$chart_dir" --namespace example-messaging \
     "${helm_args[@]}" \
-    --set-string "images.broker.repository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "images.init.repository=$ecr_repository/activemq-artemis-broker-init" \
     -f "$chart_dir/../../environments/$environment/artemis-values.yaml" \
     > "$environment_rendered"
 done

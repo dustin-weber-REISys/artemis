@@ -52,22 +52,45 @@ for environment in test nonprod prod; do
   rendered="$temp_dir/artemis-$environment.yaml"
   broker_cr="$temp_dir/artemis-$environment-cr.yaml"
   helm template validation "$repo_root/charts/artemis-ha" \
-    --set-string "images.broker.repository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "images.init.repository=$ecr_repository/activemq-artemis-broker-init" \
     --values "$repo_root/environments/$environment/artemis-values.yaml" \
     > "$rendered"
   yq 'select(.kind == "ActiveMQArtemis")' "$rendered" > "$broker_cr"
   kubeconform -strict -schema-location "$schema" "$broker_cr" >/dev/null
+  broker_version=$(yq -r '.spec.version' "$broker_cr")
+  compact_version=${broker_version//./}
+  if [[ "$(yq -r '.spec.deploymentPlan | has("image") or has("initImage")' "$broker_cr")" != false ]]; then
+    printf '%s broker CR must let the operator resolve images from spec.version\n' "$environment" >&2
+    exit 1
+  fi
 
   operator_rendered="$temp_dir/operator-$environment.yaml"
   helm template validation-operator "$operator_chart_dir" \
     --namespace example-platform \
     --values "$repo_root/operator-values.yaml" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
+    --set-string "controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
+    --set-string "controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$operator_rendered"
   kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
+
+  init_env="RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_$compact_version"
+  broker_env="RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_$compact_version"
+  init_image=$(ENV_NAME="$init_env" yq -r \
+    'select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME)) | .value' \
+    "$operator_rendered")
+  broker_image=$(ENV_NAME="$broker_env" yq -r \
+    'select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME)) | .value' \
+    "$operator_rendered")
+  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init@sha256:"* ]]; then
+    printf '%s operator init image does not resolve version %s to the private digest\n' \
+      "$environment" "$broker_version" >&2
+    exit 1
+  fi
+  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes@sha256:"* ]]; then
+    printf '%s operator broker image does not resolve version %s to the private digest\n' \
+      "$environment" "$broker_version" >&2
+    exit 1
+  fi
 done
 
 printf '%s\n' 'operator contract validation: PASS (ArkMQ 2.2.0, 3 overlays)'

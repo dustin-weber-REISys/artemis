@@ -2,20 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["images", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
+  "required": ["ha", "zookeeper", "persistence", "broker", "security", "acceptors", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
   "properties": {
     "nameOverride": {"type": "string", "maxLength": 63},
     "fullnameOverride": {"type": "string", "maxLength": 63},
-    "images": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["broker", "init", "imagePullSecrets"],
-      "properties": {
-        "imagePullSecrets": {"type": "array", "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
-        "broker": {"$ref": "#/$defs/image"},
-        "init": {"$ref": "#/$defs/image"}
-      }
-    },
     "ha": {
       "type": "object",
       "additionalProperties": false,
@@ -162,16 +152,6 @@
     "monitoring": {"$ref": "#/$defs/monitoring"}
   },
   "$defs": {
-    "image": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["repository", "digest", "pullPolicy"],
-      "properties": {
-        "repository": {"type": "string", "pattern": "^([a-z0-9][a-z0-9./_-]*|PLACEHOLDER_(NONPROD|PROD)_ECR_REPOSITORY/[a-z0-9][a-z0-9._/-]*)$"},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
-      }
-    },
     "security": {
       "type": "object",
       "additionalProperties": false,

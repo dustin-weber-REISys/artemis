@@ -52,15 +52,6 @@ This is peer traffic, independent of the configurable client acceptors.
 61616
 {{- end -}}
 
-{{- define "artemis-ha.image" -}}
-{{- $image := .image -}}
-{{- if $image.digest -}}
-{{- printf "%s:%s@%s" $image.repository .tag $image.digest -}}
-{{- else -}}
-{{- printf "%s:%s" $image.repository .tag -}}
-{{- end -}}
-{{- end -}}
-
 {{- define "artemis-ha.serviceAccountName" -}}
 {{- if .Values.security.serviceAccount.create -}}
 {{- default (include "artemis-ha.fullname" .) .Values.security.serviceAccount.name -}}

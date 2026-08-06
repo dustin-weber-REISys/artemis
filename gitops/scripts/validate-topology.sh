@@ -153,10 +153,6 @@ assert_singleton_application() {
 assert_workload_applicationset() {
   file=$1
   environment=$2
-  expected_ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
-  if [[ "$environment" == prod ]]; then
-    expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
-  fi
 
   assert_equal "$environment workloads apiVersion" \
     "$(yq -r '.apiVersion // ""' "$file")" \
@@ -214,12 +210,6 @@ assert_workload_applicationset() {
   assert_equal "$environment workloads environment values path" \
     "$(yq -r '.spec.template.spec.source.helm.valueFiles[0] // ""' "$file")" \
     '../../environments/{{.environment}}/artemis-values.yaml'
-  assert_equal "$environment workloads broker image repository" \
-    "$(yq -r '.spec.template.spec.source.helm.parameters[] | select(.name == "images.broker.repository") | .value' "$file")" \
-    "$expected_ecr_repository/activemq-artemis-broker-kubernetes"
-  assert_equal "$environment workloads init image repository" \
-    "$(yq -r '.spec.template.spec.source.helm.parameters[] | select(.name == "images.init.repository") | .value' "$file")" \
-    "$expected_ecr_repository/activemq-artemis-broker-init"
   assert_equal "$environment workloads cluster label" \
     "$(yq -r \
       '.spec.template.spec.syncPolicy.managedNamespaceMetadata.labels."messaging.example.io/cluster" // ""' \
@@ -432,13 +422,13 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
     "$(yq -r '.spec.sources[0].helm.valueFiles[0] // ""' "$operator")" \
     '$values/gitops/operator-values.yaml'
   assert_equal "$environment operator image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
+    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"
   assert_equal "$environment operator init-image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
+    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-init"
   assert_equal "$environment operator broker-image repository" \
-    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
+    "$(yq -r '.spec.sources[0].helm.parameters[] | select(.name == "controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-kubernetes"
   assert_equal "$environment operator values source ref" \
     "$(yq -r '.spec.sources[1].ref // ""' "$operator")" \

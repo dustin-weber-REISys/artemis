@@ -8,7 +8,7 @@ This area is the deployable EKS baseline. It owns:
 - [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
   charts;
 - [`operator-values.yaml`](operator-values.yaml): the shared immutable ArkMQ
-  operator release pins;
+  operator container pin;
 - [`environments`](environments): test, non-production, and production runtime
   values without image locations or release pins;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;

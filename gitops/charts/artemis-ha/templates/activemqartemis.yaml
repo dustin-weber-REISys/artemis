@@ -107,10 +107,6 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- end }}
   deploymentPlan:
-    image: {{ include "artemis-ha.image" (dict "image" .Values.images.broker "tag" (printf "artemis.%s" .Values.broker.version)) | quote }}
-    initImage: {{ include "artemis-ha.image" (dict "image" .Values.images.init "tag" (printf "artemis.%s" .Values.broker.version)) | quote }}
-    imagePullSecrets:
-      {{- toYaml .Values.images.imagePullSecrets | nindent 6 }}
     # This chart is deliberately a durable, authenticated, two-peer HA pair.
     size: 2
     requireLogin: true

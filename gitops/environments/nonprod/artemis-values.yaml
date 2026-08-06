@@ -1,5 +1,5 @@
 # Release-candidate capacity with the same HA and ZooKeeper coordination
-# semantics as test and prod. The ApplicationSet supplies image repositories.
+# semantics as test and prod.
 broker:
   resources:
     requests:

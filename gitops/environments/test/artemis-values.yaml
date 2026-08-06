@@ -1,5 +1,5 @@
-# The test cluster's local ApplicationSet supplies image repositories,
-# namespace, coordination ID, and shared-ZooKeeper service parameters.
+# The test cluster's local ApplicationSet supplies namespace, coordination ID,
+# and shared-ZooKeeper service parameters.
 broker:
   resources:
     requests:

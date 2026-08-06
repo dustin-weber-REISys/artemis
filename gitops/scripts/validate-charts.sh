@@ -80,20 +80,17 @@ while IFS= read -r chart_file; do
       if [[ "$environment" == prod ]]; then
         ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
       fi
-      image_args=()
-      if [[ "$overlay_stem" == artemis ]]; then
-        image_args+=(
-          --set-string "images.broker.repository=$ecr_repository/activemq-artemis-broker-kubernetes"
-          --set-string "images.init.repository=$ecr_repository/activemq-artemis-broker-init"
-        )
-      else
-        image_args+=(--set-string "image.repository=$ecr_repository/zookeeper")
-      fi
       rendered="$temp_dir/$chart_name-$environment.yaml"
-      validate_chart_values \
-        "$chart_dir" "$chart_name ($environment)" "$rendered" \
-        "${image_args[@]}" \
-        --values "$overlay"
+      if [[ "$overlay_stem" == zookeeper ]]; then
+        validate_chart_values \
+          "$chart_dir" "$chart_name ($environment)" "$rendered" \
+          --set-string "image.repository=$ecr_repository/zookeeper" \
+          --values "$overlay"
+      else
+        validate_chart_values \
+          "$chart_dir" "$chart_name ($environment)" "$rendered" \
+          --values "$overlay"
+      fi
     done
   fi
 done < <(find "$chart_root" -name Chart.yaml -print | sort)
