@@ -23,6 +23,9 @@ helm.sh/chart: {{ include "zookeeper.chart" . }}
 {{ include "zookeeper.selectorLabels" . }}
 app.kubernetes.io/version: {{ .Values.image.tag | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{ with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end -}}
 
 {{- define "zookeeper.selectorLabels" -}}

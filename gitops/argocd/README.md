@@ -52,7 +52,8 @@ The bootstrap-managed `messaging-platform` project allows:
 
 - the standalone Artemis Git repository and the operator chart's effective
   public Helm/OCI source
-  (`quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`);
+  (`quay.io/arkmq-org/helm-charts`, exactly matching the Application's
+  `repoURL`);
 - `https://kubernetes.default.svc` as the only destination server;
 - the local platform namespace and the workload namespaces listed in that
   cluster's topology file; and

@@ -1,6 +1,9 @@
 # Nonprod increases capacity for release-candidate and failure testing. The
 # Argo CD Application supplies the nonprod image repository.
 
+commonLabels:
+  env: nonprod
+
 persistence:
   storageClass: PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
 

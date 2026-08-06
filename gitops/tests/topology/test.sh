@@ -213,7 +213,7 @@ assert_bootstrap_rejected \
   wrong-project-oci-repository \
   prod \
   project.yaml \
-  '.spec.sourceRepos[1] = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm/arkmq-org-broker-operator"' \
+  '.spec.sourceRepos[1] = "PLACEHOLDER_PROD_ECR_REPOSITORY/helm"' \
   'prod project approved sources'
 
 assert_bootstrap_rejected \

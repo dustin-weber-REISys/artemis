@@ -6,6 +6,7 @@
     "image",
     "nameOverride",
     "fullnameOverride",
+    "commonLabels",
     "serviceAccount",
     "podAnnotations",
     "podLabels",
@@ -56,6 +57,17 @@
     },
     "nameOverride": {"type": "string"},
     "fullnameOverride": {"type": "string"},
+    "commonLabels": {
+      "type": "object",
+      "required": ["app", "contact", "env", "fismaid"],
+      "properties": {
+        "app": {"type": "string", "minLength": 1},
+        "contact": {"type": "string", "minLength": 1},
+        "env": {"type": "string", "minLength": 1},
+        "fismaid": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": {"type": "string"}
+    },
     "serviceAccount": {
       "type": "object",
       "required": ["create", "name", "annotations", "automountServiceAccountToken"],

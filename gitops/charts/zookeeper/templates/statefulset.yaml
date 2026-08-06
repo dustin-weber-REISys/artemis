@@ -19,6 +19,9 @@ spec:
       labels:
         {{- include "zookeeper.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/part-of: shared-messaging
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

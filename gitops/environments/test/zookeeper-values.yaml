@@ -1,6 +1,9 @@
 # Test uses smaller capacity while retaining the chart's quorum safeguards.
 # The Argo CD Application supplies the nonprod image repository.
 
+commonLabels:
+  env: test
+
 persistence:
   storageClass: PLACEHOLDER_TEST_GP3_STORAGE_CLASS
   size: 10Gi

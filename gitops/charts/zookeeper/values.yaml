@@ -13,6 +13,14 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+# Required enterprise resource labels. Replace the ownership and system ID
+# placeholders during environment import; keep env aligned with the overlay.
+commonLabels:
+  app: artemis
+  contact: PLACEHOLDER_ARTEMIS_CONTACT
+  env: PLACEHOLDER_ENVIRONMENT
+  fismaid: PLACEHOLDER_ARTEMIS_FISMAID
+
 serviceAccount:
   create: true
   name: ""

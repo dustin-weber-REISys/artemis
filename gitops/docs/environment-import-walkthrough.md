@@ -16,6 +16,10 @@ syntactically valid and can pass rendering while remaining unusable or unsafe.
 The effective rendered configuration must contain no placeholder, example
 endpoint, all-zero digest, or secret value.
 
+Replace `PLACEHOLDER_ARTEMIS_CONTACT` and `PLACEHOLDER_ARTEMIS_FISMAID` with
+the enterprise ownership and system identifiers required by Gatekeeper. The
+ZooKeeper environment overlays set the required `env` label explicitly.
+
 The local-cluster bootstraps are authoritative in
 [`argocd/bootstrap`](../argocd/bootstrap), and each cluster's broker-pair
 inventory is authoritative in [`argocd/topology`](../argocd/topology). Chart
@@ -129,7 +133,8 @@ Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
 Artemis Git source, the public Helm OCI chart source
-(`quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`), and the exact
+(`quay.io/arkmq-org/helm-charts`, exactly matching the Application's
+`repoURL`), and the exact
 cluster-scoped kinds rendered by the approved ArkMQ chart. Because the current
 operator values set `clusterScoped: true`, the allowlist includes `Namespace`,
 `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.

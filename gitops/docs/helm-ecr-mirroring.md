@@ -198,12 +198,12 @@ Runtime image locations are derived from two ECR base placeholders:
 
 The checked-in Applications currently pull the pinned operator chart directly
 from `quay.io/arkmq-org/helm-charts`, so their `messaging-platform` AppProjects
-allow `quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator`. The ECR base
+allow that exact repository URL. The ECR base
 placeholders continue to supply operator and operand image repositories.
 
 When private chart mirroring is resumed, change each operator Application
 `repoURL` to the matching `<ECR base>/helm` namespace and change the project
-allowlist entry to `<ECR base>/helm/arkmq-org-broker-operator` before enabling
+allowlist entry to the same `<ECR base>/helm` namespace before enabling
 the credential flow below.
 
 Register each ECR chart namespace as a Helm repository with OCI enabled, but

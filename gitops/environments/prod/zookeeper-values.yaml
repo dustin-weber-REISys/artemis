@@ -1,6 +1,9 @@
 # Prod capacity and storage class are promoted independently. The Argo CD
 # Application supplies the production image repository.
 
+commonLabels:
+  env: prod
+
 persistence:
   storageClass: PLACEHOLDER_PROD_GP3_STORAGE_CLASS
 

@@ -67,7 +67,7 @@ assert_project() {
 
   expected_sources=$(printf '%s\n' \
     "$expected_git_repository" \
-    "$expected_oci_repository/arkmq-org-broker-operator" | sort)
+    "$expected_oci_repository" | sort)
   actual_sources=$(yq -r '.spec.sourceRepos[]' "$file" | sort)
   assert_equal "$environment project approved sources" \
     "$actual_sources" "$expected_sources"

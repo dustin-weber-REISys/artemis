@@ -45,6 +45,12 @@ if [[ ! "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
 fi
 helm template zookeeper "$chart_dir" --namespace example-platform > "$rendered"
 rg -q '^kind: StatefulSet$' "$rendered"
+for required_label in app contact env fismaid; do
+  yq -e "select(.kind == \"StatefulSet\") | .metadata.labels.\"$required_label\" != null" \
+    "$rendered" >/dev/null
+  yq -e "select(.kind == \"StatefulSet\") | .spec.template.metadata.labels.\"$required_label\" != null" \
+    "$rendered" >/dev/null
+done
 rg -q 'replicas: 3' "$rendered"
 rg -q 'server\.1=zookeeper-zookeeper-0\.zookeeper-zookeeper-headless' "$rendered"
 rg -q 'server\.3=zookeeper-zookeeper-2\.zookeeper-zookeeper-headless' "$rendered"
@@ -78,6 +84,10 @@ for environment in test nonprod prod; do
   rg -q 'kind: ServiceMonitor' "$environment_rendered"
   rg -q 'kind: PrometheusRule' "$environment_rendered"
   rg -q '@sha256:[0-9a-f]{64}' "$environment_rendered"
+  yq -e "select(.kind == \"StatefulSet\") | .metadata.labels.env == \"$environment\"" \
+    "$environment_rendered" >/dev/null
+  yq -e "select(.kind == \"StatefulSet\") | .spec.template.metadata.labels.env == \"$environment\"" \
+    "$environment_rendered" >/dev/null
   kubeconform -strict -ignore-missing-schemas -summary "$environment_rendered" >/dev/null
 done
 
