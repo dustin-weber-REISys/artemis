@@ -12,5 +12,4 @@ spec:
     matchLabels:
       control-plane: controller-manager
       name: activemq-artemis-operator
-    {{- include "arkmq-org-broker-operator.selectorLabels" . | nindent 6 }}
 {{- end }}

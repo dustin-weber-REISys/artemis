@@ -94,18 +94,16 @@ identifies the missing RBAC object.
 ```sh
 OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
 
-for check in \
-  'list activemqartemises.broker.amq.io' \
-  'watch activemqartemises.broker.amq.io' \
-  'list configmaps' \
-  'watch configmaps' \
-  'list statefulsets.apps' \
-  'watch statefulsets.apps'; do
-  set -- $check
-  printf '%-7s %-45s ' "$1" "$2"
-  kubectl auth can-i "$1" "$2" \
-    --all-namespaces \
-    --as "$OPERATOR_ID"
+for verb in list watch; do
+  for resource in \
+    activemqartemises.broker.amq.io \
+    configmaps \
+    statefulsets.apps; do
+    printf '%-7s %-45s ' "$verb" "$resource"
+    kubectl auth can-i "$verb" "$resource" \
+      --all-namespaces \
+      --as "$OPERATOR_ID"
+  done
 done
 ```
 
@@ -526,5 +524,6 @@ other sensitive values before attaching it outside the authorized environment.
 | Operator log or event contains `denied` | An admission policy rejected a generated object | Identify the constraint and missing or disallowed field |
 | StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
 | `RepeatedResourceWarning` with nonempty `spec.sources` | More than one Argo source may render the same identity | Remove source drift and restore the ApplicationSet-owned single `spec.source` |
-| `RepeatedResourceWarning` with one `spec.source` and current Helm output contains one CR | The condition may belong to an older Git revision or stale Argo manifest cache | Compare `.status.sync.revision` with the intended commit, then request a hard refresh through the authorized Argo CD workflow |
+| `RepeatedResourceWarning` with one `spec.source` and current Helm output contains one copy of the named resource | The condition may belong to an older Git revision or stale Argo manifest cache | Compare `.status.sync.revision` with the intended commit, then request a hard refresh through the authorized Argo CD workflow |
+| Deployment sync fails with `spec.selector ... field is immutable` after adding Helm or policy labels | The desired chart changed the selector of an existing Deployment | Keep the desired selector identical to the live selector and apply new labels only to object metadata and the pod template |
 | Cluster-scoped log `forbidden` while `WATCH_NAMESPACE` is empty | The operator's cluster-wide informers cannot start | Restore the rendered ClusterRole and ClusterRoleBinding, then confirm every cluster-scope `can-i` result is `yes` |

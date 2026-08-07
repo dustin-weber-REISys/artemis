@@ -29,6 +29,21 @@ for environment in test nonprod prod; do
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$rendered"
 
+  duplicate_resources=$(
+    yq -r '
+      select(.apiVersion != null and .kind != null and .metadata.name != null)
+      | [.apiVersion, .kind, (.metadata.namespace // ""), .metadata.name]
+      | @tsv
+    ' "$rendered" |
+      sort |
+      uniq -d
+  )
+  if [[ -n "$duplicate_resources" ]]; then
+    printf 'duplicate rendered resource identities for %s:\n%s\n' \
+      "$environment" "$duplicate_resources" >&2
+    exit 1
+  fi
+
   ENVIRONMENT="$environment" yq -e '
     select(.kind == "Deployment")
     | (.spec.replicas == 2)
@@ -57,6 +72,9 @@ for environment in test nonprod prod; do
       and (.spec.selector.matchLabels.contact == null)
       and (.spec.selector.matchLabels.env == null)
       and (.spec.selector.matchLabels.fismaid == null)
+      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == null)
+      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == null)
+      and (.spec.selector.matchLabels | length == 2)
   ' "$rendered" >/dev/null
 
   ENVIRONMENT="$environment" yq -e '
@@ -69,6 +87,9 @@ for environment in test nonprod prod; do
       and (.spec.selector.matchLabels.contact == null)
       and (.spec.selector.matchLabels.env == null)
       and (.spec.selector.matchLabels.fismaid == null)
+      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == null)
+      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == null)
+      and (.spec.selector.matchLabels | length == 2)
   ' "$rendered" >/dev/null
 
   yq -e '
