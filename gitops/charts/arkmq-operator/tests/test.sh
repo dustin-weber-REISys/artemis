@@ -70,6 +70,37 @@ for environment in test nonprod prod; do
       and (.spec.selector.matchLabels.env == null)
       and (.spec.selector.matchLabels.fismaid == null)
   ' "$rendered" >/dev/null
+
+  yq -e '
+    select(.kind == "ClusterRole" and .metadata.name == "activemq-artemis-operator-role")
+    | ([.rules[]
+        | select(
+            (.apiGroups | contains(["broker.amq.io"])) and
+            (.resources | contains(["activemqartemises"])) and
+            (.verbs | contains(["list", "watch"]))
+          )
+      ] | length) == 1
+      and ([.rules[]
+        | select(
+            (.apiGroups | contains([""])) and
+            (.resources | contains(["configmaps"])) and
+            (.verbs | contains(["list", "watch"]))
+          )
+      ] | length) == 1
+  ' "$rendered" >/dev/null
+
+  RELEASE_NAMESPACE=example-platform yq -e '
+    select(.kind == "ClusterRoleBinding" and .metadata.name == "activemq-artemis-operator-rolebinding")
+    | .roleRef.kind == "ClusterRole"
+      and .roleRef.name == "activemq-artemis-operator-role"
+      and ([.subjects[]
+        | select(
+            .kind == "ServiceAccount" and
+            .name == "activemq-artemis-controller-manager" and
+            .namespace == strenv(RELEASE_NAMESPACE)
+          )
+      ] | length) == 1
+  ' "$rendered" >/dev/null
 done
 
 printf '%s\n' 'ArkMQ operator wrapper tests passed'

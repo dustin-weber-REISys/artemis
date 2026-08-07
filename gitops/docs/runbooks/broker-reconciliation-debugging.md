@@ -20,11 +20,12 @@ the real namespaces and names.
 
 ```sh
 ARGOCD_NAMESPACE=argocd
-PLATFORM_NAMESPACE=artemis
+PLATFORM_NAMESPACE=artemis-platform
 WORKLOAD_NAMESPACE=artemis-int-sky
 
 APPLICATION=test-sky-artemis
 APPLICATIONSET=test-artemis-workloads
+OPERATOR_APPLICATION=test-arkmq-operator
 BROKER_CR=test-sky-artemis-artemis-ha
 
 OPERATOR_DEPLOYMENT=activemq-artemis-controller-manager
@@ -42,6 +43,76 @@ printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nA
   "$APPLICATION" \
   "$BROKER_CR"
 ```
+
+## Priority evidence: run these first
+
+For an operator that is running but logging cluster-scoped `forbidden` errors,
+start with the three checks below. They distinguish an operator Application
+sync failure, a missing or incorrect RBAC object, and an ineffective binding.
+All three checks are read-only. Share their complete output before collecting
+the longer evidence bundle later in this runbook.
+
+### A. Check the operator Application and its RBAC resources
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
+  yq '{
+    "sync": .status.sync,
+    "health": .status.health,
+    "conditions": (.status.conditions // []),
+    "operationState": (.status.operationState // {}),
+    "rbacResources": [
+      .status.resources[]? |
+      select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding")
+    ]
+  }'
+```
+
+### B. Check the live ClusterRole and ClusterRoleBinding
+
+The binding subject namespace must equal `$PLATFORM_NAMESPACE`, and its
+`roleRef` must name `activemq-artemis-operator-role`.
+
+```sh
+kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o json |
+  yq '{"roleRef": .roleRef, "subjects": .subjects}'
+
+kubectl get clusterrole activemq-artemis-operator-role -o json |
+  yq '.rules[] |
+    select(
+      (.resources | contains(["activemqartemises"])) or
+      (.resources | contains(["configmaps"])) or
+      (.resources | contains(["statefulsets"]))
+    )'
+```
+
+If either `kubectl get` returns `NotFound`, preserve that output; it directly
+identifies the missing RBAC object.
+
+### C. Test the operator's effective cluster-wide permissions
+
+```sh
+OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
+
+for check in \
+  'list activemqartemises.broker.amq.io' \
+  'watch activemqartemises.broker.amq.io' \
+  'list configmaps' \
+  'watch configmaps' \
+  'list statefulsets.apps' \
+  'watch statefulsets.apps'; do
+  set -- $check
+  printf '%-7s %-45s ' "$1" "$2"
+  kubectl auth can-i "$1" "$2" \
+    --all-namespaces \
+    --as "$OPERATOR_ID"
+done
+```
+
+Every result must be `yes`. A `no` confirms that the operator cannot start the
+cluster-wide informers required by its empty `WATCH_NAMESPACE`. If the command
+reports that the caller cannot impersonate the service account, preserve that
+error and have an authorized cluster administrator run check C.
 
 ## 1. Check the effective Argo CD Application
 
@@ -95,6 +166,19 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
 ```
 
 ## 2. Confirm that the ArkMQ operator is running
+
+First inspect the operator Application itself. A running Deployment does not
+prove that its cluster-scoped RBAC resources synced successfully:
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
+  yq '{
+    "sync": .status.sync,
+    "health": .status.health,
+    "conditions": (.status.conditions // []),
+    "operationState": (.status.operationState // {})
+  }'
+```
 
 Check the operator Deployment and pods:
 
@@ -250,29 +334,39 @@ kubectl -n "$WORKLOAD_NAMESPACE" get pods \
 
 These `kubectl auth can-i` requests perform authorization reviews only; they do
 not create or change the named resources. The caller may need permission to
-impersonate the operator ServiceAccount.
+impersonate the operator ServiceAccount. Because an empty `WATCH_NAMESPACE`
+in section 2 configures a cluster-wide informer, list/watch checks must use
+`--all-namespaces`; a namespaced `can-i` result does not prove that the
+operator can start its cluster-wide watches.
 
 ```sh
 OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
 
 for resource in \
   activemqartemises.broker.amq.io \
+  activemqartemisaddresses.broker.amq.io \
+  activemqartemisscaledowns.broker.amq.io \
+  activemqartemissecurities.broker.amq.io \
   statefulsets.apps \
   persistentvolumeclaims \
   services \
   secrets \
   configmaps \
+  pods \
+  ingresses.networking.k8s.io \
   serviceaccounts \
   poddisruptionbudgets.policy; do
-  for verb in get list watch create update patch delete; do
+  for verb in list watch; do
     kubectl auth can-i "$verb" "$resource" \
-      --namespace "$WORKLOAD_NAMESPACE" \
+      --all-namespaces \
       --as "$OPERATOR_ID"
   done
 done
 ```
 
-For easier review, include the verb and resource in each result:
+For easier review, include the verb and resource in each result. The first six
+checks validate cluster-wide informer startup; the remaining checks validate
+representative writes in the workload namespace:
 
 ```sh
 OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
@@ -281,6 +375,18 @@ for check in \
   'get activemqartemises.broker.amq.io' \
   'list activemqartemises.broker.amq.io' \
   'watch activemqartemises.broker.amq.io' \
+  'list configmaps' \
+  'watch configmaps' \
+  'list statefulsets.apps' \
+  'watch statefulsets.apps'; do
+  set -- $check
+  result=$(kubectl auth can-i "$1" "$2" \
+    --all-namespaces \
+    --as "$OPERATOR_ID")
+  printf '%-7s %-45s %-15s %s\n' "$1" "$2" cluster "$result"
+done
+
+for check in \
   'create statefulsets.apps' \
   'update statefulsets.apps' \
   'patch statefulsets.apps' \
@@ -292,8 +398,25 @@ for check in \
   result=$(kubectl auth can-i "$1" "$2" \
     --namespace "$WORKLOAD_NAMESPACE" \
     --as "$OPERATOR_ID")
-  printf '%-7s %-45s %s\n' "$1" "$2" "$result"
+  printf '%-7s %-45s %-15s %s\n' "$1" "$2" "$WORKLOAD_NAMESPACE" "$result"
 done
+```
+
+Inspect the binding that grants the cluster role. The subject namespace must
+equal `$PLATFORM_NAMESPACE`, and `roleRef` must name
+`activemq-artemis-operator-role`:
+
+```sh
+kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o json |
+  yq '{"roleRef": .roleRef, "subjects": .subjects}'
+
+kubectl get clusterrole activemq-artemis-operator-role -o json |
+  yq '.rules[] |
+    select(
+      (.resources | contains(["activemqartemises"])) or
+      (.resources | contains(["configmaps"])) or
+      (.resources | contains(["statefulsets"]))
+    )'
 ```
 
 ## 6. Inspect Gatekeeper and admission-policy evidence
@@ -402,4 +525,6 @@ other sensitive values before attaching it outside the authorized environment.
 | Operator log contains `forbidden` | Operator ServiceAccount authorization is incomplete | Compare `can-i` results with the vendored ClusterRole |
 | Operator log or event contains `denied` | An admission policy rejected a generated object | Identify the constraint and missing or disallowed field |
 | StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
-| `RepeatedResourceWarning` | The effective Argo Application rendered one identity more than once | Compare child `source`/`sources` with the ApplicationSet template |
+| `RepeatedResourceWarning` with nonempty `spec.sources` | More than one Argo source may render the same identity | Remove source drift and restore the ApplicationSet-owned single `spec.source` |
+| `RepeatedResourceWarning` with one `spec.source` and current Helm output contains one CR | The condition may belong to an older Git revision or stale Argo manifest cache | Compare `.status.sync.revision` with the intended commit, then request a hard refresh through the authorized Argo CD workflow |
+| Cluster-scoped log `forbidden` while `WATCH_NAMESPACE` is empty | The operator's cluster-wide informers cannot start | Restore the rendered ClusterRole and ClusterRoleBinding, then confirm every cluster-scope `can-i` result is `yes` |

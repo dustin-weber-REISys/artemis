@@ -88,6 +88,7 @@ project=messaging-platform
 local_server=https://kubernetes.default.svc
 platform_namespace=$(yq -r '.platformNamespace // ""' "$topology")
 operator_deployment=activemq-artemis-controller-manager
+operator_service_account=activemq-artemis-controller-manager
 kubectl_args=(--context "$context" --namespace "$argocd_namespace")
 errors=0
 
@@ -139,6 +140,50 @@ if [[ -n "$platform_namespace" ]]; then
     if [[ "$operator_lifecycle_toleration_count" -ne 1 ]]; then
       error "ArkMQ operator Deployment does not contain exactly one eid-platform/node-lifecycle=ondemand:NoSchedule toleration"
     fi
+
+    watch_namespace_count=$(yq -r '
+      [.spec.template.spec.containers[]?
+        | select(.name == "manager")
+        | .env[]?
+        | select(.name == "WATCH_NAMESPACE")
+      ] | length
+    ' <<<"$operator_json")
+    watch_namespace=$(yq -r '
+      [.spec.template.spec.containers[]?
+        | select(.name == "manager")
+        | .env[]?
+        | select(.name == "WATCH_NAMESPACE")
+        | .value // ""
+      ][0] // ""
+    ' <<<"$operator_json")
+    if [[ "$watch_namespace_count" -ne 1 ]]; then
+      error "ArkMQ operator Deployment must declare exactly one WATCH_NAMESPACE environment variable"
+    elif [[ -n "$watch_namespace" ]]; then
+      error "ArkMQ operator WATCH_NAMESPACE is '$watch_namespace'; this repository requires cluster-wide watch scope"
+    else
+      printf '%s\n' 'ArkMQ operator watch scope: cluster-wide'
+    fi
+
+    operator_identity="system:serviceaccount:$platform_namespace:$operator_service_account"
+    for authorization_check in \
+      'list activemqartemises.broker.amq.io' \
+      'watch activemqartemises.broker.amq.io' \
+      'list configmaps' \
+      'watch configmaps' \
+      'list statefulsets.apps' \
+      'watch statefulsets.apps'; do
+      read -r verb resource <<<"$authorization_check"
+      if authorization_result=$(kubectl --context "$context" auth can-i \
+        "$verb" "$resource" \
+        --all-namespaces \
+        --as "$operator_identity" 2>&1); then
+        if [[ "$authorization_result" != "yes" ]]; then
+          error "ArkMQ operator authorization denied: $verb $resource at cluster scope ($authorization_result)"
+        fi
+      else
+        error "ArkMQ operator authorization review failed for $verb $resource at cluster scope: $authorization_result"
+      fi
+    done
   fi
 fi
 

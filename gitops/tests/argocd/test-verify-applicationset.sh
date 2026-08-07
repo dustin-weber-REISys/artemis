@@ -12,6 +12,14 @@ mkdir -p "$temp_dir/bin"
 cat > "$temp_dir/bin/kubectl" <<'EOF'
 #!/bin/sh
 case " $* " in
+  *' auth can-i '*)
+    if [ "${MOCK_OPERATOR_RBAC_DENIED:-false}" = true ] && \
+       echo " $* " | grep -q ' list activemqartemises.broker.amq.io '; then
+      printf '%s\n' 'no'
+    else
+      printf '%s\n' 'yes'
+    fi
+    ;;
   *' get deployment activemq-artemis-controller-manager '*)
     if [ "${MOCK_OPERATOR_UNAVAILABLE:-false}" = true ]; then
       available=0
@@ -23,8 +31,13 @@ case " $* " in
     else
       tolerations='[{"key":"eid-platform/node-lifecycle","operator":"Equal","value":"ondemand","effect":"NoSchedule"}]'
     fi
-    printf '{"spec":{"replicas":2,"template":{"spec":{"tolerations":%s}}},"status":{"availableReplicas":%s}}\n' \
-      "$tolerations" "$available"
+    if [ "${MOCK_OPERATOR_WATCH_NAMESPACE:-cluster}" = cluster ]; then
+      watch_namespace=''
+    else
+      watch_namespace=$MOCK_OPERATOR_WATCH_NAMESPACE
+    fi
+    printf '{"spec":{"replicas":2,"template":{"spec":{"tolerations":%s,"containers":[{"name":"manager","env":[{"name":"WATCH_NAMESPACE","value":"%s"}]}]}}},"status":{"availableReplicas":%s}}\n' \
+      "$tolerations" "$watch_namespace" "$available"
     ;;
   *' get deployment '*)
     printf '%s\n' '{"spec":{"replicas":1},"status":{"availableReplicas":1}}'
@@ -83,6 +96,7 @@ PATH="$temp_dir/bin:$PATH" \
     --environment test >"$temp_dir/pass.out"
 grep -Fq 'Approved project destination: https://kubernetes.default.svc/PLACEHOLDER_TEST_NAMESPACE_SKY' "$temp_dir/pass.out"
 grep -Fq 'ArkMQ operator: available (2/2 replicas)' "$temp_dir/pass.out"
+grep -Fq 'ArkMQ operator watch scope: cluster-wide' "$temp_dir/pass.out"
 grep -Fq 'ApplicationSet verification: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
 
 if PATH="$temp_dir/bin:$PATH" \
@@ -108,6 +122,30 @@ if PATH="$temp_dir/bin:$PATH" \
 fi
 grep -Fq 'ArkMQ operator Deployment does not contain exactly one eid-platform/node-lifecycle=ondemand:NoSchedule toleration' \
   "$temp_dir/operator-toleration.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_WATCH_NAMESPACE=artemis-platform \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-watch-namespace.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted a namespace-scoped ArkMQ operator' >&2
+  exit 1
+fi
+grep -Fq "ArkMQ operator WATCH_NAMESPACE is 'artemis-platform'; this repository requires cluster-wide watch scope" \
+  "$temp_dir/operator-watch-namespace.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_RBAC_DENIED=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-rbac.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted denied ArkMQ operator cluster RBAC' >&2
+  exit 1
+fi
+grep -Fq 'ArkMQ operator authorization denied: list activemqartemises.broker.amq.io at cluster scope (no)' \
+  "$temp_dir/operator-rbac.out"
 
 if PATH="$temp_dir/bin:$PATH" \
   MOCK_PROJECT_NAMESPACE=wrong-namespace \
