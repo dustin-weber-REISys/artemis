@@ -50,12 +50,12 @@ Show synchronization, health, revision, and application conditions:
 ```sh
 kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
   yq '{
-    application: .metadata.name,
-    generation: .metadata.generation,
-    destination: .spec.destination,
-    sync: .status.sync,
-    health: .status.health,
-    conditions: (.status.conditions // [])
+    "application": .metadata.name,
+    "generation": .metadata.generation,
+    "destination": .spec.destination,
+    "sync": .status.sync,
+    "health": .status.health,
+    "conditions": (.status.conditions // [])
   }'
 ```
 
@@ -65,11 +65,11 @@ stale or UI-added `spec.sources` list:
 ```sh
 kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
   yq '{
-    ownerReferences: .metadata.ownerReferences,
-    source: .spec.source,
-    sources: (.spec.sources // []),
-    sourceCount: (.spec.sources // [] | length),
-    parameters: (.spec.source.helm.parameters // [])
+    "ownerReferences": .metadata.ownerReferences,
+    "source": .spec.source,
+    "sources": (.spec.sources // []),
+    "sourceCount": (.spec.sources // [] | length),
+    "parameters": (.spec.source.helm.parameters // [])
   }'
 ```
 
@@ -78,10 +78,10 @@ Inspect the owning ApplicationSet template and reconciliation conditions:
 ```sh
 kubectl -n "$ARGOCD_NAMESPACE" get applicationset "$APPLICATIONSET" -o json |
   yq '{
-    generation: .metadata.generation,
-    templateSource: .spec.template.spec.source,
-    templateSources: (.spec.template.spec.sources // []),
-    conditions: (.status.conditions // [])
+    "generation": .metadata.generation,
+    "templateSource": .spec.template.spec.source,
+    "templateSources": (.spec.template.spec.sources // []),
+    "conditions": (.status.conditions // [])
   }'
 ```
 
@@ -111,14 +111,14 @@ Show desired, updated, ready, and available replicas:
 ```sh
 kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
   yq '{
-    generation: .metadata.generation,
-    observedGeneration: .status.observedGeneration,
-    desired: .spec.replicas,
-    updated: (.status.updatedReplicas // 0),
-    ready: (.status.readyReplicas // 0),
-    available: (.status.availableReplicas // 0),
-    unavailable: (.status.unavailableReplicas // 0),
-    conditions: (.status.conditions // [])
+    "generation": .metadata.generation,
+    "observedGeneration": .status.observedGeneration,
+    "desired": .spec.replicas,
+    "updated": (.status.updatedReplicas // 0),
+    "ready": (.status.readyReplicas // 0),
+    "available": (.status.availableReplicas // 0),
+    "unavailable": (.status.unavailableReplicas // 0),
+    "conditions": (.status.conditions // [])
   }'
 ```
 
@@ -170,13 +170,13 @@ successful sync even when the operator cannot create its generated resources.
 ```sh
 kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" -o json |
   yq '{
-    name: .metadata.name,
-    namespace: .metadata.namespace,
-    generation: .metadata.generation,
-    resourceVersion: .metadata.resourceVersion,
-    deletionTimestamp: .metadata.deletionTimestamp,
-    finalizers: (.metadata.finalizers // []),
-    status: (.status // {})
+    "name": .metadata.name,
+    "namespace": .metadata.namespace,
+    "generation": .metadata.generation,
+    "resourceVersion": .metadata.resourceVersion,
+    "deletionTimestamp": .metadata.deletionTimestamp,
+    "finalizers": (.metadata.finalizers // []),
+    "status": (.status // {})
   }'
 ```
 
@@ -345,15 +345,15 @@ EVIDENCE_FILE="artemis-reconciliation-${APPLICATION}-$(date -u +%Y%m%dT%H%M%SZ).
 
   printf '\n=== Argo Application status ===\n'
   kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
-    yq '{sync: .status.sync, health: .status.health, conditions: (.status.conditions // []), source: .spec.source, sources: (.spec.sources // [])}'
+    yq '{"sync": .status.sync, "health": .status.health, "conditions": (.status.conditions // []), "source": .spec.source, "sources": (.spec.sources // [])}'
 
   printf '\n=== ApplicationSet status ===\n'
   kubectl -n "$ARGOCD_NAMESPACE" get applicationset "$APPLICATIONSET" -o json |
-    yq '{conditions: (.status.conditions // []), templateSource: .spec.template.spec.source, templateSources: (.spec.template.spec.sources // [])}'
+    yq '{"conditions": (.status.conditions // []), "templateSource": .spec.template.spec.source, "templateSources": (.spec.template.spec.sources // [])}'
 
   printf '\n=== Operator Deployment ===\n'
   kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
-    yq '{generation: .metadata.generation, replicas: .spec.replicas, status: .status, tolerations: (.spec.template.spec.tolerations // [])}'
+    yq '{"generation": .metadata.generation, "replicas": .spec.replicas, "status": .status, "tolerations": (.spec.template.spec.tolerations // [])}'
 
   printf '\n=== Operator pods ===\n'
   kubectl -n "$PLATFORM_NAMESPACE" get pods \
@@ -362,7 +362,7 @@ EVIDENCE_FILE="artemis-reconciliation-${APPLICATION}-$(date -u +%Y%m%dT%H%M%SZ).
 
   printf '\n=== Broker CR status ===\n'
   kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" -o json |
-    yq '{name: .metadata.name, namespace: .metadata.namespace, generation: .metadata.generation, status: (.status // {})}'
+    yq '{"name": .metadata.name, "namespace": .metadata.namespace, "generation": .metadata.generation, "status": (.status // {})}'
 
   printf '\n=== Generated resources ===\n'
   kubectl -n "$WORKLOAD_NAMESPACE" get \
@@ -403,4 +403,3 @@ other sensitive values before attaching it outside the authorized environment.
 | Operator log or event contains `denied` | An admission policy rejected a generated object | Identify the constraint and missing or disallowed field |
 | StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
 | `RepeatedResourceWarning` | The effective Argo Application rendered one identity more than once | Compare child `source`/`sources` with the ApplicationSet template |
-
