@@ -168,7 +168,7 @@ assert_bootstrap_rejected \
   'prod operator Git repository: expected https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git, got https://example.invalid/unapproved.git'
 
 assert_bootstrap_rejected \
-  mismatched-operator-values-revision \
+  mismatched-operator-revision \
   prod \
   operator-application.yaml \
   '.spec.source.targetRevision = "other-revision"' \

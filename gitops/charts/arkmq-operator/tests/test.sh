@@ -23,7 +23,6 @@ for environment in test nonprod prod; do
   fi
   helm template "$environment-arkmq-operator" "$work_dir/chart" \
     --namespace example-platform \
-    --values "$chart_dir/../../operator-values.yaml" \
     --set-string "global.requiredLabels.env=$environment" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \

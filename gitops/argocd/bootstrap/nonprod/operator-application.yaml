@@ -13,8 +13,6 @@ spec:
     path: gitops/charts/arkmq-operator
     helm:
       releaseName: nonprod-arkmq-operator
-      valueFiles:
-        - ../../operator-values.yaml
       parameters:
         - name: global.requiredLabels.env
           value: nonprod

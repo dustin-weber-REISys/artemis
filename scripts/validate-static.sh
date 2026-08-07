@@ -20,7 +20,7 @@ local/compose.yaml
 local/.env.example
 local/scripts/validate-compose.sh
 gitops/Makefile
-gitops/operator-values.yaml
+gitops/charts/arkmq-operator/values.yaml
 gitops/scripts/validate-topology.sh
 gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
@@ -83,7 +83,7 @@ if command -v yq >/dev/null 2>&1; then
     '^sha256:[0-9a-f]{64}$'
   assert_yaml_pattern 'operator release image digest' \
     '."arkmq-org-broker-operator".controllerManager.manager.image.tag // ""' \
-    "$repo_root/gitops/operator-values.yaml" \
+    "$repo_root/gitops/charts/arkmq-operator/values.yaml" \
     '^2[.]2[.]0@sha256:[0-9a-f]{64}$'
 
   if rg -n '^[[:space:]]*(image|images|tag|digest):' "$repo_root/gitops/environments" >/dev/null; then

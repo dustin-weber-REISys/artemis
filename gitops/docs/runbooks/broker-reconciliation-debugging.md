@@ -1,0 +1,406 @@
+# Broker reconciliation debugging
+
+Use this runbook when Argo CD shows an `ActiveMQArtemis` resource and the
+chart-owned Services, but the ArkMQ operator does not create a StatefulSet or
+broker pods. These commands use the current kubeconfig context; select and
+verify that context separately before starting.
+
+All Kubernetes commands below are read-only. They do not sync Applications,
+patch resources, restart workloads, or delete anything. Do not capture Secret
+contents, broker credentials, tokens, or message bodies in the evidence.
+
+Run live-cluster commands only from the authorized work computer. This
+repository checkout is an offline/test copy and must not be used to access the
+real cluster.
+
+## Set the resource names
+
+Set these once for the affected broker pair. Replace the example values with
+the real namespaces and names.
+
+```sh
+ARGOCD_NAMESPACE=argocd
+PLATFORM_NAMESPACE=artemis
+WORKLOAD_NAMESPACE=artemis-int-sky
+
+APPLICATION=test-sky-artemis
+APPLICATIONSET=test-artemis-workloads
+BROKER_CR=test-sky-artemis-artemis-ha
+
+OPERATOR_DEPLOYMENT=activemq-artemis-controller-manager
+OPERATOR_SERVICE_ACCOUNT=activemq-artemis-controller-manager
+```
+
+Confirm the current context and resolved variables before collecting evidence:
+
+```sh
+kubectl config current-context
+printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nApplication: %s\nBroker CR: %s\n' \
+  "$ARGOCD_NAMESPACE" \
+  "$PLATFORM_NAMESPACE" \
+  "$WORKLOAD_NAMESPACE" \
+  "$APPLICATION" \
+  "$BROKER_CR"
+```
+
+## 1. Check the effective Argo CD Application
+
+Show synchronization, health, revision, and application conditions:
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
+  yq '{
+    application: .metadata.name,
+    generation: .metadata.generation,
+    destination: .spec.destination,
+    sync: .status.sync,
+    health: .status.health,
+    conditions: (.status.conditions // [])
+  }'
+```
+
+Confirm that the generated child Application has one `spec.source`, not a
+stale or UI-added `spec.sources` list:
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
+  yq '{
+    ownerReferences: .metadata.ownerReferences,
+    source: .spec.source,
+    sources: (.spec.sources // []),
+    sourceCount: (.spec.sources // [] | length),
+    parameters: (.spec.source.helm.parameters // [])
+  }'
+```
+
+Inspect the owning ApplicationSet template and reconciliation conditions:
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get applicationset "$APPLICATIONSET" -o json |
+  yq '{
+    generation: .metadata.generation,
+    templateSource: .spec.template.spec.source,
+    templateSources: (.spec.template.spec.sources // []),
+    conditions: (.status.conditions // [])
+  }'
+```
+
+Print only warning and error conditions from the child Application:
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
+  yq -r '.status.conditions[]? |
+    select(.type == "RepeatedResourceWarning" or .type == "InvalidSpecError") |
+    [.type, .message] | @tsv'
+```
+
+## 2. Confirm that the ArkMQ operator is running
+
+Check the operator Deployment and pods:
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o wide
+
+kubectl -n "$PLATFORM_NAMESPACE" get pods \
+  -l name=activemq-artemis-operator \
+  -o wide
+```
+
+Show desired, updated, ready, and available replicas:
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+  yq '{
+    generation: .metadata.generation,
+    observedGeneration: .status.observedGeneration,
+    desired: .spec.replicas,
+    updated: (.status.updatedReplicas // 0),
+    ready: (.status.readyReplicas // 0),
+    available: (.status.availableReplicas // 0),
+    unavailable: (.status.unavailableReplicas // 0),
+    conditions: (.status.conditions // [])
+  }'
+```
+
+Confirm the watched namespaces and operator tolerations rendered into the live
+Deployment. An empty `WATCH_NAMESPACE` is the cluster-wide setting for this
+chart.
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+  yq -r '.spec.template.spec.containers[] |
+    select(.name == "manager") |
+    .env[] |
+    select(.name == "WATCH_NAMESPACE") |
+    "WATCH_NAMESPACE=" + (.value // "")'
+
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+  yq '.spec.template.spec.tolerations // []'
+```
+
+Show recent operator events and logs. The log filter targets reconciliation,
+authorization, image resolution, and admission-policy errors.
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" events \
+  --for "deployment/$OPERATOR_DEPLOYMENT" \
+  --types Warning,Normal
+
+kubectl -n "$PLATFORM_NAMESPACE" logs \
+  -l name=activemq-artemis-operator \
+  --all-containers=true \
+  --prefix=true \
+  --tail=500 |
+  grep -Ei "$BROKER_CR|error|forbidden|denied|failed|resourceerror|watch|image"
+```
+
+If `kubectl events` is unavailable in the installed client, use:
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get events \
+  --sort-by=.metadata.creationTimestamp |
+  tail -100
+```
+
+## 3. Read the broker CR reconciliation status
+
+The CR status is the most important discriminator. Argo CD can report a
+successful sync even when the operator cannot create its generated resources.
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" -o json |
+  yq '{
+    name: .metadata.name,
+    namespace: .metadata.namespace,
+    generation: .metadata.generation,
+    resourceVersion: .metadata.resourceVersion,
+    deletionTimestamp: .metadata.deletionTimestamp,
+    finalizers: (.metadata.finalizers // []),
+    status: (.status // {})
+  }'
+```
+
+Print the conditions in a compact form suitable for pasting into a ticket or
+debugging session:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" \
+  -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\t"}{.observedGeneration}{"\t"}{.message}{"\n"}{end}'
+```
+
+Show the desired generation beside every observed generation:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" -o json |
+  yq -r '.metadata.generation as $generation |
+    "desiredGeneration=" + ($generation | tostring),
+    (.status.conditions[]? |
+      "condition=" + .type +
+      " status=" + .status +
+      " observedGeneration=" + ((.observedGeneration // 0) | tostring) +
+      " reason=" + .reason)'
+```
+
+## 4. Check for operator-generated resources
+
+The expected StatefulSet name is the broker CR name with `-ss` appended.
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get statefulset "$BROKER_CR-ss" -o wide
+```
+
+List resources carrying the operator's broker identity label:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get \
+  statefulsets,pods,persistentvolumeclaims,services,secrets,configmaps \
+  -l "ActiveMQArtemis=$BROKER_CR" \
+  -o wide
+```
+
+Also list by the operator's application label:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get \
+  statefulsets,pods,persistentvolumeclaims,services,secrets,configmaps \
+  -l "application=$BROKER_CR-app" \
+  -o wide
+```
+
+Show recent workload events, including scheduling, PVC, image-pull, RBAC, and
+admission failures:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get events \
+  --sort-by=.metadata.creationTimestamp |
+  tail -150
+```
+
+If the StatefulSet exists, inspect its rollout and pod placement:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" describe statefulset "$BROKER_CR-ss"
+
+kubectl -n "$WORKLOAD_NAMESPACE" get pods \
+  -l "ActiveMQArtemis=$BROKER_CR" \
+  -o wide
+```
+
+## 5. Check operator authorization
+
+These `kubectl auth can-i` requests perform authorization reviews only; they do
+not create or change the named resources. The caller may need permission to
+impersonate the operator ServiceAccount.
+
+```sh
+OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
+
+for resource in \
+  activemqartemises.broker.amq.io \
+  statefulsets.apps \
+  persistentvolumeclaims \
+  services \
+  secrets \
+  configmaps \
+  serviceaccounts \
+  poddisruptionbudgets.policy; do
+  for verb in get list watch create update patch delete; do
+    kubectl auth can-i "$verb" "$resource" \
+      --namespace "$WORKLOAD_NAMESPACE" \
+      --as "$OPERATOR_ID"
+  done
+done
+```
+
+For easier review, include the verb and resource in each result:
+
+```sh
+OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
+
+for check in \
+  'get activemqartemises.broker.amq.io' \
+  'list activemqartemises.broker.amq.io' \
+  'watch activemqartemises.broker.amq.io' \
+  'create statefulsets.apps' \
+  'update statefulsets.apps' \
+  'patch statefulsets.apps' \
+  'create persistentvolumeclaims' \
+  'create services' \
+  'create secrets' \
+  'create configmaps'; do
+  set -- $check
+  result=$(kubectl auth can-i "$1" "$2" \
+    --namespace "$WORKLOAD_NAMESPACE" \
+    --as "$OPERATOR_ID")
+  printf '%-7s %-45s %s\n' "$1" "$2" "$result"
+done
+```
+
+## 6. Inspect Gatekeeper and admission-policy evidence
+
+List Gatekeeper constraint resource types and their current objects:
+
+```sh
+kubectl api-resources \
+  --api-group=constraints.gatekeeper.sh \
+  --verbs=list \
+  -o name |
+while IFS= read -r resource; do
+  printf '\n### %s\n' "$resource"
+  kubectl get "$resource" -A
+done
+```
+
+List validating webhooks and identify policy engines that can reject generated
+resources:
+
+```sh
+kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io \
+  -o name |
+  grep -Ei 'gatekeeper|policy|admission'
+```
+
+Search the workload events for policy denials and missing required labels:
+
+```sh
+kubectl -n "$WORKLOAD_NAMESPACE" get events \
+  --sort-by=.metadata.creationTimestamp |
+  grep -Ei 'gatekeeper|admission|denied|forbidden|required label|violation'
+```
+
+## 7. Collect a compact evidence bundle
+
+This writes a local text file only. It does not modify cluster resources and
+does not include the broker CR spec or Secret contents.
+
+```sh
+EVIDENCE_FILE="artemis-reconciliation-${APPLICATION}-$(date -u +%Y%m%dT%H%M%SZ).txt"
+
+{
+  printf '=== UTC time ===\n'
+  date -u
+
+  printf '\n=== Current context ===\n'
+  kubectl config current-context
+
+  printf '\n=== Argo Application status ===\n'
+  kubectl -n "$ARGOCD_NAMESPACE" get application "$APPLICATION" -o json |
+    yq '{sync: .status.sync, health: .status.health, conditions: (.status.conditions // []), source: .spec.source, sources: (.spec.sources // [])}'
+
+  printf '\n=== ApplicationSet status ===\n'
+  kubectl -n "$ARGOCD_NAMESPACE" get applicationset "$APPLICATIONSET" -o json |
+    yq '{conditions: (.status.conditions // []), templateSource: .spec.template.spec.source, templateSources: (.spec.template.spec.sources // [])}'
+
+  printf '\n=== Operator Deployment ===\n'
+  kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+    yq '{generation: .metadata.generation, replicas: .spec.replicas, status: .status, tolerations: (.spec.template.spec.tolerations // [])}'
+
+  printf '\n=== Operator pods ===\n'
+  kubectl -n "$PLATFORM_NAMESPACE" get pods \
+    -l name=activemq-artemis-operator \
+    -o wide
+
+  printf '\n=== Broker CR status ===\n'
+  kubectl -n "$WORKLOAD_NAMESPACE" get activemqartemis "$BROKER_CR" -o json |
+    yq '{name: .metadata.name, namespace: .metadata.namespace, generation: .metadata.generation, status: (.status // {})}'
+
+  printf '\n=== Generated resources ===\n'
+  kubectl -n "$WORKLOAD_NAMESPACE" get \
+    statefulsets,pods,persistentvolumeclaims,services,secrets,configmaps \
+    -l "ActiveMQArtemis=$BROKER_CR" \
+    -o wide
+
+  printf '\n=== Workload events ===\n'
+  kubectl -n "$WORKLOAD_NAMESPACE" get events \
+    --sort-by=.metadata.creationTimestamp |
+    tail -150
+
+  printf '\n=== Filtered operator logs ===\n'
+  kubectl -n "$PLATFORM_NAMESPACE" logs \
+    -l name=activemq-artemis-operator \
+    --all-containers=true \
+    --prefix=true \
+    --tail=500 |
+    grep -Ei "$BROKER_CR|error|forbidden|denied|failed|resourceerror|watch|image"
+} 2>&1 | tee "$EVIDENCE_FILE"
+
+printf 'Evidence written to %s\n' "$EVIDENCE_FILE"
+```
+
+Review the file for credentials, tokens, message bodies, internal URLs, or
+other sensitive values before attaching it outside the authorized environment.
+
+## Interpretation
+
+| Evidence | Meaning | Next repository or platform check |
+|---|---|---|
+| Operator has zero available replicas | The CR cannot be reconciled | Inspect operator events for scheduling, image-pull, or admission errors |
+| `WATCH_NAMESPACE` excludes the workload namespace | The operator cannot observe the CR | Correct the environment-specific operator watch list |
+| CR has no status or conditions | The operator has not processed the CR | Check operator availability, watched namespaces, logs, and CR list/watch RBAC |
+| `Valid=False` | The operator rejected the desired broker configuration | Use the condition reason and message to correct the chart values |
+| `Deployed=False` with `ResourceError` | A generated resource failed creation or update | Follow the condition message to RBAC, Gatekeeper, storage, or API validation |
+| Operator log contains `forbidden` | Operator ServiceAccount authorization is incomplete | Compare `can-i` results with the vendored ClusterRole |
+| Operator log or event contains `denied` | An admission policy rejected a generated object | Identify the constraint and missing or disallowed field |
+| StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
+| `RepeatedResourceWarning` | The effective Argo Application rendered one identity more than once | Compare child `source`/`sources` with the ApplicationSet template |
+

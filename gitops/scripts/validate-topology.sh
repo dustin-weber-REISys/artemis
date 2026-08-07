@@ -402,11 +402,8 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
     "$(yq -r '.spec.source.helm.releaseName // ""' "$operator")" \
     "$environment-arkmq-operator"
   assert_equal "$environment operator values file count" \
-    "$(yq -r '.spec.source.helm.valueFiles | length' "$operator")" \
-    1
-  assert_equal "$environment operator release values path" \
-    "$(yq -r '.spec.source.helm.valueFiles[0] // ""' "$operator")" \
-    '../../operator-values.yaml'
+    "$(yq -r '(.spec.source.helm.valueFiles // []) | length' "$operator")" \
+    0
   assert_equal "$environment operator required env label" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "global.requiredLabels.env") | .value' "$operator")" \
     "$environment"

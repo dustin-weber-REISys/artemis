@@ -7,7 +7,7 @@ The target clusters require `app`, `contact`, `env`, and `fismaid` on the
 operator Deployment and pod template, but the upstream chart does not expose a
 common-label or pod-label value.
 
-The shared operator values run two controller-manager replicas. Upstream
+The wrapper defaults run two controller-manager replicas. Upstream
 leader election keeps one replica active and one ready to take over the
 Kubernetes Lease. Hostname and zone topology-spread constraints prefer separate
 nodes and availability zones but use `ScheduleAnyway`, allowing the standby to
@@ -29,7 +29,6 @@ intentional: selectors are immutable, so putting ownership or environment
 labels there prevents Argo CD from patching an existing Deployment when the
 labels are introduced or corrected.
 
-Application-specific upstream values belong under the
-`arkmq-org-broker-operator` key. The shared values file is
-[`../../operator-values.yaml`](../../operator-values.yaml); each environment's
-operator Application sets `global.requiredLabels.env` explicitly.
+Upstream values belong under the `arkmq-org-broker-operator` key in this
+chart's [`values.yaml`](values.yaml). Each environment's operator Application
+sets `global.requiredLabels.env` and its private ECR repositories explicitly.
