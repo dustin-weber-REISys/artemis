@@ -87,7 +87,9 @@ probes:
     timeoutSeconds: 5
     failureThreshold: 6
   readiness:
-    initialDelaySeconds: 15
+    # Give the three parallel voters the same startup window as liveness before
+    # asking zkServer.sh to contact the local client port.
+    initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 6

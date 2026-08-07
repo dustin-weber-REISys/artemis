@@ -20,6 +20,30 @@ pool and `scheduling.tolerations` for its exact taint in the environment
 values. Do not change `topology.whenUnsatisfiable`, relax pod anti-affinity, or
 add a keyless `Exists` toleration merely to make the pods schedule; those
 changes can co-locate voters or admit them to unrelated protected nodes.
+Do not tolerate autoscaler deletion-candidate, `unschedulable`, or `not-ready`
+taints. Those nodes are intentionally unavailable and must leave the eligible
+set.
+
+The selected EBS StorageClass must use `WaitForFirstConsumer`. Otherwise a
+volume can bind to an availability zone before Kubernetes evaluates the
+ZooKeeper host and zone constraints, leaving the pod with simultaneous
+`PersistentVolume node affinity` and topology-spread failures. Changing this
+chart or the StorageClass does not relocate an existing bound EBS volume.
+
+For a new ensemble that has never formed or accepted data, first correct the
+StorageClass and then recreate its uninitialized claims so the scheduler can
+provision them against the corrected topology. Treat claim deletion as data
+destruction: do not use that recovery on an initialized ensemble. Recover an
+initialized ensemble one member at a time under the backup/restore and quorum
+runbooks instead.
+
+The readiness check starts after the same 30-second startup window as the
+liveness check. A single `Readiness probe failed` event during an older rollout
+means that `zkServer.sh status` reached the local client port before that voter
+finished joining the quorum; if the pod subsequently becomes Ready and the
+event count stops increasing, no recovery action is required. Investigate a
+repeating event or a pod that remains unready as a quorum, network, or process
+failure.
 
 Run `./tests/test.sh` for focused rendering, schema, and Kubernetes resource
 validation.

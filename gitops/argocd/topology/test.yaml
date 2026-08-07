@@ -13,7 +13,7 @@ brokerPairs:
     trafficClass: internal
     managementHost: artemis-test-sky.example.invalid
     storageSize: 20Gi
-    enabled: "false"
+    enabled: "true"
   - brokerPairName: test-sky2
     workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
     coordinationId: test-sky2-01

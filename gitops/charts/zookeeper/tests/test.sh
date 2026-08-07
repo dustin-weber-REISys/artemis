@@ -65,6 +65,14 @@ rg -q 'peer=zookeeper-zookeeper-2\.zookeeper-zookeeper-headless\.example-platfor
 rg -q 'until getent hosts "\$peer"' "$rendered"
 rg -q 'standaloneEnabled=false' "$rendered"
 rg -q '/data/data/myid' "$rendered"
+yq -e 'select(.kind == "StatefulSet") |
+  .spec.template.spec.containers[] |
+  select(.name == "zookeeper") |
+  .readinessProbe.initialDelaySeconds == 30' "$rendered" >/dev/null
+yq -e 'select(.kind == "StatefulSet") |
+  .spec.template.spec.containers[] |
+  select(.name == "zookeeper") |
+  .livenessProbe.initialDelaySeconds == 30' "$rendered" >/dev/null
 rg -q 'key: ActiveMQArtemis' "$rendered"
 rg -q 'operator: Exists' "$rendered"
 rg -q 'maxUnavailable: 1' "$rendered"
