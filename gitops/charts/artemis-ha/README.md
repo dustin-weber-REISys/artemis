@@ -39,6 +39,17 @@ stage-wide runtime fields. Run
 `./tests/test.sh` for focused rendering, schema,
 port-coherence, and Kubernetes resource validation.
 
+The chart follows the platform's established shared ALB pattern: the
+`aws-lb-ingress` IngressClass, `shared-standard-group`, HTTP and HTTPS
+listeners, IP targets, an HTTP backend, and the platform-standard health check
+range. HTTPS certificates, scheme, subnets, and security groups are owned by
+the shared ALB/IngressClass, so Artemis does not render a workload TLS Secret
+reference. The `aws-lb-ingress` IngressClass must be installed before an
+Application is synced. Because ALB traffic does not originate from an
+in-cluster ingress-controller pod, environments must allow their approved
+ALB/VPC sources on the console port through `networkPolicy.extraIngress` or an
+equivalent platform-owned policy.
+
 Vault injection defaults off. The optional annotations only request a
 pod-local credential file; they do not make it the broker's effective
 administrative identity. Enable `vault.enabled` only after the environment
@@ -79,5 +90,5 @@ The environment-local ApplicationSet overrides `console.ingress.host`,
 `keycloak.redirectUri`, and `persistence.size` from each broker-pair entry in
 `argocd/topology`. This gives every pair an unambiguous Hawtio/Jolokia URL,
 exact OIDC redirect URI, and explicit storage allocation. The host, redirect
-URI, TLS certificate, DNS record, and Keycloak client registration must agree
-before enabling a pair.
+URI, shared-ALB certificate coverage, DNS record, and Keycloak client
+registration must agree before enabling a pair.

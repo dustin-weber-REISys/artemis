@@ -9,10 +9,6 @@ metadata:
     {{- toYaml .Values.console.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.console.ingress.className }}
-  tls:
-    - hosts:
-        - {{ .Values.console.ingress.host | quote }}
-      secretName: {{ .Values.console.ingress.tlsSecretName }}
   rules:
     - host: {{ .Values.console.ingress.host | quote }}
       http:

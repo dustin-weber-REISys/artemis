@@ -43,7 +43,7 @@ spec:
       rules:
         - alert: ArtemisBrokerMetricsUnavailable
           expr: >-
-            absent(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-metrics" (include "artemis-ha.fullname" .) | quote }})
+            absent(up{namespace={{ .Release.Namespace | quote }},service={{ printf "%s-metrics" (include "artemis-ha.fullname" .) | quote }}})
           for: 5m
           labels:
             severity: {{ .Values.monitoring.prometheusRule.severity }}

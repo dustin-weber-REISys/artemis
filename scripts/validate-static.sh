@@ -22,9 +22,11 @@ local/scripts/validate-compose.sh
 gitops/Makefile
 gitops/operator-values.yaml
 gitops/scripts/validate-topology.sh
+gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/tests/topology/test.sh
 gitops/tests/argocd/test-ecr-credential-refresh.sh
+gitops/tests/argocd/test-verify-applicationset.sh
 gitops/tests/e2e/acceptance-plan.yaml
 gitops/tests/e2e/test-scenario-tools.sh
 gitops/tests/compatibility/classic-6.2.6-inventory.yaml

@@ -7,6 +7,24 @@ tokens with values supplied by the cluster platform; do not commit them.
 
 - Confirm the approved image/chart digests and the maintenance window.
 - Confirm the target context, cluster, and namespace exactly.
+- Verify the ApplicationSet controller and generated child Applications before
+  checking workloads:
+
+```sh
+./gitops/scripts/verify-argocd-applicationset.sh \
+  --context CONTEXT \
+  --argocd-namespace ARGOCD_NAMESPACE \
+  --environment test
+```
+
+  A synced ApplicationSet with no status conditions has not been reconciled.
+  The verifier also confirms that each enabled broker pair's exact local
+  destination is present in the `messaging-platform` AppProject and that the
+  generated Application has no `InvalidSpecError`. Confirm the cluster's Argo
+  CD installation enables an available `argocd-applicationset-controller`
+  Deployment in the same namespace as the ApplicationSet. Enabling a topology
+  entry cannot create a valid child Application until the controller is
+  running and the AppProject permits its workload namespace.
 - Confirm Vault, storage class, ingress TLS, Prometheus, and Keycloak inputs
   exist in the environment repository.
 - Run the destructive scenario harness once in its default dry-run mode:

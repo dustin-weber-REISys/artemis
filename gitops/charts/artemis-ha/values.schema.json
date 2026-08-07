@@ -196,12 +196,11 @@
     "ingress": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "className", "host", "tlsSecretName", "annotations"],
+      "required": ["enabled", "className", "host", "annotations"],
       "properties": {
         "enabled": {"type": "boolean"},
         "className": {"type": "string", "minLength": 1},
         "host": {"type": "string", "minLength": 1},
-        "tlsSecretName": {"type": "string", "minLength": 1},
         "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
       }
     },

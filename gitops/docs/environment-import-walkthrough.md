@@ -73,8 +73,8 @@ Complete these checks before changing Argo CD resources:
 
 ### Cluster services and network
 
-- The cluster-local Argo CD and its ApplicationSet controller, nginx ingress,
-  Vault Agent Injector, Prometheus CRDs (when enabled), a
+- The cluster-local Argo CD and its ApplicationSet controller, the approved
+  IngressClass/controller, Vault Agent Injector, Prometheus CRDs (when enabled), a
   NetworkPolicy-enforcing CNI, DNS, and the cluster log collector are healthy.
 - Actual namespace and pod labels are available for every NetworkPolicy
   selector. External Vault, Keycloak, DNS, or monitoring endpoints receive
@@ -176,8 +176,10 @@ copied property inventory. At minimum, resolve:
 
 - the selected ECR base repository and approved release digests;
 - persistent storage and placement;
+- the installed `aws-lb-ingress` IngressClass, shared ALB group, certificate
+  coverage, and any environment-specific NetworkPolicy inputs;
 - pair-unique HA and ZooKeeper identities;
-- unique workload namespace, service, console, TLS, Keycloak, and Vault
+- unique workload namespace, service, console, Keycloak, and Vault
   identities;
 - actual NetworkPolicy namespace/pod selectors and approved external egress;
 - declarative application addresses, queues, authorization, redelivery,

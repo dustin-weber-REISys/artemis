@@ -118,14 +118,19 @@ acceptors:
 console:
   ingress:
     enabled: true
-    className: nginx
+    className: aws-lb-ingress
     host: artemis.example.invalid
-    tlsSecretName: example-wildcard-tls
+    # Match the platform's shared-standard-group pattern. HTTPS certificates,
+    # scheme, subnets, and security groups are owned by the shared ALB and its
+    # IngressClass rather than by each Artemis workload.
     annotations:
-      nginx.ingress.kubernetes.io/ssl-passthrough: "false"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+      alb.ingress.kubernetes.io/group.name: shared-standard-group
+      alb.ingress.kubernetes.io/group.order: "100"
+      alb.ingress.kubernetes.io/healthcheck-path: /
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/success-codes: 200-401
+      alb.ingress.kubernetes.io/target-type: ip
 
 keycloak:
   enabled: true
@@ -236,13 +241,10 @@ networkPolicy:
   # Empty defaults keep this chart deny-by-default until an environment adds
   # its approved callers.
   clientSources: []
-  managementSources:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: example-ingress
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: ingress-nginx
+  # ALB traffic does not originate from an in-cluster ingress-controller pod.
+  # Environments must allow their approved ALB/VPC sources on the console port
+  # with extraIngress (or an equivalent platform-owned policy).
+  managementSources: []
   monitoringSources:
     - namespaceSelector:
         matchLabels:

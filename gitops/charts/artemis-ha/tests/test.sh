@@ -44,6 +44,7 @@ removed_values=(
   'broker.terminationGracePeriodSeconds=120'
   'console.enabled=true'
   'console.port=8161'
+  'console.ingress.tlsSecretName=obsolete-secret'
   'services.type=ClusterIP'
   'services.publishNotReadyAddresses=false'
 )
@@ -69,6 +70,24 @@ done
 helm template artemis "$chart_dir" --namespace example-messaging "${helm_args[@]}" > "$rendered"
 
 rg -q '^kind: ActiveMQArtemis$' "$rendered"
+[[ "$(rg -c '^kind: ActiveMQArtemis$' "$rendered")" == "1" ]]
+
+# Argo CD identifies resources by group/kind/namespace/name and rejects a
+# render that repeats an identity, even when the duplicate uses another API
+# version. Check the complete chart output using the release namespace Argo CD
+# applies to resources without an explicit metadata.namespace.
+duplicate_resource_identities=$(
+  RELEASE_NAMESPACE=example-messaging yq eval -r '
+    select(.kind != null and .metadata.name != null)
+    | [(.apiVersion | split("/")[0]), .kind, (.metadata.namespace // strenv(RELEASE_NAMESPACE)), .metadata.name]
+    | @tsv
+  ' "$rendered" | sort | uniq -d
+)
+if [[ -n "$duplicate_resource_identities" ]]; then
+  printf 'chart rendered duplicate Argo CD resource identities:\n%s\n' \
+    "$duplicate_resource_identities" >&2
+  exit 1
+fi
 for required_label in app contact env fismaid; do
   yq -e "select(.kind == \"ActiveMQArtemis\") | .metadata.labels.\"$required_label\" != null" \
     "$rendered" >/dev/null
@@ -115,6 +134,17 @@ rg -q 'kind: Ingress' "$rendered"
 rg -q 'kind: NetworkPolicy' "$rendered"
 rg -q 'kind: ServiceMonitor' "$rendered"
 rg -q 'kind: PrometheusRule' "$rendered"
+if rg -q 'ingress-nginx' "$rendered"; then
+  echo "ALB configuration unexpectedly rendered the obsolete ingress-nginx NetworkPolicy source" >&2
+  exit 1
+fi
+[[ "$(yq eval -r 'select(.kind == "PrometheusRule") | .spec.groups[].rules[] | select(.alert == "ArtemisBrokerMetricsUnavailable") | .expr' "$rendered")" == 'absent(up{namespace="example-messaging",service="artemis-artemis-ha-metrics"})' ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .spec.ingressClassName' "$rendered")" == "aws-lb-ingress" ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/group.name"' "$rendered")" == "shared-standard-group" ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/group.order"' "$rendered")" == "100" ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/listen-ports"' "$rendered")" == '[{"HTTP":80},{"HTTPS":443}]' ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/target-type"' "$rendered")" == "ip" ]]
+[[ "$(yq eval -r 'select(.kind == "Ingress") | .spec | has("tls")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.size' "$rendered")" == "2" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
@@ -153,6 +183,11 @@ done
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$prod_rendered")" == "PLACEHOLDER_PROD_GP3_STORAGE_CLASS" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$nonprod_rendered")" == "PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$test_rendered")" == "PLACEHOLDER_TEST_GP3_STORAGE_CLASS" ]]
+for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered"; do
+  [[ "$(yq eval -r 'select(.kind == "Ingress") | .spec.ingressClassName' "$environment_rendered")" == "aws-lb-ingress" ]]
+  [[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/group.name"' "$environment_rendered")" == "shared-standard-group" ]]
+  [[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/target-type"' "$environment_rendered")" == "ip" ]]
+done
 
 helm template artemis-ports "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
