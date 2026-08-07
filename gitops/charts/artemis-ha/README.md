@@ -26,7 +26,8 @@ Broker scheduling requires two eligible zone and host domains and injects an
 explicit anti-affinity selector for the pair. A separate metrics Service
 publishes both broker endpoints so Prometheus can scrape the passive peer even
 though client Services retain the active-only readiness gate. ZooKeeper's
-companion chart requires three eligible zone domains for its three voters.
+companion chart keeps its three voters on separate hosts and spreads them over
+the environment's available zone count.
 
 Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external

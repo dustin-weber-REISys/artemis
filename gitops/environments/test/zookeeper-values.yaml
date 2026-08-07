@@ -19,6 +19,20 @@ resources:
 jvm:
   heapOpts: -Xms256m -Xmx512m
 
+# Test spans two availability zones. Keep all three voters on separate hosts;
+# the scheduler may place two voters in one zone and one in the other.
+topology:
+  minDomains: 2
+
+# Permit ZooKeeper voters on the test cluster's on-demand platform nodes. The
+# exact key/value/effect keeps unrelated protected node pools ineligible.
+scheduling:
+  tolerations:
+    - key: eid-platform/node-lifecycle
+      operator: Equal
+      value: ondemand
+      effect: NoSchedule
+
 networkPolicy:
   brokerNamespaceSelector:
     matchLabels:

@@ -73,6 +73,13 @@ resources:
     cpu: 1
     memory: 2Gi
 
+# Keep these empty for ordinary worker nodes. When ZooKeeper uses a dedicated
+# tainted node pool, set both a selector for that pool and only the matching
+# toleration; do not use a blanket Exists toleration.
+scheduling:
+  nodeSelector: {}
+  tolerations: []
+
 probes:
   liveness:
     initialDelaySeconds: 30

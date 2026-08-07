@@ -72,6 +72,22 @@ rg -q 'minDomains: 3' "$rendered"
 rg -q 'topologyKey: "topology.kubernetes.io/zone"' "$rendered"
 kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
 
+scheduling_rendered="$work_dir/scheduling.yaml"
+helm template zookeeper "$chart_dir" --namespace example-platform \
+  --set-string scheduling.nodeSelector.nodepool=messaging \
+  --set-string 'scheduling.tolerations[0].key=dedicated' \
+  --set-string 'scheduling.tolerations[0].operator=Equal' \
+  --set-string 'scheduling.tolerations[0].value=messaging' \
+  --set-string 'scheduling.tolerations[0].effect=NoSchedule' > "$scheduling_rendered"
+yq -e 'select(.kind == "StatefulSet") |
+  .spec.template.spec.nodeSelector.nodepool == "messaging" and
+  .spec.template.spec.tolerations[0].key == "dedicated" and
+  .spec.template.spec.tolerations[0].operator == "Equal" and
+  .spec.template.spec.tolerations[0].value == "messaging" and
+  .spec.template.spec.tolerations[0].effect == "NoSchedule"' \
+  "$scheduling_rendered" >/dev/null
+kubeconform -strict -ignore-missing-schemas -summary "$scheduling_rendered" >/dev/null
+
 for environment in test nonprod prod; do
   values="$repository_dir/environments/$environment/zookeeper-values.yaml"
   ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
@@ -96,6 +112,26 @@ for environment in test nonprod prod; do
   yq -e "select(.kind == \"StatefulSet\") | .metadata.labels.env == \"$environment\"" \
     "$environment_rendered" >/dev/null
   yq -e "select(.kind == \"StatefulSet\") | .spec.template.metadata.labels.env == \"$environment\"" \
+    "$environment_rendered" >/dev/null
+  expected_zone_domains=3
+  if [[ "$environment" == test ]]; then
+    expected_zone_domains=2
+    yq -e 'select(.kind == "StatefulSet") |
+      (.spec.template.spec.tolerations | length) == 1 and
+      .spec.template.spec.tolerations[0].key == "eid-platform/node-lifecycle" and
+      .spec.template.spec.tolerations[0].operator == "Equal" and
+      .spec.template.spec.tolerations[0].value == "ondemand" and
+      .spec.template.spec.tolerations[0].effect == "NoSchedule"' \
+      "$environment_rendered" >/dev/null
+  fi
+  yq -e "select(.kind == \"StatefulSet\") |
+    .spec.template.spec.topologySpreadConstraints[] |
+    select(.topologyKey == \"topology.kubernetes.io/zone\") |
+    .minDomains == $expected_zone_domains" \
+    "$environment_rendered" >/dev/null
+  yq -e 'select(.kind == "StatefulSet") |
+    .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[] |
+    select(.topologyKey == "kubernetes.io/hostname")' \
     "$environment_rendered" >/dev/null
   kubeconform -strict -ignore-missing-schemas -summary "$environment_rendered" >/dev/null
 done
