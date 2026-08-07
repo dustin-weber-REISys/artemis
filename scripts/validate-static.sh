@@ -80,7 +80,7 @@ if command -v yq >/dev/null 2>&1; then
     "$repo_root/gitops/charts/zookeeper/values.yaml" \
     '^sha256:[0-9a-f]{64}$'
   assert_yaml_pattern 'operator release image digest' \
-    '.controllerManager.manager.image.tag // ""' \
+    '."arkmq-org-broker-operator".controllerManager.manager.image.tag // ""' \
     "$repo_root/gitops/operator-values.yaml" \
     '^2[.]2[.]0@sha256:[0-9a-f]{64}$'
 

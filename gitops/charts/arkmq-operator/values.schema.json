@@ -20,6 +20,15 @@
         }
       },
       "additionalProperties": true
+    },
+    "podDisruptionBudget": {
+      "type": "object",
+      "required": ["enabled", "minAvailable"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minAvailable": {"type": "integer", "const": 1}
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {

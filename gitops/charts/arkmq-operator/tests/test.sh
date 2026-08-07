@@ -32,7 +32,16 @@ for environment in test nonprod prod; do
 
   ENVIRONMENT="$environment" yq -e '
     select(.kind == "Deployment")
-    | (.metadata.labels.app == "artemis")
+    | (.spec.replicas == 2)
+      and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
+      and (.spec.template.spec.topologySpreadConstraints | length == 2)
+      and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
+      and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")
+      and (.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == "DoNotSchedule")
+      and (.spec.template.spec.topologySpreadConstraints[1].maxSkew == 1)
+      and (.spec.template.spec.topologySpreadConstraints[1].topologyKey == "topology.kubernetes.io/zone")
+      and (.spec.template.spec.topologySpreadConstraints[1].whenUnsatisfiable == "DoNotSchedule")
+      and (.metadata.labels.app == "artemis")
       and (.metadata.labels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
       and (.metadata.labels.env == strenv(ENVIRONMENT))
       and (.metadata.labels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
@@ -40,6 +49,18 @@ for environment in test nonprod prod; do
       and (.spec.template.metadata.labels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
       and (.spec.template.metadata.labels.env == strenv(ENVIRONMENT))
       and (.spec.template.metadata.labels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
+  ' "$rendered" >/dev/null
+
+  ENVIRONMENT="$environment" yq -e '
+    select(.kind == "PodDisruptionBudget")
+    | (.metadata.name == "activemq-artemis-controller-manager")
+      and (.spec.minAvailable == 1)
+      and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
+      and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
+      and (.spec.selector.matchLabels.app == "artemis")
+      and (.spec.selector.matchLabels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
+      and (.spec.selector.matchLabels.env == strenv(ENVIRONMENT))
+      and (.spec.selector.matchLabels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
   ' "$rendered" >/dev/null
 done
 

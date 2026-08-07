@@ -2,6 +2,24 @@
 # revision. Argo CD supplies the selected ECR repository locations.
 arkmq-org-broker-operator:
   controllerManager:
+    # The operator uses controller-runtime leader election, so one pod
+    # reconciles while the second remains available to take over its Lease.
+    replicas: 2
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            control-plane: controller-manager
+            name: activemq-artemis-operator
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            control-plane: controller-manager
+            name: activemq-artemis-operator
     manager:
       image:
         tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
@@ -11,3 +29,7 @@ arkmq-org-broker-operator:
   crds:
     apply: true
     keep: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

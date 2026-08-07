@@ -1,0 +1,16 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: activemq-artemis-controller-manager
+  labels:
+    control-plane: controller-manager
+  {{- include "arkmq-org-broker-operator.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+      name: activemq-artemis-operator
+    {{- include "arkmq-org-broker-operator.selectorLabels" . | nindent 6 }}
+{{- end }}
