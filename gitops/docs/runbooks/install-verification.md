@@ -51,7 +51,11 @@ tokens with values supplied by the cluster platform; do not commit them.
 ## Verification
 
 1. Check Argo application `Synced` and `Healthy`, including operator and CRD
-   sync waves.
+   sync waves. A broker CR with `Valid=True` but `Deployed=False`,
+   `Reason=ResourceError`, and an admission-webhook message about missing
+   labels means the operator-generated resource failed policy even though the
+   Argo-owned CR synced. Confirm the CR renders the required labels under both
+   `deploymentPlan.labels` and the unscoped `resourceTemplates[0].labels`.
 2. Check two broker pods are scheduled on distinct nodes and zones, each has a
    separate `ReadWriteOnce` PVC, and the PDB is respected. `Synced` alone means
    only that the declarative resources were applied. If no broker is scheduled,

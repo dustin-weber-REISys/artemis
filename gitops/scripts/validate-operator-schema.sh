@@ -54,6 +54,19 @@ for environment in test nonprod prod; do
     > "$rendered"
   yq 'select(.kind == "ActiveMQArtemis")' "$rendered" > "$broker_cr"
   kubeconform -strict -schema-location "$schema" "$broker_cr" >/dev/null
+  if [[ "$(yq -r '.spec.resourceTemplates | length' "$broker_cr")" != 1 ]] || \
+     [[ "$(yq -r '.spec.resourceTemplates[0] | has("selector")' "$broker_cr")" != false ]]; then
+    printf '%s broker CR must apply one unscoped resourceTemplate to operator-generated resources\n' \
+      "$environment" >&2
+    exit 1
+  fi
+  for required_label in app contact env fismaid; do
+    if [[ "$(LABEL="$required_label" yq -r '.spec.resourceTemplates[0].labels[strenv(LABEL)] // ""' "$broker_cr")" == "" ]]; then
+      printf '%s broker resourceTemplate is missing required label %s\n' \
+        "$environment" "$required_label" >&2
+      exit 1
+    fi
+  done
   broker_version=$(yq -r '.spec.version' "$broker_cr")
   compact_version=${broker_version//./}
   if [[ "$(yq -r '.spec.deploymentPlan | has("image") or has("initImage")' "$broker_cr")" != false ]]; then

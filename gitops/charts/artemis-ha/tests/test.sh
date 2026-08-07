@@ -93,7 +93,13 @@ for required_label in app contact env fismaid; do
     "$rendered" >/dev/null
   yq -e "select(.kind == \"ActiveMQArtemis\") | .spec.deploymentPlan.labels.\"$required_label\" != null" \
     "$rendered" >/dev/null
+  yq -e "select(.kind == \"ActiveMQArtemis\") | .spec.resourceTemplates[0].labels.\"$required_label\" != null" \
+    "$rendered" >/dev/null
 done
+yq -e 'select(.kind == "ActiveMQArtemis") |
+  (.spec.resourceTemplates | length) == 1 and
+  (.spec.resourceTemplates[0] | has("selector") | not)' \
+  "$rendered" >/dev/null
 rg -q 'HAPolicyConfiguration=REPLICATION_PRIMARY_LOCK_MANAGER' "$rendered"
 rg -q 'HAPolicyConfiguration\.coordinationId=pair-id-test01' "$rendered"
 rg -q 'HAPolicyConfiguration\.distributedManagerConfiguration\.properties\.namespace=artemis/example/example-pair' "$rendered"
@@ -177,7 +183,10 @@ for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered
 done
 for environment in prod nonprod test; do
   environment_rendered="$temp_dir/$environment.yaml"
-  yq -e "select(.kind == \"ActiveMQArtemis\") | (.metadata.labels.env == \"$environment\") and (.spec.deploymentPlan.labels.env == \"$environment\")" \
+  yq -e "select(.kind == \"ActiveMQArtemis\") |
+    (.metadata.labels.env == \"$environment\") and
+    (.spec.deploymentPlan.labels.env == \"$environment\") and
+    (.spec.resourceTemplates[0].labels.env == \"$environment\")" \
     "$environment_rendered" >/dev/null
   yq -e 'select(.kind == "ActiveMQArtemis") |
     (.spec.deploymentPlan.tolerations | length) == 1 and

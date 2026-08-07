@@ -35,6 +35,14 @@ this aligned with the environment node-pool taint. A synced workload with
 broker pods remaining unscheduled has no console Service endpoints, so the
 shared ALB correctly returns 503 until at least the active broker is ready.
 
+The chart puts required enterprise labels on the `ActiveMQArtemis` resource and
+broker pod template, and uses the operator's unscoped `resourceTemplates`
+contract to put them on every operator-generated supporting resource. This is
+required because admission policy evaluates StatefulSet metadata separately
+from its pod-template metadata. Removing that template leaves the custom
+resource valid but causes Gatekeeper to reject the generated StatefulSet, so no
+broker pods or console endpoints can exist.
+
 Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external
 ZooKeeper connection and selectors, ingress identity, and the approved policy
