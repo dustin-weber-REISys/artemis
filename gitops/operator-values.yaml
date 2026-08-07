@@ -8,14 +8,18 @@ arkmq-org-broker-operator:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
+        # The operator should prefer separate nodes without becoming
+        # unschedulable when only one untainted worker is currently eligible.
+        whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels:
             control-plane: controller-manager
             name: activemq-artemis-operator
       - maxSkew: 1
         topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: DoNotSchedule
+        # Preserve zone spreading as a preference. A hard constraint can
+        # deadlock the standby replica during node-pool maintenance or scale-up.
+        whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels:
             control-plane: controller-manager

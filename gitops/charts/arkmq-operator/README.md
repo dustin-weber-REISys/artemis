@@ -7,10 +7,13 @@ does not expose a common-label value, while the target clusters require `app`,
 
 The shared operator values run two controller-manager replicas. Upstream
 leader election keeps one replica active and one ready to take over the
-Kubernetes Lease. Required hostname and zone topology-spread constraints keep
-the replicas out of the same node and availability zone, and the wrapper adds
-a PodDisruptionBudget that preserves at least one replica during voluntary
-disruptions.
+Kubernetes Lease. Hostname and zone topology-spread constraints prefer separate
+nodes and availability zones but use `ScheduleAnyway`, allowing the standby to
+start when maintenance, autoscaling, or untolerated node-pool taints leave only
+one eligible node. The wrapper also adds a PodDisruptionBudget that preserves
+at least one replica during voluntary disruptions. Add narrowly scoped upstream
+`controllerManager.tolerations` only when the operator is intentionally assigned
+to a tainted node pool; do not use a blanket `Exists` toleration.
 
 The upstream Deployment builds its pod-template labels from its selector-label
 helper. Consequently, the wrapper adds the enterprise labels to the Deployment
