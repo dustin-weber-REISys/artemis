@@ -56,6 +56,26 @@ spec:
           labelSelector:
             matchLabels:
               {{- include "zookeeper.selectorLabels" . | nindent 14 }}
+      initContainers:
+        - name: wait-for-peer-dns
+          image: {{ include "zookeeper.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              {{- range $i, $_ := until (int .Values.replicaCount) }}
+              peer={{ include "zookeeper.fullname" $ }}-{{ $i }}.{{ include "zookeeper.headlessServiceName" $ }}.{{ $.Release.Namespace }}.svc.cluster.local
+              until getent hosts "$peer" >/dev/null; do
+                printf 'waiting for ZooKeeper peer DNS: %s\n' "$peer"
+                sleep 2
+              done
+              {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext.container | nindent 12 }}
       containers:
         - name: zookeeper
           image: {{ include "zookeeper.image" . | quote }}
