@@ -38,14 +38,14 @@ The existing EKS Terraform inputs map to Artemis as follows:
 
 The operator Applications use the repository-owned
 [`arkmq-operator`](../charts/arkmq-operator) wrapper chart as their Git source.
-The wrapper pins ArkMQ Broker Operator `2.2.0` as a public OCI dependency and
-overrides the upstream label helpers so Gatekeeper-required labels are present
-on the operator Deployment and pod template. Operator and operand image
-locations remain environment-specific ECR placeholders in the bootstrap
-manifests.
+The wrapper pins a repository-local copy of ArkMQ Broker Operator `2.2.0` and
+patches its label handling so Gatekeeper-required labels are present on the
+operator Deployment and pod template without entering immutable selectors.
+Operator and operand image locations remain environment-specific ECR
+placeholders in the bootstrap manifests.
 
-The public chart source does not require the ECR Helm credential-refresh
-integration. The separate ECR mirroring design remains documented in
+The repository-local chart dependency needs no runtime Helm-registry
+credentials. The separate ECR mirroring design remains documented in
 [`Helm chart mirroring to ECR`](../docs/helm-ecr-mirroring.md) for a future
 switch back to the private source.
 
@@ -65,7 +65,7 @@ The root Application uses the `default` project for bootstrap. Sync wave `-30`
 creates the environment-local `messaging-platform` project before the operator,
 ZooKeeper, and generated Artemis Applications reference it. Git and private
 image-registry credentials remain platform-owned and must exist before the
-root sync; the wrapper's public operator dependency needs no ECR Helm token.
+root sync; the repository-local operator dependency needs no ECR Helm token.
 
 Set `PLACEHOLDER_GITOPS_REVISION` in the bootstrap manifests to the exact
 branch, tag, or commit configured for the root entry in `argocd_repos`. The
@@ -102,8 +102,8 @@ expressions. The intended root source is the raw YAML bootstrap directory.
 Replace `PLACEHOLDER_NONPROD_ECR_REPOSITORY` and
 `PLACEHOLDER_PROD_ECR_REPOSITORY` with full ECR prefixes shaped like
 `123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/artemis`. The checked-in
-configuration appends image names. The public Helm-style OCI `repoURL`
-is recorded in the wrapper dependency rather than an Application source.
+configuration appends image names. The wrapper resolves its chart dependency
+from the checked-in `vendor` directory rather than an Application source.
 Replace every other placeholder before sync. Each AppProject allows the exact
 Git source used by its children. Git and private image-registry credentials,
 AppProject policy, and secret values remain outside this repository.

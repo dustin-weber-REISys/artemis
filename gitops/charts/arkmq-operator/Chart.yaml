@@ -2,9 +2,9 @@ apiVersion: v2
 name: artemis-arkmq-operator
 description: Enterprise-label wrapper for the upstream ArkMQ Broker Operator chart
 type: application
-version: 2.2.0-1
+version: 2.2.0-2
 appVersion: 2.2.0
 dependencies:
   - name: arkmq-org-broker-operator
     version: 2.2.0
-    repository: oci://quay.io/arkmq-org/helm-charts
+    repository: file://vendor/arkmq-org-broker-operator
