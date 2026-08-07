@@ -24,12 +24,14 @@ tokens with values supplied by the cluster platform; do not commit them.
 ```
 
   A synced ApplicationSet with no status conditions has not been reconciled.
-  The verifier also confirms that each enabled broker pair's exact local
-  destination is present in the `messaging-platform` AppProject, the generated
-  Application has no `InvalidSpecError`, and it has exactly the Helm
-  parameter names declared by its owning ApplicationSet. This catches stale or
-  UI-added overrides such as `networkPolicy.*Selector={}`; Helm interprets that
-  syntax as an empty array, not the selector object required by the chart.
+  The verifier also confirms that the ArkMQ operator Deployment has an
+  available replica and the exact on-demand-node toleration. For each enabled
+  broker pair, it verifies the local destination, a single Git/Helm source,
+  the source fields owned by the ApplicationSet, no `InvalidSpecError` or
+  `RepeatedResourceWarning`, and exactly the declared Helm parameter names.
+  This catches duplicate sources as well as stale or UI-added overrides such
+  as `networkPolicy.*Selector={}`; Helm interprets that syntax as an empty
+  array, not the selector object required by the chart.
   Check the owning ApplicationSet first. If it declares the override, sync the
   root Application to the approved Git revision and reconcile the
   ApplicationSet; deleting generated child Applications only recreates the
@@ -56,13 +58,19 @@ tokens with values supplied by the cluster platform; do not commit them.
    labels means the operator-generated resource failed policy even though the
    Argo-owned CR synced. Confirm the CR renders the required labels under both
    `deploymentPlan.labels` and the unscoped `resourceTemplates[0].labels`.
+   A `RepeatedResourceWarning` naming the broker CR is not a pod failure: it
+   means the effective child Application rendered the same group/kind/
+   namespace/name twice. The chart's focused test checks the rendered inventory
+   and produces one CR, so use the verifier to find a stale `spec.sources`
+   entry or source drift in the generated child Application.
 2. Check two broker pods are scheduled on distinct nodes and zones, each has a
    separate `ReadWriteOnce` PVC, and the PDB is respected. `Synced` alone means
    only that the declarative resources were applied. If no broker is scheduled,
    inspect pod events for an untolerated node taint before debugging ingress;
    the console Service will have no endpoint and the ALB will return 503 until
-   an active broker is ready. Every environment overlay intentionally tolerates
-   only `eid-platform/node-lifecycle=ondemand:NoSchedule`.
+   an active broker is ready. Every broker environment overlay and the shared
+   operator values intentionally tolerate only
+   `eid-platform/node-lifecycle=ondemand:NoSchedule`.
 3. Check readiness exposes only the active broker. Passive operation must not
    cause a liveness restart loop.
 4. Check exactly one broker is active, the peer is passive, replication is

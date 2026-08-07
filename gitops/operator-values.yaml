@@ -24,6 +24,14 @@ arkmq-org-broker-operator:
           matchLabels:
             control-plane: controller-manager
             name: activemq-artemis-operator
+    # The platform worker pool carries the same lifecycle taint as the broker
+    # and test ZooKeeper nodes. The operator must be schedulable before it can
+    # turn an ActiveMQArtemis CR into a StatefulSet and broker pods.
+    tolerations:
+      - key: eid-platform/node-lifecycle
+        operator: Equal
+        value: ondemand
+        effect: NoSchedule
     manager:
       image:
         tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f

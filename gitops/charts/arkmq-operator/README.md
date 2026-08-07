@@ -12,10 +12,15 @@ leader election keeps one replica active and one ready to take over the
 Kubernetes Lease. Hostname and zone topology-spread constraints prefer separate
 nodes and availability zones but use `ScheduleAnyway`, allowing the standby to
 start when maintenance, autoscaling, or untolerated node-pool taints leave only
-one eligible node. The wrapper also adds a PodDisruptionBudget that preserves
-at least one replica during voluntary disruptions. Add narrowly scoped upstream
-`controllerManager.tolerations` only when the operator is intentionally assigned
-to a tainted node pool; do not use a blanket `Exists` toleration.
+one eligible node. The shared values also tolerate exactly
+`eid-platform/node-lifecycle=ondemand:NoSchedule`, matching the platform worker
+pool used by the broker workloads. This is required for reconciliation: a
+synced `ActiveMQArtemis` CR cannot produce a StatefulSet while every operator
+replica is pending on that taint. The toleration does not select a node pool;
+add a node selector separately if placement must be exclusive. The wrapper
+also adds a PodDisruptionBudget that preserves at least one replica during
+voluntary disruptions. Do not replace the exact toleration with a blanket
+`Exists` toleration.
 
 The vendored patch adds the enterprise labels to resource metadata and the
 operator pod template while leaving `Deployment.spec.selector` and the PDB

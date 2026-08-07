@@ -86,6 +86,8 @@ topology="$repo_root/argocd/topology/$environment.yaml"
 applicationset="$environment-artemis-workloads"
 project=messaging-platform
 local_server=https://kubernetes.default.svc
+platform_namespace=$(yq -r '.platformNamespace // ""' "$topology")
+operator_deployment=activemq-artemis-controller-manager
 kubectl_args=(--context "$context" --namespace "$argocd_namespace")
 errors=0
 
@@ -93,6 +95,8 @@ error() {
   printf 'ERROR: %s\n' "$*" >&2
   errors=$((errors + 1))
 }
+
+[[ -n "$platform_namespace" ]] || error "$environment topology does not declare platformNamespace"
 
 controller_json=
 if ! controller_json=$(kubectl "${kubectl_args[@]}" get deployment "$controller_deployment" -o json); then
@@ -107,8 +111,44 @@ else
   fi
 fi
 
+operator_json=
+if [[ -n "$platform_namespace" ]]; then
+  if ! operator_json=$(kubectl --context "$context" --namespace "$platform_namespace" \
+    get deployment "$operator_deployment" -o json); then
+    error "ArkMQ operator Deployment $platform_namespace/$operator_deployment is not readable; the broker CR cannot be reconciled without it"
+  else
+    operator_available=$(yq -r '.status.availableReplicas // 0' <<<"$operator_json")
+    operator_desired=$(yq -r '.spec.replicas // 1' <<<"$operator_json")
+    if [[ "$operator_available" -lt 1 ]]; then
+      error "ArkMQ operator has $operator_available available replicas (desired: $operator_desired); a synced broker CR cannot produce a StatefulSet until the operator runs"
+    else
+      printf 'ArkMQ operator: available (%s/%s replicas)\n' \
+        "$operator_available" "$operator_desired"
+    fi
+
+    operator_lifecycle_toleration_count=$(yq -r '
+      [.spec.template.spec.tolerations[]?
+        | select(
+            .key == "eid-platform/node-lifecycle" and
+            .operator == "Equal" and
+            .value == "ondemand" and
+            .effect == "NoSchedule"
+          )
+      ] | length
+    ' <<<"$operator_json")
+    if [[ "$operator_lifecycle_toleration_count" -ne 1 ]]; then
+      error "ArkMQ operator Deployment does not contain exactly one eid-platform/node-lifecycle=ondemand:NoSchedule toleration"
+    fi
+  fi
+fi
+
 applicationset_json=
 declared_parameter_names=
+declared_repo_url=
+declared_revision=
+declared_path=
+declared_value_files=
+declared_release_name=
 if ! applicationset_json=$(kubectl "${kubectl_args[@]}" get applicationset "$applicationset" -o json); then
   error "ApplicationSet $argocd_namespace/$applicationset is not readable"
 else
@@ -121,6 +161,25 @@ else
     error_count=$(yq -r '[.status.conditions[] | select(.type == "ErrorOccurred" and .status == "True")] | length' <<<"$applicationset_json")
     [[ "$error_count" -eq 0 ]] || error 'ApplicationSet reports ErrorOccurred=True'
   fi
+  parent_multi_source_count=$(yq -r '.spec.template.spec.sources // [] | length' \
+    <<<"$applicationset_json")
+  if [[ "$parent_multi_source_count" -ne 0 ]]; then
+    error "ApplicationSet $argocd_namespace/$applicationset declares spec.sources with $parent_multi_source_count entries; Artemis workloads require exactly one Git/Helm source"
+  fi
+  if [[ "$(yq -r '.spec.template.spec.source == null' <<<"$applicationset_json")" == "true" ]]; then
+    error "ApplicationSet $argocd_namespace/$applicationset does not declare spec.source"
+  fi
+  declared_repo_url=$(yq -r '.spec.template.spec.source.repoURL // ""' \
+    <<<"$applicationset_json")
+  declared_revision=$(yq -r '.spec.template.spec.source.targetRevision // ""' \
+    <<<"$applicationset_json")
+  declared_path=$(yq -r '.spec.template.spec.source.path // ""' \
+    <<<"$applicationset_json")
+  declared_value_files=$(yq -o=json -I=0 \
+    '.spec.template.spec.source.helm.valueFiles // []' <<<"$applicationset_json" |
+    sed "s/{{\\.environment}}/$environment/g")
+  declared_release_name=$(yq -r \
+    '.spec.template.spec.source.helm.releaseName // ""' <<<"$applicationset_json")
   declared_parameter_names=$(yq -r \
     '.spec.template.spec.source.helm.parameters // [] | map(.name) | sort | .[]' \
     <<<"$applicationset_json")
@@ -134,7 +193,7 @@ else
     ] | sort | .[]
   ' <<<"$applicationset_json")
   if [[ -n "$invalid_empty_selector_parameters" ]]; then
-    error "ApplicationSet $argocd_namespace/$applicationset declares selector parameters with value {}; Helm parses {} as an array, not an object: $(paste -sd, <<<"$invalid_empty_selector_parameters")"
+    error "ApplicationSet $argocd_namespace/$applicationset declares selector parameters with value {}; Helm parses {} as an array, not an object: $(paste -sd, - <<<"$invalid_empty_selector_parameters")"
   fi
 fi
 
@@ -186,6 +245,33 @@ for enabled_pair in "${enabled_pairs[@]}"; do
   fi
 
   if [[ -n "$applicationset_json" ]]; then
+    child_multi_source_count=$(yq -r '.spec.sources // [] | length' \
+      <<<"$application_json")
+    if [[ "$child_multi_source_count" -ne 0 ]]; then
+      error "Application $argocd_namespace/$application declares spec.sources with $child_multi_source_count entries; this can render the same ActiveMQArtemis identity more than once"
+    fi
+    if [[ "$(yq -r '.spec.source == null' <<<"$application_json")" == "true" ]]; then
+      error "Application $argocd_namespace/$application does not declare the single spec.source owned by ApplicationSet $applicationset"
+    fi
+
+    actual_repo_url=$(yq -r '.spec.source.repoURL // ""' <<<"$application_json")
+    actual_revision=$(yq -r '.spec.source.targetRevision // ""' <<<"$application_json")
+    actual_path=$(yq -r '.spec.source.path // ""' <<<"$application_json")
+    actual_value_files=$(yq -o=json -I=0 \
+      '.spec.source.helm.valueFiles // []' <<<"$application_json")
+    actual_release_name=$(yq -r \
+      '.spec.source.helm.releaseName // ""' <<<"$application_json")
+    [[ "$actual_repo_url" == "$declared_repo_url" ]] || \
+      error "Application $argocd_namespace/$application repoURL differs from ApplicationSet $applicationset"
+    [[ "$actual_revision" == "$declared_revision" ]] || \
+      error "Application $argocd_namespace/$application targetRevision differs from ApplicationSet $applicationset"
+    [[ "$actual_path" == "$declared_path" ]] || \
+      error "Application $argocd_namespace/$application path differs from ApplicationSet $applicationset"
+    [[ "$actual_value_files" == "$declared_value_files" ]] || \
+      error "Application $argocd_namespace/$application valueFiles differ from ApplicationSet $applicationset"
+    [[ "$actual_release_name" == "$declared_release_name" ]] || \
+      error "Application $argocd_namespace/$application releaseName differs from ApplicationSet $applicationset"
+
     actual_parameter_names=$(yq -r \
       '.spec.source.helm.parameters // [] | map(.name) | sort | .[]' \
       <<<"$application_json")
@@ -198,10 +284,10 @@ for enabled_pair in "${enabled_pairs[@]}"; do
         <(printf '%s\n' "$actual_parameter_names" | sed '/^$/d'))
       parameter_drift=''
       if [[ -n "$unexpected_parameter_names" ]]; then
-        parameter_drift=" unexpected: $(paste -sd, <<<"$unexpected_parameter_names")"
+        parameter_drift=" unexpected: $(paste -sd, - <<<"$unexpected_parameter_names")"
       fi
       if [[ -n "$missing_parameter_names" ]]; then
-        parameter_drift="$parameter_drift missing: $(paste -sd, <<<"$missing_parameter_names")"
+        parameter_drift="$parameter_drift missing: $(paste -sd, - <<<"$missing_parameter_names")"
       fi
       error "Application $argocd_namespace/$application Helm parameters differ from ApplicationSet $applicationset;$parameter_drift"
     fi
@@ -223,6 +309,20 @@ for enabled_pair in "${enabled_pairs[@]}"; do
       | join("; ")
     ' <<<"$application_json")
     error "Application $argocd_namespace/$application has InvalidSpecError: $invalid_spec_message"
+  fi
+
+  repeated_resource_count=$(yq -r '
+    [.status.conditions[]? | select(.type == "RepeatedResourceWarning")]
+    | length
+  ' <<<"$application_json")
+  if [[ "$repeated_resource_count" -ne 0 ]]; then
+    repeated_resource_message=$(yq -r '
+      [.status.conditions[]?
+        | select(.type == "RepeatedResourceWarning")
+        | .message]
+      | join("; ")
+    ' <<<"$application_json")
+    error "Application $argocd_namespace/$application has RepeatedResourceWarning: $repeated_resource_message"
   fi
 done
 
