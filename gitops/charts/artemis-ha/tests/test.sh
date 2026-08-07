@@ -179,6 +179,13 @@ for environment in prod nonprod test; do
   environment_rendered="$temp_dir/$environment.yaml"
   yq -e "select(.kind == \"ActiveMQArtemis\") | (.metadata.labels.env == \"$environment\") and (.spec.deploymentPlan.labels.env == \"$environment\")" \
     "$environment_rendered" >/dev/null
+  yq -e 'select(.kind == "ActiveMQArtemis") |
+    (.spec.deploymentPlan.tolerations | length) == 1 and
+    .spec.deploymentPlan.tolerations[0].key == "eid-platform/node-lifecycle" and
+    .spec.deploymentPlan.tolerations[0].operator == "Equal" and
+    .spec.deploymentPlan.tolerations[0].value == "ondemand" and
+    .spec.deploymentPlan.tolerations[0].effect == "NoSchedule"' \
+    "$environment_rendered" >/dev/null
 done
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$prod_rendered")" == "PLACEHOLDER_PROD_GP3_STORAGE_CLASS" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$nonprod_rendered")" == "PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS" ]]

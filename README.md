@@ -4,6 +4,18 @@ This repository is organized into three operational areas. Each area has its
 own README and Makefile; the root Makefile provides stable shortcuts across
 them.
 
+## Execution boundary
+
+This checkout is an offline/test copy. The real Artemis deployment, AWS
+credentials, and Kubernetes access exist only on the authorized work computer.
+Do not run AWS SSO, `kubectl`, Argo synchronization, deployment, or other live
+infrastructure operations from this workspace, even if local context entries
+or expired credentials are present.
+
+Use this checkout to edit and validate repository artifacts. Run commands that
+collect live cluster evidence only on the work computer, then bring the
+sanitized output back here for diagnosis and repository-owned fixes.
+
 ## Areas
 
 ### [`local`](local)

@@ -108,6 +108,7 @@ else
 fi
 
 applicationset_json=
+declared_parameter_names=
 if ! applicationset_json=$(kubectl "${kubectl_args[@]}" get applicationset "$applicationset" -o json); then
   error "ApplicationSet $argocd_namespace/$applicationset is not readable"
 else
@@ -119,6 +120,21 @@ else
     yq -r '.status.conditions[] | "  \(.type)=\(.status): \(.message // \"\")"' <<<"$applicationset_json"
     error_count=$(yq -r '[.status.conditions[] | select(.type == "ErrorOccurred" and .status == "True")] | length' <<<"$applicationset_json")
     [[ "$error_count" -eq 0 ]] || error 'ApplicationSet reports ErrorOccurred=True'
+  fi
+  declared_parameter_names=$(yq -r \
+    '.spec.template.spec.source.helm.parameters // [] | map(.name) | sort | .[]' \
+    <<<"$applicationset_json")
+  invalid_empty_selector_parameters=$(yq -r '
+    [.spec.template.spec.source.helm.parameters[]?
+      | select(
+          (.value == "{}") and
+          (.name | test("^networkPolicy\\.(clientSources|managementSources|monitoringSources)\\[[0-9]+\\]\\.(namespaceSelector|podSelector)$"))
+        )
+      | .name
+    ] | sort | .[]
+  ' <<<"$applicationset_json")
+  if [[ -n "$invalid_empty_selector_parameters" ]]; then
+    error "ApplicationSet $argocd_namespace/$applicationset declares selector parameters with value {}; Helm parses {} as an array, not an object: $(paste -sd, <<<"$invalid_empty_selector_parameters")"
   fi
 fi
 
@@ -167,6 +183,28 @@ for enabled_pair in "${enabled_pairs[@]}"; do
     error "Application $argocd_namespace/$application is not owned by ApplicationSet $applicationset"
   else
     printf 'Generated Application: %s/%s\n' "$argocd_namespace" "$application"
+  fi
+
+  if [[ -n "$applicationset_json" ]]; then
+    actual_parameter_names=$(yq -r \
+      '.spec.source.helm.parameters // [] | map(.name) | sort | .[]' \
+      <<<"$application_json")
+    if [[ "$actual_parameter_names" != "$declared_parameter_names" ]]; then
+      unexpected_parameter_names=$(comm -13 \
+        <(printf '%s\n' "$declared_parameter_names" | sed '/^$/d') \
+        <(printf '%s\n' "$actual_parameter_names" | sed '/^$/d'))
+      missing_parameter_names=$(comm -23 \
+        <(printf '%s\n' "$declared_parameter_names" | sed '/^$/d') \
+        <(printf '%s\n' "$actual_parameter_names" | sed '/^$/d'))
+      parameter_drift=''
+      if [[ -n "$unexpected_parameter_names" ]]; then
+        parameter_drift=" unexpected: $(paste -sd, <<<"$unexpected_parameter_names")"
+      fi
+      if [[ -n "$missing_parameter_names" ]]; then
+        parameter_drift="$parameter_drift missing: $(paste -sd, <<<"$missing_parameter_names")"
+      fi
+      error "Application $argocd_namespace/$application Helm parameters differ from ApplicationSet $applicationset;$parameter_drift"
+    fi
   fi
 
   actual_server=$(yq -r '.spec.destination.server // ""' <<<"$application_json")

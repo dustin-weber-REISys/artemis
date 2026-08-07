@@ -29,6 +29,12 @@ though client Services retain the active-only readiness gate. ZooKeeper's
 companion chart keeps its three voters on separate hosts and spreads them over
 the environment's available zone count.
 
+Every environment overlay admits broker pods to its on-demand worker nodes with
+the exact `eid-platform/node-lifecycle=ondemand:NoSchedule` toleration. Keep
+this aligned with the environment node-pool taint. A synced workload with
+broker pods remaining unscheduled has no console Service endpoints, so the
+shared ALB correctly returns 503 until at least the active broker is ready.
+
 Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external
 ZooKeeper connection and selectors, ingress identity, and the approved policy

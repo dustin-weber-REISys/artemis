@@ -3,6 +3,12 @@
 Use this after Argo CD applies a new Artemis workload. Replace the uppercase
 tokens with values supplied by the cluster platform; do not commit them.
 
+> **Where to run live checks:** This repository checkout is an offline/test
+> copy. Run every AWS, `kubectl`, Argo CD, and live EKS command in this runbook
+> only from the authorized work computer. From this workspace, limit work to
+> repository rendering, tests, and analysis of sanitized evidence copied from
+> that computer. Do not start AWS SSO or attempt cluster access here.
+
 ## Preconditions
 
 - Confirm the approved image/chart digests and the maintenance window.
@@ -19,9 +25,17 @@ tokens with values supplied by the cluster platform; do not commit them.
 
   A synced ApplicationSet with no status conditions has not been reconciled.
   The verifier also confirms that each enabled broker pair's exact local
-  destination is present in the `messaging-platform` AppProject and that the
-  generated Application has no `InvalidSpecError`. Confirm the cluster's Argo
-  CD installation enables an available `argocd-applicationset-controller`
+  destination is present in the `messaging-platform` AppProject, the generated
+  Application has no `InvalidSpecError`, and it has exactly the Helm
+  parameter names declared by its owning ApplicationSet. This catches stale or
+  UI-added overrides such as `networkPolicy.*Selector={}`; Helm interprets that
+  syntax as an empty array, not the selector object required by the chart.
+  Check the owning ApplicationSet first. If it declares the override, sync the
+  root Application to the approved Git revision and reconcile the
+  ApplicationSet; deleting generated child Applications only recreates the
+  same invalid parameters. If only the child differs, reconcile its owning
+  ApplicationSet. Do not weaken the values schema. Confirm the cluster's Argo CD
+  installation enables an available `argocd-applicationset-controller`
   Deployment in the same namespace as the ApplicationSet. Enabling a topology
   entry cannot create a valid child Application until the controller is
   running and the AppProject permits its workload namespace.
@@ -39,7 +53,12 @@ tokens with values supplied by the cluster platform; do not commit them.
 1. Check Argo application `Synced` and `Healthy`, including operator and CRD
    sync waves.
 2. Check two broker pods are scheduled on distinct nodes and zones, each has a
-   separate `ReadWriteOnce` PVC, and the PDB is respected.
+   separate `ReadWriteOnce` PVC, and the PDB is respected. `Synced` alone means
+   only that the declarative resources were applied. If no broker is scheduled,
+   inspect pod events for an untolerated node taint before debugging ingress;
+   the console Service will have no endpoint and the ALB will return 503 until
+   an active broker is ready. Every environment overlay intentionally tolerates
+   only `eid-platform/node-lifecycle=ondemand:NoSchedule`.
 3. Check readiness exposes only the active broker. Passive operation must not
    cause a liveness restart loop.
 4. Check exactly one broker is active, the peer is passive, replication is
