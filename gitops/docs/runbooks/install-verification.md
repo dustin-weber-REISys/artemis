@@ -56,6 +56,72 @@ tokens with values supplied by the cluster platform; do not commit them.
   --context CONTEXT --cluster CLUSTER --namespace NAMESPACE
 ```
 
+## Broker administrator credential handoff
+
+Keycloak is not the source of the initial Artemis administrator credential.
+When `spec.adminUser` and `spec.adminPassword` are absent, the ArkMQ operator
+generates both values in a Secret named
+`BROKER_CR-credentials-secret`. The keys are `AMQ_USER` and `AMQ_PASSWORD`.
+This repository intentionally contains neither value.
+
+Run the commands in this section only from the authorized work computer. First
+confirm the context and inventory the generated credential Secrets without
+reading their values:
+
+```sh
+kubectl config current-context
+kubectl --context CONTEXT -n NAMESPACE get secrets \
+  -o custom-columns=NAME:.metadata.name --no-headers \
+  | awk '/-credentials-secret$/ {print $1}'
+```
+
+If the authorized identity has cluster-wide read access, inventory every
+broker credential Secret in that cluster without reading values:
+
+```sh
+kubectl --context CONTEXT get secrets --all-namespaces \
+  -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name \
+  --no-headers \
+  | awk '$2 ~ /-credentials-secret$/ {print $1, $2}'
+```
+
+For the current test Sky deployment, the generated Secret is
+`test-sky-artemis-artemis-ha-credentials-secret` in `artemis-int-sky`.
+Retrieve one credential pair at a time in a private terminal:
+
+```sh
+kubectl --context CONTEXT -n artemis-int-sky get secret \
+  test-sky-artemis-artemis-ha-credentials-secret \
+  -o jsonpath='{.data.AMQ_USER}' | base64 --decode; echo
+
+kubectl --context CONTEXT -n artemis-int-sky get secret \
+  test-sky-artemis-artemis-ha-credentials-secret \
+  -o jsonpath='{.data.AMQ_PASSWORD}' | base64 --decode; echo
+```
+
+For another broker pair, substitute its workload namespace and exact
+`ActiveMQArtemis` resource name. Confirm the expected keys without revealing
+their values before retrieval:
+
+```sh
+kubectl --context CONTEXT -n NAMESPACE get secret \
+  BROKER_CR-credentials-secret \
+  -o go-template='{{range $key, $value := .data}}{{$key}}{{"\n"}}{{end}}'
+```
+
+Record the pair in the approved Vault location using the security team's
+authorized UI or secret-input workflow, then verify access and ownership. Do
+not put either value in Markdown, Git, Helm values, Argo parameters, tickets,
+chat, shell arguments, screenshots, or captured command output. Do not bulk
+dump all namespaces. The Vault path should identify the environment, workload
+namespace, and broker CR so each pair can be rotated independently.
+
+This is a credential custody handoff, not completed runtime integration. The
+chart's `vault.enabled` option remains off because the injected file is not yet
+wired to the operator's `BROKER_CR-credentials-secret`. Copying the generated
+value into Vault therefore does not rotate or replace the credential used by
+the running broker.
+
 ## Verification
 
 1. Check Argo application `Synced` and `Healthy`, including operator and CRD
