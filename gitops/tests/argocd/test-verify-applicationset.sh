@@ -123,8 +123,9 @@ case " $* " in
     if [ "${MOCK_MULTI_SOURCE:-false}" = true ]; then
       sources=',"sources":[{"repoURL":"https://example.invalid/artemis.git","path":"gitops/charts/artemis-ha"},{"repoURL":"https://example.invalid/artemis.git","path":"gitops/charts/artemis-ha"}]'
     fi
-    printf '{"metadata":{"ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"repoURL":"https://example.invalid/artemis.git","targetRevision":"main","path":"%s","helm":{"valueFiles":["../../environments/test/artemis-values.yaml"],"parameters":%s}}%s,"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_TEST_NAMESPACE_SKY"}},"status":{"conditions":%s}}\n' \
-      "$path" "$parameters" "$sources" "$conditions"
+    workload_revision=${MOCK_WORKLOAD_RECONCILED_REVISION:-}
+    printf '{"metadata":{"ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"repoURL":"https://example.invalid/artemis.git","targetRevision":"main","path":"%s","helm":{"valueFiles":["../../environments/test/artemis-values.yaml"],"parameters":%s}}%s,"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_TEST_NAMESPACE_SKY"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s}}\n' \
+      "$path" "$parameters" "$sources" "$workload_revision" "$conditions"
     ;;
   *)
     printf 'unexpected kubectl arguments: %s\n' "$*" >&2
@@ -142,6 +143,7 @@ PATH="$temp_dir/bin:$PATH" \
 grep -Fq 'Approved project destination: https://kubernetes.default.svc/PLACEHOLDER_TEST_NAMESPACE_SKY' "$temp_dir/pass.out"
 grep -Fq 'ArkMQ operator: available (2/2 replicas)' "$temp_dir/pass.out"
 grep -Fq 'ArkMQ operator watch scope: cluster-wide' "$temp_dir/pass.out"
+grep -Fq 'Local chart render: one ActiveMQArtemis, no duplicate identities, required resourceTemplate labels present' "$temp_dir/pass.out"
 grep -Fq 'Broker reconciliation conditions: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha generation=3' "$temp_dir/pass.out"
 grep -Fq 'Broker StatefulSet: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss desired=2 current=2 ready=2' "$temp_dir/pass.out"
 grep -Fq 'ApplicationSet verification: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
@@ -331,6 +333,20 @@ if PATH="$temp_dir/bin:$PATH" \
 fi
 grep -Fq 'has no unscoped spec.resourceTemplates entry carrying required labels: app,contact,env,fismaid; sync gitops/charts/artemis-ha/templates/activemqartemis.yaml' \
   "$temp_dir/broker-resource-template-labels.out"
+
+checkout_revision=$(git -C "$repo_root/.." rev-parse HEAD)
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS=true \
+  MOCK_WORKLOAD_RECONCILED_REVISION="$checkout_revision" \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/same-revision-manifest-drift.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted live manifest drift at the checkout revision' >&2
+  exit 1
+fi
+grep -Fq "differs from the valid local Helm render at the same revision $checkout_revision; inspect Argo CD's generated manifests and request a hard refresh through the authorized workflow" \
+  "$temp_dir/same-revision-manifest-drift.out"
 
 if PATH="$temp_dir/bin:$PATH" \
   MOCK_SOURCE_DRIFT=true \

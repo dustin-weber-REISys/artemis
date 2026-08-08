@@ -139,7 +139,9 @@ done
 Finally, after the updated verifier is present in the work-computer checkout,
 run it once and return the complete output. It reports missing required labels
 separately for CR metadata, broker pod metadata, and operator-generated
-resources:
+resources. It also renders the exact pair inputs from the checked-out chart,
+checks that the render contains one broker CR and no duplicate resource
+identities, and compares the child Application revision with the checkout:
 
 ```sh
 ./gitops/scripts/verify-argocd-applicationset.sh \
@@ -147,6 +149,21 @@ resources:
   --argocd-namespace "$ARGOCD_NAMESPACE" \
   --environment test
 ```
+
+For the evidence captured on 2026-08-08, both child Applications were
+`Synced`, the operator was available and cluster-scoped, and both live broker
+CRs had the required metadata and deployment-plan labels. Both CRs nevertheless
+reported `resourceTemplates: []`; Gatekeeper therefore rejected each generated
+StatefulSet. The next run should stop after the verifier if it reports either
+of these boundaries:
+
+- The local render is also missing `resourceTemplates`: the checked-out
+  workload chart does not contain the repository label-propagation fix.
+- The local render has one correctly labeled CR, the live CR is missing the
+  template, and both report the same Git revision: preserve the verifier
+  output, inspect Argo CD's generated manifests, and request a hard refresh
+  through the authorized Argo CD workflow. Do not change the operator or
+  Gatekeeper policy; neither owns this manifest drift.
 
 ## Step-by-step triage
 
