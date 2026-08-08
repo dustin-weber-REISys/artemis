@@ -44,6 +44,176 @@ printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nA
   "$BROKER_CR"
 ```
 
+## Missing operator Deployment after an immutable-selector fix
+
+Use this focused sequence when Argo CD previously reported
+`spec.selector ... field is immutable`, the chart selector has been corrected,
+and neither the operator Deployment nor its pods now exists. It determines
+whether Argo has reconciled the corrected commit, whether the Deployment is in
+the desired resource inventory, and whether its latest create was rejected.
+
+Set the expected environment and Helm release to the same identity as the
+operator Application. For nonproduction, for example:
+
+```sh
+# Run this section from the repository root, not from Downloads or another
+# directory. Replace the example path with the work-computer checkout.
+cd /path/to/elis-artemis
+git rev-parse --show-toplevel
+
+EXPECTED_ENVIRONMENT=nonprod
+EXPECTED_RELEASE=nonprod-arkmq-operator
+EXPECTED_REVISION=$(git rev-parse HEAD)
+
+printf 'application=%s environment=%s release=%s localRevision=%s\n' \
+  "$OPERATOR_APPLICATION" \
+  "$EXPECTED_ENVIRONMENT" \
+  "$EXPECTED_RELEASE" \
+  "$EXPECTED_REVISION"
+```
+
+### 1. Compare the configured source, reconciled source, and latest operation
+
+The Application name, environment parameter, and Helm release must describe
+the same environment. The sync revision must equal the commit containing the
+selector fix before later cluster evidence can validate that fix.
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
+  yq '{
+    "application": .metadata.name,
+    "configuredSource": {
+      "path": .spec.source.path,
+      "targetRevision": .spec.source.targetRevision,
+      "releaseName": .spec.source.helm.releaseName,
+      "environment": ([
+        .spec.source.helm.parameters[]? |
+        select(.name == "global.requiredLabels.env") |
+        .value
+      ][0] // "")
+    },
+    "reconciledSource": (.status.sync.comparedTo.source // {}),
+    "sync": (.status.sync // {}),
+    "health": (.status.health // {}),
+    "conditions": (.status.conditions // []),
+    "operation": {
+      "phase": (.status.operationState.phase // ""),
+      "message": (.status.operationState.message // ""),
+      "startedAt": (.status.operationState.startedAt // ""),
+      "finishedAt": (.status.operationState.finishedAt // ""),
+      "resources": [
+        .status.operationState.syncResult.resources[]? |
+        select(
+          .name == "activemq-artemis-controller-manager" or
+          .name == "activemq-artemis-operator-role" or
+          .name == "activemq-artemis-operator-rolebinding" or
+          .name == "activemq-artemis-leader-election-role" or
+          .name == "activemq-artemis-leader-election-rolebinding"
+        ) |
+        {
+          "group": .group,
+          "kind": .kind,
+          "namespace": .namespace,
+          "name": .name,
+          "status": .status,
+          "hookPhase": .hookPhase,
+          "message": .message
+        }
+      ]
+    }
+  }'
+```
+
+### 2. Check whether Argo currently tracks the expected resources
+
+```sh
+kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
+  yq -r '.status.resources[]? |
+    select(
+      .name == "activemq-artemis-controller-manager" or
+      .name == "activemq-artemis-operator-role" or
+      .name == "activemq-artemis-operator-rolebinding" or
+      .name == "activemq-artemis-leader-election-role" or
+      .name == "activemq-artemis-leader-election-rolebinding"
+    ) |
+    [
+      (.group // ""),
+      .kind,
+      (.namespace // ""),
+      .name,
+      (.status // ""),
+      (.health.status // ""),
+      ((.requiresPruning // false) | tostring)
+    ] | @tsv'
+```
+
+An absent Deployment row means Argo's current manifest cache did not render
+the Deployment. A Deployment row with no live object means the operation and
+event messages are the primary evidence for a rejected create.
+
+### 3. Check live operator resources without stopping on `NotFound`
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o yaml
+kubectl -n "$PLATFORM_NAMESPACE" get serviceaccount "$OPERATOR_SERVICE_ACCOUNT" -o yaml
+kubectl -n "$PLATFORM_NAMESPACE" get poddisruptionbudget "$OPERATOR_DEPLOYMENT" -o yaml
+
+kubectl -n "$PLATFORM_NAMESPACE" get replicasets,pods \
+  -l name=activemq-artemis-operator \
+  -o wide
+
+kubectl get clusterrole activemq-artemis-operator-role -o yaml
+kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o yaml
+```
+
+Preserve every `NotFound` response; do not replace or recreate these objects
+manually while Argo owns the Application.
+
+### 4. Collect namespace-level create and admission failures
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get events \
+  --sort-by=.metadata.creationTimestamp |
+  tail -150 |
+  grep -Ei \
+    'activemq-artemis|failedcreate|denied|forbidden|admission|gatekeeper|selector|image|serviceaccount'
+```
+
+If the filtered command prints nothing, preserve the unfiltered last 50 events:
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get events \
+  --sort-by=.metadata.creationTimestamp |
+  tail -50
+```
+
+### 5. Confirm the corrected local chart still renders one Deployment
+
+These commands only build the file-based Helm dependency in the local checkout
+and render manifests; they do not contact the cluster or expose Secret data.
+
+```sh
+helm dependency build gitops/charts/arkmq-operator
+
+helm template "$EXPECTED_RELEASE" gitops/charts/arkmq-operator \
+  --namespace "$PLATFORM_NAMESPACE" \
+  --set-string "global.requiredLabels.env=$EXPECTED_ENVIRONMENT" |
+  yq 'select(
+    .kind == "Deployment" and
+    .metadata.name == "activemq-artemis-controller-manager"
+  ) | {
+    "name": .metadata.name,
+    "labels": .metadata.labels,
+    "selector": .spec.selector.matchLabels,
+    "podLabels": .spec.template.metadata.labels,
+    "serviceAccountName": .spec.template.spec.serviceAccountName
+  }'
+```
+
+The selector must contain exactly `control-plane: controller-manager` and
+`name: activemq-artemis-operator`. The pod labels should additionally contain
+the Helm release and required enterprise labels.
+
 ## Priority evidence: run these first
 
 For an operator that is running but logging cluster-scoped `forbidden` errors,
