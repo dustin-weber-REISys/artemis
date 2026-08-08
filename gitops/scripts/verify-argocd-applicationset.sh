@@ -570,7 +570,14 @@ for enabled_pair in "${enabled_pairs[@]}"; do
       'select(.kind == "ActiveMQArtemis" and .metadata.name == strenv(BROKER_CR)) | .metadata.name' \
       <<<"$rendered_workload" | awk 'END { print NR }')
     if [[ "$rendered_broker_count" -ne 1 ]]; then
-      error "Local Helm render for Application $application produced ActiveMQArtemis $broker_cr $rendered_broker_count times; expected exactly once"
+      rendered_broker_sources=$(awk '
+        /^# Source: / {
+          source = $0
+          sub(/^# Source: /, "", source)
+        }
+        /^kind: ActiveMQArtemis$/ { print source }
+      ' <<<"$rendered_workload" | sort | uniq -c | awk '{$1=$1; print}' | paste -sd, -)
+      error "Local Helm render for Application $application produced ActiveMQArtemis $broker_cr $rendered_broker_count times; expected exactly once; rendered sources (count path): ${rendered_broker_sources:-unknown}"
     fi
 
     duplicate_resource_identities=$(RELEASE_NAMESPACE="$workload_namespace" yq -r '

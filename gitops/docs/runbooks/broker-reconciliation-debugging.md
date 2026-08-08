@@ -13,6 +13,13 @@ Run live-cluster commands only from the authorized work computer. This
 repository checkout is an offline/test copy and must not be used to access the
 real cluster.
 
+```sh
+git status --short --untracked-files=all
+
+rg -n \
+  '^kind:[[:space:]]+ActiveMQArtemis$|deploymentPlan:|resourceTemplates:' \
+  gitops/charts/artemis-ha
+```
 ## Set the resource names
 
 Set these once for the affected broker pair. Replace the example values with
@@ -157,6 +164,14 @@ reported `resourceTemplates: []`; Gatekeeper therefore rejected each generated
 StatefulSet. The next run should stop after the verifier if it reports either
 of these boundaries:
 
+- The local render contains the broker CR more than once: do not hard-refresh
+  or sync yet. The verifier prints every rendering template as `count path`;
+  retain only the canonical
+  `artemis-ha/templates/activemqartemis.yaml` definition, port any missing
+  changes into it, and remove or rename stale Helm-renderable `.yaml` copies.
+  Compare `git status --short --untracked-files=all` with `git ls-files` because
+  a local-only third template can make the worktree render count differ from
+  Argo CD's warning at the committed revision.
 - The local render is also missing `resourceTemplates`: the checked-out
   workload chart does not contain the repository label-propagation fix.
 - The local render has one correctly labeled CR, the live CR is missing the
