@@ -416,6 +416,9 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment operator image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"
+  assert_equal "$environment operator private image tag" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.tag") | .value' "$operator")" \
+    2.2.0
   assert_equal "$environment operator init-image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-init"

@@ -199,7 +199,11 @@ Runtime image locations are derived from two ECR base placeholders:
 The checked-in operator wrapper currently resolves its pinned dependency from
 `quay.io/arkmq-org/helm-charts`. The operator Applications themselves use the
 Artemis Git repository as their source. The ECR base placeholders continue to
-supply operator and operand image repositories.
+supply operator and operand image repositories. The manager image is selected
+by the immutable `2.2.0` tag in each operator Application. Do not append the
+upstream Quay digest to that private ECR repository unless the promotion record
+shows the same digest exists in the target repository; registry-side manifest
+conversion or an incomplete copy otherwise produces `ErrImagePull: NotFound`.
 
 When private chart mirroring is resumed, change the wrapper's dependency
 repository to the matching `<ECR base>/helm` namespace before enabling the

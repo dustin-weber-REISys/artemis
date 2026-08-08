@@ -437,6 +437,43 @@ kubectl -n "$PLATFORM_NAMESPACE" get events \
   tail -100
 ```
 
+For `ErrImagePull`, print the exact desired manager reference and its waiting
+message. A private ECR reference ending in `@sha256:... not found` means the
+specified digest is absent from that repository; it is distinct from an ECR
+authorization failure.
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+  yq -r '.spec.template.spec.containers[] |
+    select(.name == "manager") |
+    "desiredImage=" + .image'
+
+kubectl -n "$PLATFORM_NAMESPACE" get pods \
+  -l name=activemq-artemis-operator \
+  -o json |
+  yq -r '.items[] |
+    .metadata.name as $pod |
+    .status.containerStatuses[]? |
+    select(.name == "manager") |
+    [$pod, (.state.waiting.reason // ""), (.state.waiting.message // "")] |
+    @tsv'
+```
+
+From the authorized work computer, this read-only ECR query confirms that the
+mirrored tag exists and records the target registry's digest. Set the region
+and repository name to the values from the desired image reference.
+
+```sh
+AWS_REGION=us-east-1
+OPERATOR_ECR_REPOSITORY=artemis/arkmq-operator
+
+aws ecr describe-images \
+  --region "$AWS_REGION" \
+  --repository-name "$OPERATOR_ECR_REPOSITORY" \
+  --image-ids imageTag=2.2.0 \
+  --query 'imageDetails[].{digest:imageDigest,tags:imageTags,pushedAt:imagePushedAt}'
+```
+
 ## 3. Read the broker CR reconciliation status
 
 The CR status is the most important discriminator. Argo CD can report a

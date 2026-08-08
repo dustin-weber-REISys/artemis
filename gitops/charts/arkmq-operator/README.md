@@ -48,3 +48,7 @@ identity or selector.
 Upstream values belong under the `arkmq-org-broker-operator` key in this
 chart's [`values.yaml`](values.yaml). Each environment's operator Application
 sets `global.requiredLabels.env` and its private ECR repositories explicitly.
+It also overrides the manager image to the mirrored `2.2.0` ECR tag. The
+wrapper default records the upstream digest, but an upstream registry digest
+must not be combined with a private repository unless the promotion record
+confirms that the private registry preserved that exact manifest digest.

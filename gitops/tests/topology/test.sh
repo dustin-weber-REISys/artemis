@@ -182,6 +182,13 @@ assert_bootstrap_rejected \
   'test operator cluster scope: expected true, got false'
 
 assert_bootstrap_rejected \
+  upstream-digest-on-private-operator-image \
+  test \
+  operator-application.yaml \
+  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.tag") | .value) = "2.2.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  'test operator private image tag: expected 2.2.0, got 2.2.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
+assert_bootstrap_rejected \
   missing-operator-prune-last \
   test \
   operator-application.yaml \

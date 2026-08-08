@@ -20,6 +20,10 @@ spec:
           value: "true"
         - name: arkmq-org-broker-operator.controllerManager.manager.image.repository
           value: PLACEHOLDER_PROD_ECR_REPOSITORY/arkmq-operator
+        # The private mirror owns its registry digest. Do not combine this ECR
+        # repository with the digest of the upstream Quay manifest.
+        - name: arkmq-org-broker-operator.controllerManager.manager.image.tag
+          value: "2.2.0"
         - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
           value: PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init
         - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository

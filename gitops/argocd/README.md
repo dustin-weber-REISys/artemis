@@ -46,7 +46,10 @@ were rendered differently by earlier revisions. `PruneLast=true` keeps the old
 controller available until the replacement is healthy, then automated pruning
 removes it.
 Operator and operand image locations remain environment-specific ECR
-placeholders in the bootstrap manifests.
+placeholders in the bootstrap manifests. The manager image uses the mirrored
+`2.2.0` tag rather than the upstream Quay digest: ECR returned `NotFound` when
+the private repository was combined with a digest that was not present in that
+repository. The private tag must be immutable under the platform's ECR policy.
 
 The repository-local chart dependency needs no runtime Helm-registry
 credentials. The separate ECR mirroring design remains documented in

@@ -25,6 +25,7 @@ for environment in test nonprod prod; do
     --namespace example-platform \
     --set-string "global.requiredLabels.env=$environment" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$rendered"
@@ -53,11 +54,12 @@ for environment in test nonprod prod; do
         ] | length) == 1)
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" yq -e '
+  ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" yq -e '
     select(.kind == "Deployment")
     | (.metadata.name == "activemq-artemis-controller-manager-v2")
       and (.spec.replicas == 2)
       and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
+      and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:2.2.0"))
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
       and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
       and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")

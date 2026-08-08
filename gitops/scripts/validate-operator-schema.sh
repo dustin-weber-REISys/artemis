@@ -79,6 +79,7 @@ for environment in test nonprod prod; do
     --namespace example-platform \
     --set-string "global.requiredLabels.env=$environment" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
     > "$operator_rendered"
@@ -89,6 +90,12 @@ for environment in test nonprod prod; do
      [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels."control-plane"' "$operator_rendered")" != "controller-manager" ]] || \
      [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels.name' "$operator_rendered")" != "activemq-artemis-operator" ]]; then
     printf '%s operator Deployment must use the v2 identity and stable two-label selector\n' \
+      "$environment" >&2
+    exit 1
+  fi
+
+  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:2.2.0" ]]; then
+    printf '%s operator Deployment must resolve the private ECR image by its mirrored 2.2.0 tag\n' \
       "$environment" >&2
     exit 1
   fi
