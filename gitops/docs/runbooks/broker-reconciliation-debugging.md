@@ -16,9 +16,11 @@ real cluster.
 ```sh
 git status --short --untracked-files=all
 
-rg -n \
-  '^kind:[[:space:]]+ActiveMQArtemis$|deploymentPlan:|resourceTemplates:' \
-  gitops/charts/artemis-ha
+find gitops/charts/artemis-ha/templates \
+  -type f \( -name '*.yaml' -o -name '*.yml' \) \
+  -exec grep -nHE \
+  '^[[:space:]]*kind:[[:space:]]*ActiveMQArtemis|^[[:space:]]*deploymentPlan:|^[[:space:]]*resourceTemplates:' \
+  {} +
 ```
 ## Set the resource names
 
