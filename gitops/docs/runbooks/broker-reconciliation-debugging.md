@@ -86,9 +86,10 @@ with the direct commands below.
 Check the workload Application and the operator Application together. The
 operator Application must be current before a synced broker CR can produce a
 StatefulSet. Run the Git commands from the root of the authorized
-work-computer checkout. A branch name such as `main` is not sufficient
-evidence: record the local and remote commit IDs and compare them with each
-Application's reconciled commit.
+work-computer checkout. Revision IDs establish whether Argo has reconciled
+that deployment repository; do not compare them with an offline source
+repository from which files were copied. Directly inspect and render the
+work-computer files when the repositories have independent history.
 
 ```sh
 git rev-parse HEAD origin/main
@@ -138,27 +139,98 @@ below. If the reconciled commit differs from the expected local or remote
 commit, preserve all three IDs; do not patch a different revision based only
 on live symptoms.
 
-If the live operator Application has the wrong environment or release, does
-not track its expected cluster RBAC, or reports a reconciled commit different
-from the work-computer checkout, collect the exact reconciled files and the
-root Application that selected the bootstrap directory. `git show` and
-`git ls-tree` read the commit without checking it out or changing the working
-tree. Preserve a missing-commit or missing-file error because it distinguishes
-repository drift from an incorrect manifest at the reconciled revision.
+If the live operator Application has the wrong environment or release or does
+not track its expected cluster RBAC, inspect and render the deployment
+repository's current files directly. The render is built in a temporary
+directory and does not change the worktree or cluster. It also exposes hidden
+characters in template filenames and duplicate rendered resource identities.
 
 ```sh
-LIVE_REV=$(kubectl -n "$ARGOCD_NAMESPACE" \
-  get application "$OPERATOR_APPLICATION" \
-  -o jsonpath='{.status.sync.revision}')
+OPERATOR_MANIFEST=gitops/argocd/bootstrap/test/operator-application.yaml
+OPERATOR_CHART=gitops/charts/arkmq-operator
+RENDER_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/arkmq-render.XXXXXX")
 
-printf 'localHEAD=%s\noriginMain=%s\nliveOperatorRevision=%s\n' \
-  "$(git rev-parse HEAD)" \
-  "$(git rev-parse origin/main)" \
-  "$LIVE_REV"
+yq '{
+  "application": .metadata.name,
+  "sourcePath": .spec.source.path,
+  "releaseName": .spec.source.helm.releaseName,
+  "environment": ([
+    .spec.source.helm.parameters[]? |
+    select(.name == "global.requiredLabels.env") |
+    .value
+  ][0] // ""),
+  "clusterScoped": ([
+    .spec.source.helm.parameters[]? |
+    select(.name == "arkmq-org-broker-operator.clusterScoped") |
+    .value
+  ][0] // ""),
+  "destination": .spec.destination
+}' "$OPERATOR_MANIFEST"
 
-git show "${LIVE_REV}:gitops/argocd/bootstrap/test/operator-application.yaml"
-git show "${LIVE_REV}:gitops/charts/arkmq-operator/Chart.yaml"
-git ls-tree -r --name-only "$LIVE_REV" -- gitops/charts/arkmq-operator
+HELM_RELEASE=$(yq -r '.spec.source.helm.releaseName' "$OPERATOR_MANIFEST")
+HELM_ENVIRONMENT=$(yq -r '
+  .spec.source.helm.parameters[] |
+  select(.name == "global.requiredLabels.env") |
+  .value
+' "$OPERATOR_MANIFEST")
+HELM_CLUSTER_SCOPED=$(yq -r '
+  .spec.source.helm.parameters[] |
+  select(.name == "arkmq-org-broker-operator.clusterScoped") |
+  .value
+' "$OPERATOR_MANIFEST")
+
+LC_ALL=C ls -lb \
+  "$OPERATOR_CHART/vendor/arkmq-org-broker-operator/templates"
+sed -n '1,45p;140,170p' \
+  "$OPERATOR_CHART/vendor/arkmq-org-broker-operator/templates/operator-rbac.yaml"
+
+cp -R "$OPERATOR_CHART" "$RENDER_ROOT/chart"
+rm -rf "$RENDER_ROOT/chart/charts"
+helm dependency build "$RENDER_ROOT/chart"
+helm template "$HELM_RELEASE" "$RENDER_ROOT/chart" \
+  --namespace "$PLATFORM_NAMESPACE" \
+  --set-string "global.requiredLabels.env=$HELM_ENVIRONMENT" \
+  --set-string \
+    "arkmq-org-broker-operator.clusterScoped=$HELM_CLUSTER_SCOPED" \
+  > "$RENDER_ROOT/operator-rendered.yaml"
+
+printf '%s\n' 'Rendered operator RBAC identities:'
+yq -r '
+  select(
+    .kind == "Role" or
+    .kind == "RoleBinding" or
+    .kind == "ClusterRole" or
+    .kind == "ClusterRoleBinding"
+  ) |
+  [
+    .apiVersion,
+    .kind,
+    (.metadata.namespace // "<implicit>"),
+    .metadata.name,
+    (.roleRef.kind // ""),
+    (.roleRef.name // "")
+  ] | @tsv
+' "$RENDER_ROOT/operator-rendered.yaml"
+
+printf '%s\n' 'Duplicate rendered identities (no output expected):'
+yq -r '
+  select(
+    .apiVersion != null and
+    .kind != null and
+    .metadata.name != null
+  ) |
+  [
+    .apiVersion,
+    .kind,
+    (.metadata.namespace // "<implicit>"),
+    .metadata.name
+  ] | @tsv
+' "$RENDER_ROOT/operator-rendered.yaml" |
+  sort |
+  uniq -cd
+
+printf 'Temporary rendered manifest: %s\n' \
+  "$RENDER_ROOT/operator-rendered.yaml"
 
 kubectl -n "$ARGOCD_NAMESPACE" get applications -o json |
   yq '.items[] |
@@ -178,15 +250,71 @@ kubectl -n "$ARGOCD_NAMESPACE" get applications -o json |
       "sync": (.status.sync // {}),
       "conditions": (.status.conditions // [])
     }'
+
+kubectl -n "$ARGOCD_NAMESPACE" \
+  get application "$OPERATOR_APPLICATION" -o json |
+  yq '{
+    "trackedRbac": [
+      .status.resources[]? |
+      select(
+        .kind == "Role" or
+        .kind == "RoleBinding" or
+        .kind == "ClusterRole" or
+        .kind == "ClusterRoleBinding"
+      )
+    ],
+    "lastSyncRbac": [
+      .status.operationState.syncResult.resources[]? |
+      select(
+        .kind == "Role" or
+        .kind == "RoleBinding" or
+        .kind == "ClusterRole" or
+        .kind == "ClusterRoleBinding"
+      ) |
+      {
+        "group": .group,
+        "kind": .kind,
+        "namespace": (.namespace // ""),
+        "name": .name,
+        "status": (.status // ""),
+        "message": (.message // "")
+      }
+    ]
+  }'
+
+kubectl -n "$ARGOCD_NAMESPACE" get appproject messaging-platform -o json |
+  yq '{
+    "clusterResourceWhitelist": (
+      .spec.clusterResourceWhitelist // []
+    ),
+    "clusterResourceBlacklist": (
+      .spec.clusterResourceBlacklist // []
+    )
+  }'
+
+kubectl -n "$ARGOCD_NAMESPACE" get configmap argocd-cm -o json |
+  yq '{
+    "resourceInclusions": (.data."resource.inclusions" // ""),
+    "resourceExclusions": (.data."resource.exclusions" // "")
+  }'
 ```
 
-The exact test operator manifest must declare `test-arkmq-operator` as both
-its Application and Helm release, set `global.requiredLabels.env=test`, and
-set `arkmq-org-broker-operator.clusterScoped=true`. The root Application must
-select `gitops/argocd/bootstrap/test` in the test cluster. A nonprod value in
-either location explains cross-environment operator drift; a correct exact
-commit plus an incorrect live source instead identifies root-Application or
-Argo reconciliation drift.
+The test operator manifest must declare `test-arkmq-operator` as both its
+Application and Helm release, set `global.requiredLabels.env=test`, and set
+`arkmq-org-broker-operator.clusterScoped=true`. The root Application must
+select `gitops/argocd/bootstrap/test` in the test cluster. The render must
+contain exactly one `activemq-artemis-operator-role` `ClusterRole` and one
+matching `ClusterRoleBinding`. A nonprod value in the test manifest is direct
+cross-environment configuration drift. A correct direct render with missing
+live RBAC instead isolates the remaining problem to Argo rendering or sync.
+`<implicit>` means Helm omitted `metadata.namespace`: cluster-scoped kinds
+remain cluster-scoped, while namespaced kinds inherit the Application's
+destination namespace.
+If the local render contains both expected cluster RBAC objects but neither
+appears under `trackedRbac` or `lastSyncRbac`, inspect the AppProject allowlist
+and Argo resource inclusion/exclusion output. If the local render itself omits
+the objects, the defect is in the copied chart or dependency packaging rather
+than ZooKeeper or live-cluster authorization.
 
 ### Step 3: Confirm that the operator can run
 
