@@ -84,6 +84,7 @@ command -v yq >/dev/null 2>&1 || {
 
 topology="$repo_root/argocd/topology/$environment.yaml"
 applicationset="$environment-artemis-workloads"
+operator_application="$environment-arkmq-operator"
 project=messaging-platform
 local_server=https://kubernetes.default.svc
 platform_namespace=$(yq -r '.platformNamespace // ""' "$topology")
@@ -91,6 +92,11 @@ operator_deployment=activemq-artemis-controller-manager-v2
 operator_service_account=activemq-artemis-controller-manager
 kubectl_args=(--context "$context" --namespace "$argocd_namespace")
 errors=0
+checkout_revision=
+
+if checkout_revision=$(git -C "$repo_root/.." rev-parse HEAD 2>/dev/null); then
+  printf 'Repository checkout revision: %s\n' "$checkout_revision"
+fi
 
 error() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -110,6 +116,110 @@ else
   else
     printf 'ApplicationSet controller: available (%s/%s replicas)\n' "$available" "$desired"
   fi
+fi
+
+operator_application_json=
+if ! operator_application_json=$(kubectl "${kubectl_args[@]}" \
+  get application "$operator_application" -o json); then
+  error "ArkMQ operator Application $argocd_namespace/$operator_application is not readable"
+else
+  operator_source_count=$(yq -r \
+    '[.spec.source | select(. != null)] | length' \
+    <<<"$operator_application_json")
+  operator_multi_source_count=$(yq -r '.spec.sources // [] | length' \
+    <<<"$operator_application_json")
+  if [[ "$operator_source_count" -ne 1 || "$operator_multi_source_count" -ne 0 ]]; then
+    error "ArkMQ operator Application $argocd_namespace/$operator_application must declare exactly one spec.source and no spec.sources entries"
+  fi
+
+  operator_path=$(yq -r '.spec.source.path // ""' \
+    <<<"$operator_application_json")
+  operator_release=$(yq -r '.spec.source.helm.releaseName // ""' \
+    <<<"$operator_application_json")
+  operator_environment_count=$(ENVIRONMENT="$environment" yq -r '
+    [.spec.source.helm.parameters[]?
+      | select(
+          .name == "global.requiredLabels.env" and
+          .value == strenv(ENVIRONMENT)
+        )
+    ] | length
+  ' <<<"$operator_application_json")
+  operator_cluster_scope_count=$(yq -r '
+    [.spec.source.helm.parameters[]?
+      | select(
+          .name == "arkmq-org-broker-operator.clusterScoped" and
+          .value == "true"
+        )
+    ] | length
+  ' <<<"$operator_application_json")
+  operator_server=$(yq -r '.spec.destination.server // ""' \
+    <<<"$operator_application_json")
+  operator_namespace=$(yq -r '.spec.destination.namespace // ""' \
+    <<<"$operator_application_json")
+
+  [[ "$operator_path" == 'gitops/charts/arkmq-operator' ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application uses path $operator_path; expected gitops/charts/arkmq-operator"
+  [[ "$operator_release" == "$operator_application" ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application uses Helm release $operator_release; expected $operator_application"
+  [[ "$operator_environment_count" -eq 1 ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application must set global.requiredLabels.env=$environment exactly once"
+  [[ "$operator_cluster_scope_count" -eq 1 ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application must set arkmq-org-broker-operator.clusterScoped=true exactly once"
+  if [[ "$operator_server" != "$local_server" || "$operator_namespace" != "$platform_namespace" ]]; then
+    error "ArkMQ operator Application $argocd_namespace/$operator_application targets $operator_server namespace $operator_namespace; expected $local_server namespace $platform_namespace"
+  fi
+
+  operator_sync_status=$(yq -r '.status.sync.status // ""' \
+    <<<"$operator_application_json")
+  operator_health_status=$(yq -r '.status.health.status // ""' \
+    <<<"$operator_application_json")
+  operator_reconciled_revision=$(yq -r '.status.sync.revision // ""' \
+    <<<"$operator_application_json")
+  [[ "$operator_sync_status" == Synced ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application sync status is $operator_sync_status; expected Synced"
+  [[ "$operator_health_status" == Healthy ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application health is $operator_health_status; expected Healthy"
+  if [[ -n "$checkout_revision" && -n "$operator_reconciled_revision" && \
+        "$operator_reconciled_revision" != "$checkout_revision" ]]; then
+    error "ArkMQ operator Application $argocd_namespace/$operator_application reconciled revision $operator_reconciled_revision differs from repository checkout $checkout_revision"
+  fi
+
+  operator_repeated_resource_message=$(yq -r '
+    [.status.conditions[]?
+      | select(.type == "RepeatedResourceWarning")
+      | .message
+    ] | join("; ")
+  ' <<<"$operator_application_json")
+  if [[ -n "$operator_repeated_resource_message" ]]; then
+    error "ArkMQ operator Application $argocd_namespace/$operator_application has RepeatedResourceWarning: $operator_repeated_resource_message"
+  fi
+
+  tracked_operator_cluster_role_count=$(yq -r '
+    [.status.resources[]?
+      | select(
+          .group == "rbac.authorization.k8s.io" and
+          .kind == "ClusterRole" and
+          .name == "activemq-artemis-operator-role"
+        )
+    ] | length
+  ' <<<"$operator_application_json")
+  tracked_operator_cluster_role_binding_count=$(yq -r '
+    [.status.resources[]?
+      | select(
+          .group == "rbac.authorization.k8s.io" and
+          .kind == "ClusterRoleBinding" and
+          .name == "activemq-artemis-operator-rolebinding"
+        )
+    ] | length
+  ' <<<"$operator_application_json")
+  [[ "$tracked_operator_cluster_role_count" -eq 1 ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application does not track expected ClusterRole activemq-artemis-operator-role"
+  [[ "$tracked_operator_cluster_role_binding_count" -eq 1 ]] || \
+    error "ArkMQ operator Application $argocd_namespace/$operator_application does not track expected ClusterRoleBinding activemq-artemis-operator-rolebinding"
+
+  printf 'ArkMQ operator Application: %s/%s revision=%s\n' \
+    "$operator_sync_status" "$operator_health_status" \
+    "${operator_reconciled_revision:-unknown}"
 fi
 
 operator_json=

@@ -239,33 +239,33 @@ not create broker resources.
 ```sh
 OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
 
-for check in \
-  'list activemqartemises.broker.amq.io' \
-  'watch activemqartemises.broker.amq.io' \
-  'list configmaps' \
-  'watch configmaps' \
-  'list statefulsets.apps' \
-  'watch statefulsets.apps'; do
-  set -- $check
-  printf '%-7s %-45s ' "$1" "$2"
-  kubectl auth can-i "$1" "$2" \
+while read -r verb resource; do
+  printf '%-7s %-45s ' "$verb" "$resource"
+  kubectl auth can-i "$verb" "$resource" \
     --all-namespaces \
     --as "$OPERATOR_ID"
-done
+done <<'EOF'
+list activemqartemises.broker.amq.io
+watch activemqartemises.broker.amq.io
+list configmaps
+watch configmaps
+list statefulsets.apps
+watch statefulsets.apps
+EOF
 
-for check in \
-  'create statefulsets.apps' \
-  'update statefulsets.apps' \
-  'create persistentvolumeclaims' \
-  'create services' \
-  'create secrets' \
-  'create configmaps'; do
-  set -- $check
-  printf '%-7s %-45s ' "$1" "$2"
-  kubectl auth can-i "$1" "$2" \
+while read -r verb resource; do
+  printf '%-7s %-45s ' "$verb" "$resource"
+  kubectl auth can-i "$verb" "$resource" \
     --namespace "$WORKLOAD_NAMESPACE" \
     --as "$OPERATOR_ID"
-done
+done <<'EOF'
+create statefulsets.apps
+update statefulsets.apps
+create persistentvolumeclaims
+create services
+create secrets
+create configmaps
+EOF
 ```
 
 Expected result: every answer is `yes`. If impersonation itself is forbidden,
@@ -1090,35 +1090,36 @@ representative writes in the workload namespace:
 ```sh
 OPERATOR_ID="system:serviceaccount:$PLATFORM_NAMESPACE:$OPERATOR_SERVICE_ACCOUNT"
 
-for check in \
-  'get activemqartemises.broker.amq.io' \
-  'list activemqartemises.broker.amq.io' \
-  'watch activemqartemises.broker.amq.io' \
-  'list configmaps' \
-  'watch configmaps' \
-  'list statefulsets.apps' \
-  'watch statefulsets.apps'; do
-  set -- $check
-  result=$(kubectl auth can-i "$1" "$2" \
+while read -r verb resource; do
+  result=$(kubectl auth can-i "$verb" "$resource" \
     --all-namespaces \
     --as "$OPERATOR_ID")
-  printf '%-7s %-45s %-15s %s\n' "$1" "$2" cluster "$result"
-done
+  printf '%-7s %-45s %-15s %s\n' "$verb" "$resource" cluster "$result"
+done <<'EOF'
+get activemqartemises.broker.amq.io
+list activemqartemises.broker.amq.io
+watch activemqartemises.broker.amq.io
+list configmaps
+watch configmaps
+list statefulsets.apps
+watch statefulsets.apps
+EOF
 
-for check in \
-  'create statefulsets.apps' \
-  'update statefulsets.apps' \
-  'patch statefulsets.apps' \
-  'create persistentvolumeclaims' \
-  'create services' \
-  'create secrets' \
-  'create configmaps'; do
-  set -- $check
-  result=$(kubectl auth can-i "$1" "$2" \
+while read -r verb resource; do
+  result=$(kubectl auth can-i "$verb" "$resource" \
     --namespace "$WORKLOAD_NAMESPACE" \
     --as "$OPERATOR_ID")
-  printf '%-7s %-45s %-15s %s\n' "$1" "$2" "$WORKLOAD_NAMESPACE" "$result"
-done
+  printf '%-7s %-45s %-15s %s\n' \
+    "$verb" "$resource" "$WORKLOAD_NAMESPACE" "$result"
+done <<'EOF'
+create statefulsets.apps
+update statefulsets.apps
+patch statefulsets.apps
+create persistentvolumeclaims
+create services
+create secrets
+create configmaps
+EOF
 ```
 
 Inspect the binding that grants the cluster role. The subject namespace must

@@ -72,6 +72,28 @@ case " $* " in
     fi
     printf '%s\n' '{"spec":{"replicas":2},"status":{"currentReplicas":2,"readyReplicas":2}}'
     ;;
+  *' get application test-arkmq-operator '*)
+    operator_environment=test
+    operator_release=test-arkmq-operator
+    if [ "${MOCK_OPERATOR_ENVIRONMENT_DRIFT:-false}" = true ]; then
+      operator_environment=nonprod
+      operator_release=nonprod-arkmq-operator
+    fi
+    if [ "${MOCK_OPERATOR_RBAC_RESOURCES_MISSING:-false}" = true ]; then
+      operator_resources='[]'
+    else
+      operator_resources='[{"group":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"activemq-artemis-operator-role","status":"Synced"},{"group":"rbac.authorization.k8s.io","kind":"ClusterRoleBinding","name":"activemq-artemis-operator-rolebinding","status":"Synced"}]'
+    fi
+    if [ "${MOCK_OPERATOR_REPEATED_RESOURCE:-false}" = true ]; then
+      operator_conditions='[{"type":"RepeatedResourceWarning","message":"Resource rbac.authorization.k8s.io/Role/artemis-platform/activemq-artemis-leader-election-role appeared 2 times among application resources."}]'
+    else
+      operator_conditions='[]'
+    fi
+    operator_revision=${MOCK_OPERATOR_RECONCILED_REVISION:-}
+    printf '{"spec":{"source":{"path":"gitops/charts/arkmq-operator","helm":{"releaseName":"%s","parameters":[{"name":"global.requiredLabels.env","value":"%s"},{"name":"arkmq-org-broker-operator.clusterScoped","value":"true"}]}},"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_PLATFORM_NAMESPACE"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s,"resources":%s}}\n' \
+      "$operator_release" "$operator_environment" "$operator_revision" \
+      "$operator_conditions" "$operator_resources"
+    ;;
   *' get application '*)
     if [ "${MOCK_INVALID_SPEC:-false}" = true ]; then
       conditions='[{"type":"InvalidSpecError","message":"destination is not permitted"}]'
@@ -117,6 +139,58 @@ grep -Fq 'ArkMQ operator watch scope: cluster-wide' "$temp_dir/pass.out"
 grep -Fq 'Broker reconciliation conditions: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha generation=3' "$temp_dir/pass.out"
 grep -Fq 'Broker StatefulSet: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss desired=2 current=2 ready=2' "$temp_dir/pass.out"
 grep -Fq 'ApplicationSet verification: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_ENVIRONMENT_DRIFT=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-environment-drift.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted operator environment drift' >&2
+  exit 1
+fi
+grep -Fq 'uses Helm release nonprod-arkmq-operator; expected test-arkmq-operator' \
+  "$temp_dir/operator-environment-drift.out"
+grep -Fq 'must set global.requiredLabels.env=test exactly once' \
+  "$temp_dir/operator-environment-drift.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_RBAC_RESOURCES_MISSING=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-rbac-resources-missing.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted missing operator RBAC resources' >&2
+  exit 1
+fi
+grep -Fq 'does not track expected ClusterRole activemq-artemis-operator-role' \
+  "$temp_dir/operator-rbac-resources-missing.out"
+grep -Fq 'does not track expected ClusterRoleBinding activemq-artemis-operator-rolebinding' \
+  "$temp_dir/operator-rbac-resources-missing.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_REPEATED_RESOURCE=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-repeated-resource.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted duplicate operator resources' >&2
+  exit 1
+fi
+grep -Fq 'ArkMQ operator Application argocd/test-arkmq-operator has RepeatedResourceWarning' \
+  "$temp_dir/operator-repeated-resource.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_OPERATOR_RECONCILED_REVISION=f7675b8ab3dfa84d859b583b86f44fc3a4604f5e \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/operator-revision-drift.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted a stale operator revision' >&2
+  exit 1
+fi
+grep -Fq 'reconciled revision f7675b8ab3dfa84d859b583b86f44fc3a4604f5e differs from repository checkout' \
+  "$temp_dir/operator-revision-drift.out"
 
 if PATH="$temp_dir/bin:$PATH" \
   MOCK_OPERATOR_UNAVAILABLE=true \
