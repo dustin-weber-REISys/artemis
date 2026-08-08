@@ -44,6 +44,110 @@ printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nA
   "$BROKER_CR"
 ```
 
+## Focused evidence: `artemis-int-sky` required-label failure
+
+Use this section for the current test-cluster failure where Gatekeeper rejects
+the operator-generated StatefulSet for missing `app`, `contact`, `env`, and
+`fismaid`. Run every command from the root of the authorized work-computer
+checkout and return the complete output. These commands are read-only; they do
+not refresh, sync, patch, restart, or delete resources.
+
+First, prove which repository revision is on the work computer and whether its
+Artemis chart contains the StatefulSet label-propagation template:
+
+```sh
+git rev-parse HEAD
+git status --short
+sed -n '86,105p' gitops/charts/artemis-ha/templates/activemqartemis.yaml
+```
+
+The displayed chart section must contain an unscoped
+`spec.resourceTemplates` entry populated from `.Values.commonLabels`. If it is
+absent, sync `gitops/charts/artemis-ha/templates/activemqartemis.yaml` before
+continuing. Updating only the operator ClusterRole does not add labels to
+operator-generated StatefulSets.
+
+Next, inspect the effective Argo child Application and live broker CR for both
+affected pairs. The output deliberately excludes Secret data:
+
+```sh
+while IFS='|' read -r workload_namespace application broker_cr; do
+  printf '\nApplication %s; broker %s/%s\n' \
+    "$application" "$workload_namespace" "$broker_cr"
+
+  kubectl -n "$ARGOCD_NAMESPACE" get application "$application" -o json |
+    yq '{
+      "application": .metadata.name,
+      "syncStatus": .status.sync.status,
+      "reconciledRevision": .status.sync.revision,
+      "source": .spec.source,
+      "sources": (.spec.sources // []),
+      "conditions": (.status.conditions // [])
+    }'
+
+  kubectl -n "$workload_namespace" \
+    get activemqartemis "$broker_cr" -o json |
+    yq '{
+      "name": .metadata.name,
+      "namespace": .metadata.namespace,
+      "generation": .metadata.generation,
+      "metadataLabels": (.metadata.labels // {}),
+      "deploymentPlanLabels": (.spec.deploymentPlan.labels // {}),
+      "resourceTemplates": (.spec.resourceTemplates // []),
+      "conditions": (.status.conditions // [])
+    }'
+done <<'EOF'
+artemis-int-sky|test-sky-artemis|test-sky-artemis-artemis-ha
+artemis-int-sky2|test-sky2-artemis|test-sky2-artemis-artemis-ha
+EOF
+```
+
+Interpret the broker fields at this boundary:
+
+- Missing or empty `resourceTemplates`: the workload chart template was not
+  synced. This explains a StatefulSet admission denial even when the CR and
+  broker pod template have labels.
+- An unscoped `resourceTemplates` entry containing all four labels: the live
+  CR is correct, so collect the operator evidence below to test whether the
+  running operator ignored the template.
+- Nonempty `spec.sources`, or more than one source rendering the same broker
+  identity: the child Application still has source-composition drift.
+- One `spec.source`, an empty `spec.sources`, and a remaining
+  `RepeatedResourceWarning`: preserve the condition and reconciled revision;
+  it may be an older Argo manifest-cache condition rather than a current chart
+  duplicate. Do not refresh it until the revision and live CR are recorded.
+
+If either live CR already has the correct unscoped resource template, collect
+the matching operator errors and admission events:
+
+```sh
+kubectl -n "$PLATFORM_NAMESPACE" logs \
+  -l name=activemq-artemis-operator \
+  --all-containers=true \
+  --prefix=true \
+  --since=60m \
+  --tail=2000 |
+  grep -Ei 'test-sky|test-sky2|resource.?template|statefulset|gatekeeper|admission|denied|error'
+
+for workload_namespace in artemis-int-sky artemis-int-sky2; do
+  kubectl -n "$workload_namespace" get events \
+    --sort-by=.metadata.creationTimestamp |
+    grep -Ei 'test-sky|test-sky2|statefulset|gatekeeper|admission|denied|required.label|violation'
+done
+```
+
+Finally, after the updated verifier is present in the work-computer checkout,
+run it once and return the complete output. It reports missing required labels
+separately for CR metadata, broker pod metadata, and operator-generated
+resources:
+
+```sh
+./gitops/scripts/verify-argocd-applicationset.sh \
+  --context "$(kubectl config current-context)" \
+  --argocd-namespace "$ARGOCD_NAMESPACE" \
+  --environment test
+```
+
 ## Step-by-step triage
 
 Run these steps in order. Stop at the first failed boundary and use its noted

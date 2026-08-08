@@ -93,6 +93,7 @@ operator_service_account=activemq-artemis-controller-manager
 kubectl_args=(--context "$context" --namespace "$argocd_namespace")
 errors=0
 checkout_revision=
+required_resource_labels=(app contact env fismaid)
 
 if checkout_revision=$(git -C "$repo_root/.." rev-parse HEAD 2>/dev/null); then
   printf 'Repository checkout revision: %s\n' "$checkout_revision"
@@ -517,6 +518,42 @@ for enabled_pair in "${enabled_pairs[@]}"; do
     get activemqartemis "$broker_cr" -o json); then
     error "Application $argocd_namespace/$application did not produce readable ActiveMQArtemis $workload_namespace/$broker_cr"
     continue
+  fi
+
+  missing_metadata_labels=()
+  missing_deployment_labels=()
+  missing_resource_template_labels=()
+  for required_label in "${required_resource_labels[@]}"; do
+    if [[ "$(LABEL="$required_label" yq -r '.metadata.labels[strenv(LABEL)] // ""' \
+      <<<"$broker_json")" == "" ]]; then
+      missing_metadata_labels+=("$required_label")
+    fi
+    if [[ "$(LABEL="$required_label" yq -r '.spec.deploymentPlan.labels[strenv(LABEL)] // ""' \
+      <<<"$broker_json")" == "" ]]; then
+      missing_deployment_labels+=("$required_label")
+    fi
+    matching_template_count=$(LABEL="$required_label" yq -r '
+      [.spec.resourceTemplates[]?
+        | select(
+            (.selector.apiGroup // "") == "" and
+            (.selector.kind // "") == "" and
+            (.selector.name // "") == "" and
+            (.labels[strenv(LABEL)] // "") != ""
+          )]
+      | length
+    ' <<<"$broker_json")
+    if [[ "$matching_template_count" -eq 0 ]]; then
+      missing_resource_template_labels+=("$required_label")
+    fi
+  done
+  if ((${#missing_metadata_labels[@]})); then
+    error "ActiveMQArtemis $workload_namespace/$broker_cr metadata.labels is missing required labels: $(IFS=,; printf '%s' "${missing_metadata_labels[*]}")"
+  fi
+  if ((${#missing_deployment_labels[@]})); then
+    error "ActiveMQArtemis $workload_namespace/$broker_cr spec.deploymentPlan.labels is missing required labels: $(IFS=,; printf '%s' "${missing_deployment_labels[*]}")"
+  fi
+  if ((${#missing_resource_template_labels[@]})); then
+    error "ActiveMQArtemis $workload_namespace/$broker_cr has no unscoped spec.resourceTemplates entry carrying required labels: $(IFS=,; printf '%s' "${missing_resource_template_labels[*]}"); sync gitops/charts/artemis-ha/templates/activemqartemis.yaml"
   fi
 
   broker_generation=$(yq -r '.metadata.generation // 0' <<<"$broker_json")

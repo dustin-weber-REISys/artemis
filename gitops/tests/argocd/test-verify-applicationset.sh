@@ -63,7 +63,13 @@ case " $* " in
     else
       conditions='[{"type":"Valid","status":"True","reason":"ValidationSucceeded","observedGeneration":3,"message":"configuration is valid"},{"type":"Deployed","status":"True","reason":"Deployed","observedGeneration":3,"message":"broker resources created"}]'
     fi
-    printf '{"metadata":{"generation":3},"status":{"conditions":%s}}\n' "$conditions"
+    if [ "${MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS:-false}" = true ]; then
+      resource_templates='[]'
+    else
+      resource_templates='[{"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}}]'
+    fi
+    printf '{"metadata":{"generation":3,"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}},"spec":{"deploymentPlan":{"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}},"resourceTemplates":%s},"status":{"conditions":%s}}\n' \
+      "$resource_templates" "$conditions"
     ;;
   *' get statefulset '*)
     if [ "${MOCK_STATEFULSET_MISSING:-false}" = true ]; then
@@ -313,6 +319,18 @@ grep -Fq 'reconciliation failed: Deployed=False reason=ResourceError: StatefulSe
   "$temp_dir/broker-resource-error.out"
 grep -Fq 'has not created expected StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss' \
   "$temp_dir/broker-resource-error.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/broker-resource-template-labels.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted a broker CR without StatefulSet label propagation' >&2
+  exit 1
+fi
+grep -Fq 'has no unscoped spec.resourceTemplates entry carrying required labels: app,contact,env,fismaid; sync gitops/charts/artemis-ha/templates/activemqartemis.yaml' \
+  "$temp_dir/broker-resource-template-labels.out"
 
 if PATH="$temp_dir/bin:$PATH" \
   MOCK_SOURCE_DRIFT=true \
