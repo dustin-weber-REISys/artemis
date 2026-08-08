@@ -81,33 +81,62 @@ Interpret the first reported error as the failed boundary:
 If the verifier is not yet present in the work-computer revision, continue
 with the direct commands below.
 
-### Step 2: Confirm the Argo Applications and revisions
+### Step 2: Confirm the checkout, Argo sources, and revisions
 
 Check the workload Application and the operator Application together. The
 operator Application must be current before a synced broker CR can produce a
-StatefulSet.
+StatefulSet. Run the Git commands from the root of the authorized
+work-computer checkout. A branch name such as `main` is not sufficient
+evidence: record the local and remote commit IDs and compare them with each
+Application's reconciled commit.
 
 ```sh
+git rev-parse HEAD origin/main
+
 for app in "$APPLICATION" "$OPERATOR_APPLICATION"; do
   kubectl -n "$ARGOCD_NAMESPACE" get application "$app" -o json |
     yq '{
       "application": .metadata.name,
-      "configuredRevision": (.spec.source.targetRevision // ""),
+      "ownerReferences": (.metadata.ownerReferences // []),
+      "source": (.spec.source // null),
+      "sources": (.spec.sources // []),
+      "configuredRevision": (
+        .spec.source.targetRevision //
+        .spec.sources[0].targetRevision //
+        ""
+      ),
       "reconciledRevision": (.status.sync.revision // ""),
+      "comparedTo": (.status.sync.comparedTo // {}),
+      "reconciledAt": (.status.reconciledAt // ""),
       "sync": (.status.sync.status // ""),
       "health": (.status.health.status // ""),
       "conditions": (.status.conditions // []),
       "operationPhase": (.status.operationState.phase // ""),
-      "operationMessage": (.status.operationState.message // "")
+      "operationMessage": (.status.operationState.message // ""),
+      "relevantResources": [
+        .status.resources[]? |
+        select(
+          .kind == "Role" or
+          .kind == "RoleBinding" or
+          .kind == "ClusterRole" or
+          .kind == "ClusterRoleBinding" or
+          .kind == "ActiveMQArtemis"
+        )
+      ]
     }'
 done
 ```
 
 Expected result: both Applications are `Synced`, the operator is `Healthy`,
-and neither has an error condition. If the operator operation mentions an
-immutable Deployment selector, use the focused immutable-selector section
-below. If only the configured revision is current, the latest manifests have
-not completed reconciliation.
+and neither has an error condition. Each Application must have exactly one
+configured source; both `source` and a nonempty `sources` list indicate stale
+or manually altered composition. A `RepeatedResourceWarning` means the same
+group, kind, namespace, and name was rendered more than once and must be
+resolved before relying on the sync result. If the operator operation mentions
+an immutable Deployment selector, use the focused immutable-selector section
+below. If the reconciled commit differs from the expected local or remote
+commit, preserve all three IDs; do not patch a different revision based only
+on live symptoms.
 
 ### Step 3: Confirm that the operator can run
 
@@ -173,15 +202,35 @@ operator from seeing the broker CR.
 
 ```sh
 kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
-  yq -r '.spec.template.spec.containers[] |
-    select(.name == "manager") |
-    .env[] |
-    select(.name == "WATCH_NAMESPACE") |
-    "WATCH_NAMESPACE=" + (.value // "")'
-
-kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o json |
-  yq '{"roleRef": .roleRef, "subjects": .subjects}'
+  yq '{
+    "serviceAccountName": .spec.template.spec.serviceAccountName,
+    "watchNamespace": ([
+      .spec.template.spec.containers[]? |
+      select(.name == "manager") |
+      .env[]? |
+      select(.name == "WATCH_NAMESPACE") |
+      .value
+    ][0] // "")
+  }'
 ```
+
+Inspect both the expected cluster-scoped RBAC and any namespaced objects with
+the same identity. `NotFound` is useful evidence, so these commands continue
+long enough to collect all four results.
+
+```sh
+kubectl get clusterrole activemq-artemis-operator-role -o yaml || true
+kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o yaml || true
+kubectl -n "$PLATFORM_NAMESPACE" \
+  get role activemq-artemis-operator-role -o yaml || true
+kubectl -n "$PLATFORM_NAMESPACE" \
+  get rolebinding activemq-artemis-operator-rolebinding -o yaml || true
+```
+
+For an empty `WATCH_NAMESPACE`, the expected objects are a `ClusterRole` and
+`ClusterRoleBinding`. A namespaced `Role`/`RoleBinding` cannot authorize the
+operator's cluster-wide list and watch operations. The binding subject must
+match the Deployment's service account and `$PLATFORM_NAMESPACE`.
 
 Test the operator ServiceAccount's effective permissions. These commands
 create `SelfSubjectAccessReview`/`SubjectAccessReview` requests only; they do
@@ -471,8 +520,10 @@ Summarize the first failed boundary and attach only the relevant evidence:
 ```text
 Argo workload Application: Synced/Healthy or failure
 Argo operator Application: Synced/Healthy or failure
+Git revisions: local HEAD, origin/main, and each reconciled commit
+Argo sources: source/sources count and any RepeatedResourceWarning
 Operator Deployment: desired/available and manager image state
-WATCH_NAMESPACE and RBAC: expected values and first denial
+WATCH_NAMESPACE and RBAC: rendered Role kind, binding subject, and first denial
 Broker CR: generation plus complete conditions
 StatefulSet: NotFound or desired/current/ready
 Pods: phase plus first warning event
