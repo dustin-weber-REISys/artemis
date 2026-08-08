@@ -138,6 +138,56 @@ below. If the reconciled commit differs from the expected local or remote
 commit, preserve all three IDs; do not patch a different revision based only
 on live symptoms.
 
+If the live operator Application has the wrong environment or release, does
+not track its expected cluster RBAC, or reports a reconciled commit different
+from the work-computer checkout, collect the exact reconciled files and the
+root Application that selected the bootstrap directory. `git show` and
+`git ls-tree` read the commit without checking it out or changing the working
+tree. Preserve a missing-commit or missing-file error because it distinguishes
+repository drift from an incorrect manifest at the reconciled revision.
+
+```sh
+LIVE_REV=$(kubectl -n "$ARGOCD_NAMESPACE" \
+  get application "$OPERATOR_APPLICATION" \
+  -o jsonpath='{.status.sync.revision}')
+
+printf 'localHEAD=%s\noriginMain=%s\nliveOperatorRevision=%s\n' \
+  "$(git rev-parse HEAD)" \
+  "$(git rev-parse origin/main)" \
+  "$LIVE_REV"
+
+git show "${LIVE_REV}:gitops/argocd/bootstrap/test/operator-application.yaml"
+git show "${LIVE_REV}:gitops/charts/arkmq-operator/Chart.yaml"
+git ls-tree -r --name-only "$LIVE_REV" -- gitops/charts/arkmq-operator
+
+kubectl -n "$ARGOCD_NAMESPACE" get applications -o json |
+  yq '.items[] |
+    ([.spec.source.path, .spec.sources[]?.path] |
+      map(select(
+        . != null and
+        contains("gitops/argocd/bootstrap")
+      )) |
+      length
+    ) as $bootstrapSourceCount |
+    select($bootstrapSourceCount > 0) |
+    {
+      "name": .metadata.name,
+      "ownerReferences": (.metadata.ownerReferences // []),
+      "source": (.spec.source // null),
+      "sources": (.spec.sources // []),
+      "sync": (.status.sync // {}),
+      "conditions": (.status.conditions // [])
+    }'
+```
+
+The exact test operator manifest must declare `test-arkmq-operator` as both
+its Application and Helm release, set `global.requiredLabels.env=test`, and
+set `arkmq-org-broker-operator.clusterScoped=true`. The root Application must
+select `gitops/argocd/bootstrap/test` in the test cluster. A nonprod value in
+either location explains cross-environment operator drift; a correct exact
+commit plus an incorrect live source instead identifies root-Application or
+Argo reconciliation drift.
+
 ### Step 3: Confirm that the operator can run
 
 The expected controller is a Deployment in the platform namespace. Its absence
