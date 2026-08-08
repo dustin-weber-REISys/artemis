@@ -800,9 +800,27 @@ kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
 ```
 
 For broker version `2.53.0`, both the init and Kubernetes image variables ending
-in `2530` must exist. A private repository combined with an upstream-only
-digest can yield `not found`; an ECR authorization failure instead reports a
-token or pull-authorization error.
+in `2530` must exist and end in `:2.53.0`. A private repository combined with
+an upstream-only digest yields the `not found` failure shown here; an ECR
+authorization failure instead reports a token or pull-authorization error.
+
+Before syncing the fix, confirm that both immutable tags exist from the
+authorized work computer. Use the repository names from the desired pod image
+references if the imported namespace differs.
+
+```sh
+AWS_REGION=us-east-1
+
+for ECR_REPOSITORY in \
+  artemis/activemq-artemis-broker-init \
+  artemis/activemq-artemis-broker-kubernetes; do
+  aws ecr describe-images \
+    --region "$AWS_REGION" \
+    --repository-name "$ECR_REPOSITORY" \
+    --image-ids imageTag=2.53.0 \
+    --query 'imageDetails[0].{digest:imageDigest,tags:imageTags,pushedAt:imagePushedAt}'
+done
+```
 
 ### Step 12: Diagnose Gatekeeper or another admission denial
 

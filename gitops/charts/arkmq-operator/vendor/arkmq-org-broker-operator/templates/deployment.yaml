@@ -227,11 +227,17 @@ spec:
           value: {{ quote (printf "%s@%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2520.digest)
             }}
         - name: RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_2530
-          value: {{ quote (printf "%s@%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.digest)
-            }}
+          {{- if .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag }}
+          value: {{ printf "%s:%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag | quote }}
+          {{- else }}
+          value: {{ printf "%s@%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.digest | quote }}
+          {{- end }}
         - name: RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_2530
-          value: {{ quote (printf "%s@%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.digest)
-            }}
+          {{- if .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag }}
+          value: {{ printf "%s:%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag | quote }}
+          {{- else }}
+          value: {{ printf "%s@%s" .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository .Values.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.digest | quote }}
+          {{- end }}
         - name: OPERATOR_NAME
           valueFrom:
             fieldRef:

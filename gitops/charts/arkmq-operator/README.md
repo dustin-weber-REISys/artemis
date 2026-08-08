@@ -1,7 +1,7 @@
 # ArkMQ operator wrapper
 
 This chart pins a repository-local enterprise patch of
-`arkmq-org-broker-operator` as chart version `2.2.0-enterprise.2`, based on
+`arkmq-org-broker-operator` as chart version `2.2.0-enterprise.4`, based on
 upstream application version `2.2.0` originally published in the public Quay
 OCI namespace at digest
 `sha256:bf75b448cc62374cfca3f9ad7b405d76584e09e13034446b30b19c3ad36ad285`.
@@ -52,3 +52,6 @@ It also overrides the manager image to the mirrored `2.2.0` ECR tag. The
 wrapper default records the upstream digest, but an upstream registry digest
 must not be combined with a private repository unless the promotion record
 confirms that the private registry preserved that exact manifest digest.
+The Applications therefore select the immutable ECR `2.53.0` tags for both
+related images used by the approved broker version. When the approved broker
+version changes, its two related-image mappings must be updated together.

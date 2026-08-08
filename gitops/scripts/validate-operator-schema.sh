@@ -81,7 +81,9 @@ for environment in test nonprod prod; do
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag=2.53.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag=2.53.0" \
     > "$operator_rendered"
   kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
 
@@ -122,13 +124,13 @@ for environment in test nonprod prod; do
   broker_image=$(ENV_NAME="$broker_env" yq -r \
     'select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME)) | .value' \
     "$operator_rendered")
-  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init@sha256:"* ]]; then
-    printf '%s operator init image does not resolve version %s to the private digest\n' \
+  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init:$broker_version" ]]; then
+    printf '%s operator init image does not resolve version %s to the private mirror tag\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi
-  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes@sha256:"* ]]; then
-    printf '%s operator broker image does not resolve version %s to the private digest\n' \
+  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes:$broker_version" ]]; then
+    printf '%s operator broker image does not resolve version %s to the private mirror tag\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi

@@ -204,6 +204,10 @@ by the immutable `2.2.0` tag in each operator Application. Do not append the
 upstream Quay digest to that private ECR repository unless the promotion record
 shows the same digest exists in the target repository; registry-side manifest
 conversion or an incomplete copy otherwise produces `ErrImagePull: NotFound`.
+The same constraint applies to the operator's related init and broker images.
+The current Applications select immutable private `2.53.0` tags for both
+operands because upstream digests are not valid private-mirror references
+unless the import evidence proves that exact digest exists in ECR.
 
 When private chart mirroring is resumed, change the wrapper's dependency
 repository to the matching `<ECR base>/helm` namespace before enabling the

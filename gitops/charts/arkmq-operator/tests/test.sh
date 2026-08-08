@@ -27,7 +27,9 @@ for environment in test nonprod prod; do
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag=2.53.0" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag=2.53.0" \
     > "$rendered"
 
   duplicate_resources=$(
@@ -60,6 +62,12 @@ for environment in test nonprod prod; do
       and (.spec.replicas == 2)
       and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
       and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:2.2.0"))
+      and ([.spec.template.spec.containers[0].env[] |
+        select(.name == "RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_2530" and
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-init:2.53.0"))] | length == 1)
+      and ([.spec.template.spec.containers[0].env[] |
+        select(.name == "RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_2530" and
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:2.53.0"))] | length == 1)
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
       and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
       and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")

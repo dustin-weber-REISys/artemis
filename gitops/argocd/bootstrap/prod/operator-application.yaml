@@ -26,8 +26,14 @@ spec:
           value: "2.2.0"
         - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
           value: PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-init
+        # Private mirrors own their manifest digests, so select the immutable
+        # mirror tag instead of pairing ECR with the upstream Quay digest.
+        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag
+          value: "2.53.0"
         - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository
           value: PLACEHOLDER_PROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
+        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag
+          value: "2.53.0"
   destination:
     server: https://kubernetes.default.svc
     namespace: PLACEHOLDER_PLATFORM_NAMESPACE
