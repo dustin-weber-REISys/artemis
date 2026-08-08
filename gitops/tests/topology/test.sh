@@ -182,6 +182,13 @@ assert_bootstrap_rejected \
   'test operator cluster scope: expected true, got false'
 
 assert_bootstrap_rejected \
+  missing-operator-prune-last \
+  test \
+  operator-application.yaml \
+  'del(.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true"))' \
+  'test operator PruneLast migration option count: expected 1, got 0'
+
+assert_bootstrap_rejected \
   wrong-topology-file \
   prod \
   artemis-workloads-applicationset.yaml \

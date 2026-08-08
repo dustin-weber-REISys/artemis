@@ -40,9 +40,11 @@ The operator Applications use the repository-owned
 [`arkmq-operator`](../charts/arkmq-operator) wrapper chart as their Git source.
 The wrapper pins a repository-local copy of ArkMQ Broker Operator `2.2.0` and
 patches its label handling so Gatekeeper-required labels are present on the
-operator Deployment and pod template. It also reproduces the existing
-environment-specific Deployment selector exactly, avoiding an attempted
-immutable-field update during Argo reconciliation.
+operator Deployment and pod template. Its `-v2` Deployment identity performs a
+one-time declarative replacement for installations whose immutable selectors
+were rendered differently by earlier revisions. `PruneLast=true` keeps the old
+controller available until the replacement is healthy, then automated pruning
+removes it.
 Operator and operand image locations remain environment-specific ECR
 placeholders in the bootstrap manifests.
 

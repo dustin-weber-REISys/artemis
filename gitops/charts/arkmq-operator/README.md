@@ -1,7 +1,7 @@
 # ArkMQ operator wrapper
 
 This chart pins a repository-local enterprise patch of
-`arkmq-org-broker-operator` as chart version `2.2.0-enterprise.1`, based on
+`arkmq-org-broker-operator` as chart version `2.2.0-enterprise.2`, based on
 upstream application version `2.2.0` originally published in the public Quay
 OCI namespace at digest
 `sha256:bf75b448cc62374cfca3f9ad7b405d76584e09e13034446b30b19c3ad36ad285`.
@@ -24,22 +24,26 @@ also adds a PodDisruptionBudget that preserves at least one replica during
 voluntary disruptions. Do not replace the exact toleration with a blanket
 `Exists` toleration.
 
-The first enterprise-labelled installation stored the Helm release labels and
-the four required enterprise labels in `Deployment.spec.selector`. Because
-that selector is immutable, the vendored patch intentionally reproduces that
-eight-label legacy selector so Argo CD can update the existing Deployment in
-place. The pod template carries the same labels. The wrapper PDB uses only the
-stable `control-plane` and `name` pair because it does not share the
-Deployment's immutable-selector compatibility requirement. Treat release name,
-environment, `app`, `contact`, and `fismaid` as immutable for an installed
-operator; changing one requires a planned Deployment replacement. Any future
-required metadata labels must remain outside this explicitly enumerated legacy
+Earlier revisions rendered two-, four-, and eight-label selectors for the same
+`activemq-artemis-controller-manager` Deployment. Kubernetes selectors are
+immutable, so no single in-place selector can repair every installation. This
+revision performs a one-time declarative replacement named
+`activemq-artemis-controller-manager-v2`. Argo CD creates the replacement and,
+because every operator Application enables automated pruning with
+`PruneLast=true`, removes the obsolete Deployment only after the replacement is
+healthy. The ServiceAccount, RBAC, and leader-election identity do not change,
+so the replacement resumes reconciliation without a manual cluster delete.
+
+The replacement Deployment and its PDB select only the stable `control-plane`
+and `name` pair. Helm release and enterprise labels remain on Deployment and
+pod metadata for ownership and admission policy, but are deliberately excluded
+from `spec.selector`. Future metadata-label changes must remain outside that
 selector.
 
-The distinct vendored chart version is intentional. Reusing upstream chart
-version `2.2.0` for modified templates allows Helm or Argo CD dependency caches
-to serve an older four-label selector package after the source templates have
-changed.
+The distinct vendored chart version is intentional. Each change to vendored
+templates must increment the `enterprise.N` dependency version; otherwise Helm
+or Argo CD dependency caches can serve a package with an older Deployment
+identity or selector.
 
 Upstream values belong under the `arkmq-org-broker-operator` key in this
 chart's [`values.yaml`](values.yaml). Each environment's operator Application

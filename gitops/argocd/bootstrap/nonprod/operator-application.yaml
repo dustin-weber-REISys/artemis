@@ -35,6 +35,9 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - ApplyOutOfSyncOnly=true
+      # Keep the original selector-incompatible Deployment available until
+      # the replacement controller Deployment is healthy.
+      - PruneLast=true
     retry:
       limit: 5
       backoff:

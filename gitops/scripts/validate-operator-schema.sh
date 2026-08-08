@@ -84,6 +84,15 @@ for environment in test nonprod prod; do
     > "$operator_rendered"
   kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
 
+  if [[ "$(yq -r 'select(.kind == "Deployment") | .metadata.name' "$operator_rendered")" != "activemq-artemis-controller-manager-v2" ]] || \
+     [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels | length' "$operator_rendered")" != 2 ]] || \
+     [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels."control-plane"' "$operator_rendered")" != "controller-manager" ]] || \
+     [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels.name' "$operator_rendered")" != "activemq-artemis-operator" ]]; then
+    printf '%s operator Deployment must use the v2 identity and stable two-label selector\n' \
+      "$environment" >&2
+    exit 1
+  fi
+
   for required_label in app contact env fismaid; do
     if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .metadata.labels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]] || \
        [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.template.metadata.labels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]]; then
@@ -91,8 +100,8 @@ for environment in test nonprod prod; do
         "$environment" "$required_label" >&2
       exit 1
     fi
-    if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]]; then
-      printf '%s operator Deployment selector is missing legacy compatibility label %s\n' \
+    if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels[strenv(LABEL)] // ""' "$operator_rendered")" != "" ]]; then
+      printf '%s operator Deployment selector must exclude metadata-only label %s\n' \
         "$environment" "$required_label" >&2
       exit 1
     fi

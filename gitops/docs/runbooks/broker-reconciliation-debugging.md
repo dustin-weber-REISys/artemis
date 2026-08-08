@@ -28,7 +28,7 @@ APPLICATIONSET=test-artemis-workloads
 OPERATOR_APPLICATION=test-arkmq-operator
 BROKER_CR=test-sky-artemis-artemis-ha
 
-OPERATOR_DEPLOYMENT=activemq-artemis-controller-manager
+OPERATOR_DEPLOYMENT=activemq-artemis-controller-manager-v2
 OPERATOR_SERVICE_ACCOUNT=activemq-artemis-controller-manager
 ```
 
@@ -47,13 +47,15 @@ printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nA
 ## Operator Deployment immutable-selector sync failure
 
 Use this focused sequence when Argo CD reports
-`spec.selector ... field is immutable`. Existing enterprise-labelled installs
-store an eight-label selector: the fixed operator pair, Helm name and instance,
-and `app`, `contact`, `env`, and `fismaid`. The chart must reproduce that exact
-map; reducing it to only the fixed pair is still an immutable-field change.
-This sequence confirms the Application identity, desired revision, live
-selector, and rendered compatibility selector without deleting the running
-operator.
+`spec.selector ... field is immutable`. Earlier chart revisions rendered
+different selectors for the same `activemq-artemis-controller-manager`
+identity, so selecting another label map cannot repair every installation. The
+current chart instead renders `activemq-artemis-controller-manager-v2` with a
+stable two-label selector. Argo creates that replacement and `PruneLast=true`
+keeps the old controller available until the replacement is healthy, after
+which automated pruning removes it. This sequence confirms the Application
+identity, desired revision, old-resource pruning state, and replacement
+Deployment.
 
 Set the expected environment and Helm release to the same identity as the
 operator Application. For nonproduction, for example:
@@ -80,7 +82,7 @@ printf 'application=%s environment=%s release=%s localRevision=%s\n' \
 The Application name, environment parameter, and Helm release must describe
 the same environment. For example, `test-arkmq-operator` must not reconcile a
 `nonprod-arkmq-operator` release with `env=nonprod`. The sync revision must
-equal the commit containing the compatibility selector before later cluster
+equal the commit containing the replacement Deployment before later cluster
 evidence can validate it.
 
 ```sh
@@ -115,6 +117,7 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
         .status.operationState.syncResult.resources[]? |
         select(
           .name == "activemq-artemis-controller-manager" or
+          .name == "activemq-artemis-controller-manager-v2" or
           .name == "activemq-artemis-operator-role" or
           .name == "activemq-artemis-operator-rolebinding" or
           .name == "activemq-artemis-leader-election-role" or
@@ -141,6 +144,7 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
   yq -r '.status.resources[]? |
     select(
       .name == "activemq-artemis-controller-manager" or
+      .name == "activemq-artemis-controller-manager-v2" or
       .name == "activemq-artemis-operator-role" or
       .name == "activemq-artemis-operator-rolebinding" or
       .name == "activemq-artemis-leader-election-role" or
@@ -157,10 +161,11 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
     ] | @tsv'
 ```
 
-An `OutOfSync` Deployment row plus an operation message containing
-`spec.selector ... field is immutable` means the desired and live selector
-maps differ. An absent Deployment row means Argo's current manifest cache did
-not render the Deployment.
+After the new revision is reconciled, the `-v2` row must be present and the old
+Deployment may appear temporarily with `requiresPruning=true`. If only the old
+Deployment appears, Argo has not rendered the replacement revision. If the old
+Deployment remains after `-v2` becomes Healthy, inspect whether automated prune
+is still enabled on the operator Application.
 
 ### 3. Check live operator resources without stopping on `NotFound`
 
@@ -177,9 +182,9 @@ kubectl get clusterrole activemq-artemis-operator-role -o yaml
 kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o yaml
 ```
 
-Preserve every `NotFound` response. Do not delete or recreate the Deployment
-manually while Argo owns the Application; the compatibility render is designed
-to update it in place.
+Preserve every `NotFound` response. Do not delete or recreate either Deployment
+manually while Argo owns the Application; the chart and automated pruning own
+the replacement lifecycle.
 
 ### 4. Collect namespace-level create and admission failures
 
@@ -199,7 +204,7 @@ kubectl -n "$PLATFORM_NAMESPACE" get events \
   tail -50
 ```
 
-### 5. Compare the live and locally rendered selectors
+### 5. Verify the replacement identity and stable selector
 
 The `helm` commands build the file-based dependency and render only from the
 local checkout. The `kubectl get` is read-only and retrieves only the live
@@ -216,7 +221,7 @@ helm template "$EXPECTED_RELEASE" gitops/charts/arkmq-operator \
   --set-string "global.requiredLabels.env=$EXPECTED_ENVIRONMENT" |
   yq 'select(
     .kind == "Deployment" and
-    .metadata.name == "activemq-artemis-controller-manager"
+    .metadata.name == "activemq-artemis-controller-manager-v2"
   ) | {
     "name": .metadata.name,
     "labels": .metadata.labels,
@@ -226,12 +231,11 @@ helm template "$EXPECTED_RELEASE" gitops/charts/arkmq-operator \
   }'
 ```
 
-The live and rendered selector maps must be identical and contain exactly eight
-labels: `control-plane`, `name`, `app.kubernetes.io/name`,
-`app.kubernetes.io/instance`, `app`, `contact`, `env`, and `fismaid`. The pod
-labels must contain the same eight labels and may contain additional metadata
-labels. If the maps differ, first verify the Application/release/environment
-identity and local Git revision; do not force or replace the Deployment.
+The rendered and live replacement selectors must contain exactly
+`control-plane=controller-manager` and `name=activemq-artemis-operator`. The pod
+labels must additionally contain the Helm and required enterprise labels. If
+the `-v2` Deployment is absent, first verify the Application revision and
+rendered output; do not delete the old Deployment manually.
 
 ## Priority evidence: run these first
 
@@ -714,5 +718,5 @@ other sensitive values before attaching it outside the authorized environment.
 | StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
 | `RepeatedResourceWarning` with nonempty `spec.sources` | More than one Argo source may render the same identity | Remove source drift and restore the ApplicationSet-owned single `spec.source` |
 | `RepeatedResourceWarning` with one `spec.source` and current Helm output contains one copy of the named resource | The condition may belong to an older Git revision or stale Argo manifest cache | Compare `.status.sync.revision` with the intended commit, then request a hard refresh through the authorized Argo CD workflow |
-| Deployment sync fails with `spec.selector ... field is immutable` | The desired chart selector differs from the eight-label selector stored by the existing enterprise-labelled Deployment | Render the compatibility selector from the same release and environment values, confirm it is identical to the live map, and sync that revision without forcing or replacing the Deployment |
+| Deployment sync fails with `spec.selector ... field is immutable` | Argo is still reconciling an older revision against the original Deployment identity | Confirm the intended revision renders `activemq-artemis-controller-manager-v2`, sync it through the authorized Argo workflow, and let automated prune retire the original Deployment |
 | Cluster-scoped log `forbidden` while `WATCH_NAMESPACE` is empty | The operator's cluster-wide informers cannot start | Restore the rendered ClusterRole and ClusterRoleBinding, then confirm every cluster-scope `can-i` result is `yes` |

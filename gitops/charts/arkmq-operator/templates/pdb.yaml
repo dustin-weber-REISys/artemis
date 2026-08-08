@@ -2,7 +2,7 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: activemq-artemis-controller-manager
+  name: activemq-artemis-controller-manager-v2
   labels:
     control-plane: controller-manager
   {{- include "arkmq-org-broker-operator.labels" . | nindent 4 }}

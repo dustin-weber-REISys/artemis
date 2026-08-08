@@ -20,7 +20,7 @@ case " $* " in
       printf '%s\n' 'yes'
     fi
     ;;
-  *' get deployment activemq-artemis-controller-manager '*)
+  *' get deployment activemq-artemis-controller-manager-v2 '*)
     if [ "${MOCK_OPERATOR_UNAVAILABLE:-false}" = true ]; then
       available=0
     else

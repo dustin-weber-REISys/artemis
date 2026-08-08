@@ -410,6 +410,9 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment operator cluster scope" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.clusterScoped") | .value' "$operator")" \
     true
+  assert_equal "$environment operator PruneLast migration option count" \
+    "$(yq -r '[.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true")] | length' "$operator")" \
+    1
   assert_equal "$environment operator image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"

@@ -44,9 +44,19 @@ for environment in test nonprod prod; do
     exit 1
   fi
 
+  yq eval-all -e '
+    [.] |
+      (([.[] | select(.kind == "Deployment")] | length) == 1 and
+       ([.[] |
+         select(.kind == "Deployment") |
+         select(.metadata.name == "activemq-artemis-controller-manager-v2")
+        ] | length) == 1)
+  ' "$rendered" >/dev/null
+
   ENVIRONMENT="$environment" yq -e '
     select(.kind == "Deployment")
-    | (.spec.replicas == 2)
+    | (.metadata.name == "activemq-artemis-controller-manager-v2")
+      and (.spec.replicas == 2)
       and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
       and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
@@ -68,20 +78,14 @@ for environment in test nonprod prod; do
       and (.spec.template.metadata.labels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
       and (.spec.template.metadata.labels.env == strenv(ENVIRONMENT))
       and (.spec.template.metadata.labels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
-      and (.spec.selector.matchLabels.app == "artemis")
-      and (.spec.selector.matchLabels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
-      and (.spec.selector.matchLabels.env == strenv(ENVIRONMENT))
-      and (.spec.selector.matchLabels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
-      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == "arkmq-org-broker-operator")
-      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == (strenv(ENVIRONMENT) + "-arkmq-operator"))
       and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
       and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
-      and (.spec.selector.matchLabels | length == 8)
+      and (.spec.selector.matchLabels | length == 2)
   ' "$rendered" >/dev/null
 
   ENVIRONMENT="$environment" yq -e '
     select(.kind == "PodDisruptionBudget")
-    | (.metadata.name == "activemq-artemis-controller-manager")
+    | (.metadata.name == "activemq-artemis-controller-manager-v2")
       and (.spec.minAvailable == 1)
       and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
       and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
