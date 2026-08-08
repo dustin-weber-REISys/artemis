@@ -22,12 +22,17 @@ also adds a PodDisruptionBudget that preserves at least one replica during
 voluntary disruptions. Do not replace the exact toleration with a blanket
 `Exists` toleration.
 
-The vendored patch adds Helm and enterprise labels to resource metadata and the
-operator pod template while leaving `Deployment.spec.selector` and the PDB
-selector limited to the operator's stable legacy pair, `control-plane` and
-`name`. This separation is intentional: Deployment selectors are immutable, so
-adding release, ownership, or environment labels there prevents Argo CD from
-patching an existing Deployment when those labels are introduced or corrected.
+The first enterprise-labelled installation stored the Helm release labels and
+the four required enterprise labels in `Deployment.spec.selector`. Because
+that selector is immutable, the vendored patch intentionally reproduces that
+eight-label legacy selector so Argo CD can update the existing Deployment in
+place. The pod template carries the same labels. The wrapper PDB uses only the
+stable `control-plane` and `name` pair because it does not share the
+Deployment's immutable-selector compatibility requirement. Treat release name,
+environment, `app`, `contact`, and `fismaid` as immutable for an installed
+operator; changing one requires a planned Deployment replacement. Any future
+required metadata labels must remain outside this explicitly enumerated legacy
+selector.
 
 Upstream values belong under the `arkmq-org-broker-operator` key in this
 chart's [`values.yaml`](values.yaml). Each environment's operator Application

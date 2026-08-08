@@ -68,13 +68,15 @@ for environment in test nonprod prod; do
       and (.spec.template.metadata.labels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
       and (.spec.template.metadata.labels.env == strenv(ENVIRONMENT))
       and (.spec.template.metadata.labels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
-      and (.spec.selector.matchLabels.app == null)
-      and (.spec.selector.matchLabels.contact == null)
-      and (.spec.selector.matchLabels.env == null)
-      and (.spec.selector.matchLabels.fismaid == null)
-      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == null)
-      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == null)
-      and (.spec.selector.matchLabels | length == 2)
+      and (.spec.selector.matchLabels.app == "artemis")
+      and (.spec.selector.matchLabels.contact == "PLACEHOLDER_ARTEMIS_CONTACT")
+      and (.spec.selector.matchLabels.env == strenv(ENVIRONMENT))
+      and (.spec.selector.matchLabels.fismaid == "PLACEHOLDER_ARTEMIS_FISMAID")
+      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == "arkmq-org-broker-operator")
+      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == (strenv(ENVIRONMENT) + "-arkmq-operator"))
+      and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
+      and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
+      and (.spec.selector.matchLabels | length == 8)
   ' "$rendered" >/dev/null
 
   ENVIRONMENT="$environment" yq -e '

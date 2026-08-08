@@ -31,8 +31,8 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
-Admission-policy labels supplied by the wrapper chart. Keep these separate from
-selectorLabels because Deployment selectors are immutable.
+Admission-policy labels supplied by the wrapper chart. The Deployment template
+also uses these to preserve the selector stored by existing installations.
 */}}
 {{- define "arkmq-org-broker-operator.requiredLabels" -}}
 {{- with .Values.global }}
@@ -61,6 +61,23 @@ Selector labels
 {{- define "arkmq-org-broker-operator.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "arkmq-org-broker-operator.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Selector labels stored by the first enterprise-labelled installation. A
+Deployment selector is immutable, so all later renders must reproduce this
+exact set until the Deployment is deliberately replaced.
+*/}}
+{{- define "arkmq-org-broker-operator.legacyDeploymentSelectorLabels" -}}
+{{ include "arkmq-org-broker-operator.selectorLabels" . }}
+{{- with .Values.global }}
+{{- with .requiredLabels }}
+app: {{ .app | quote }}
+contact: {{ .contact | quote }}
+env: {{ .env | quote }}
+fismaid: {{ .fismaid | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 
 {{/*

@@ -44,13 +44,16 @@ printf 'Argo CD namespace: %s\nPlatform namespace: %s\nWorkload namespace: %s\nA
   "$BROKER_CR"
 ```
 
-## Missing operator Deployment after an immutable-selector fix
+## Operator Deployment immutable-selector sync failure
 
-Use this focused sequence when Argo CD previously reported
-`spec.selector ... field is immutable`, the chart selector has been corrected,
-and neither the operator Deployment nor its pods now exists. It determines
-whether Argo has reconciled the corrected commit, whether the Deployment is in
-the desired resource inventory, and whether its latest create was rejected.
+Use this focused sequence when Argo CD reports
+`spec.selector ... field is immutable`. Existing enterprise-labelled installs
+store an eight-label selector: the fixed operator pair, Helm name and instance,
+and `app`, `contact`, `env`, and `fismaid`. The chart must reproduce that exact
+map; reducing it to only the fixed pair is still an immutable-field change.
+This sequence confirms the Application identity, desired revision, live
+selector, and rendered compatibility selector without deleting the running
+operator.
 
 Set the expected environment and Helm release to the same identity as the
 operator Application. For nonproduction, for example:
@@ -75,8 +78,10 @@ printf 'application=%s environment=%s release=%s localRevision=%s\n' \
 ### 1. Compare the configured source, reconciled source, and latest operation
 
 The Application name, environment parameter, and Helm release must describe
-the same environment. The sync revision must equal the commit containing the
-selector fix before later cluster evidence can validate that fix.
+the same environment. For example, `test-arkmq-operator` must not reconcile a
+`nonprod-arkmq-operator` release with `env=nonprod`. The sync revision must
+equal the commit containing the compatibility selector before later cluster
+evidence can validate it.
 
 ```sh
 kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
@@ -147,9 +152,10 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
     ] | @tsv'
 ```
 
-An absent Deployment row means Argo's current manifest cache did not render
-the Deployment. A Deployment row with no live object means the operation and
-event messages are the primary evidence for a rejected create.
+An `OutOfSync` Deployment row plus an operation message containing
+`spec.selector ... field is immutable` means the desired and live selector
+maps differ. An absent Deployment row means Argo's current manifest cache did
+not render the Deployment.
 
 ### 3. Check live operator resources without stopping on `NotFound`
 
@@ -166,8 +172,9 @@ kubectl get clusterrole activemq-artemis-operator-role -o yaml
 kubectl get clusterrolebinding activemq-artemis-operator-rolebinding -o yaml
 ```
 
-Preserve every `NotFound` response; do not replace or recreate these objects
-manually while Argo owns the Application.
+Preserve every `NotFound` response. Do not delete or recreate the Deployment
+manually while Argo owns the Application; the compatibility render is designed
+to update it in place.
 
 ### 4. Collect namespace-level create and admission failures
 
@@ -187,13 +194,17 @@ kubectl -n "$PLATFORM_NAMESPACE" get events \
   tail -50
 ```
 
-### 5. Confirm the corrected local chart still renders one Deployment
+### 5. Compare the live and locally rendered selectors
 
-These commands only build the file-based Helm dependency in the local checkout
-and render manifests; they do not contact the cluster or expose Secret data.
+The `helm` commands build the file-based dependency and render only from the
+local checkout. The `kubectl get` is read-only and retrieves only the live
+Deployment selector; none of these commands expose Secret data.
 
 ```sh
 helm dependency build gitops/charts/arkmq-operator
+
+kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
+  yq '.spec.selector.matchLabels'
 
 helm template "$EXPECTED_RELEASE" gitops/charts/arkmq-operator \
   --namespace "$PLATFORM_NAMESPACE" \
@@ -210,9 +221,12 @@ helm template "$EXPECTED_RELEASE" gitops/charts/arkmq-operator \
   }'
 ```
 
-The selector must contain exactly `control-plane: controller-manager` and
-`name: activemq-artemis-operator`. The pod labels should additionally contain
-the Helm release and required enterprise labels.
+The live and rendered selector maps must be identical and contain exactly eight
+labels: `control-plane`, `name`, `app.kubernetes.io/name`,
+`app.kubernetes.io/instance`, `app`, `contact`, `env`, and `fismaid`. The pod
+labels must contain the same eight labels and may contain additional metadata
+labels. If the maps differ, first verify the Application/release/environment
+identity and local Git revision; do not force or replace the Deployment.
 
 ## Priority evidence: run these first
 
@@ -695,5 +709,5 @@ other sensitive values before attaching it outside the authorized environment.
 | StatefulSet exists but pods do not | Reconciliation succeeded past resource creation | Inspect StatefulSet events, scheduling constraints, PVCs, and image pulls |
 | `RepeatedResourceWarning` with nonempty `spec.sources` | More than one Argo source may render the same identity | Remove source drift and restore the ApplicationSet-owned single `spec.source` |
 | `RepeatedResourceWarning` with one `spec.source` and current Helm output contains one copy of the named resource | The condition may belong to an older Git revision or stale Argo manifest cache | Compare `.status.sync.revision` with the intended commit, then request a hard refresh through the authorized Argo CD workflow |
-| Deployment sync fails with `spec.selector ... field is immutable` after adding Helm or policy labels | The desired chart changed the selector of an existing Deployment | Keep the desired selector identical to the live selector and apply new labels only to object metadata and the pod template |
+| Deployment sync fails with `spec.selector ... field is immutable` | The desired chart selector differs from the eight-label selector stored by the existing enterprise-labelled Deployment | Render the compatibility selector from the same release and environment values, confirm it is identical to the live map, and sync that revision without forcing or replacing the Deployment |
 | Cluster-scoped log `forbidden` while `WATCH_NAMESPACE` is empty | The operator's cluster-wide informers cannot start | Restore the rendered ClusterRole and ClusterRoleBinding, then confirm every cluster-scope `can-i` result is `yes` |

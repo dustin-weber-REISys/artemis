@@ -91,8 +91,8 @@ for environment in test nonprod prod; do
         "$environment" "$required_label" >&2
       exit 1
     fi
-    if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels[strenv(LABEL)] // ""' "$operator_rendered")" != "" ]]; then
-      printf '%s operator Deployment selector must not contain mutable required label %s\n' \
+    if [[ "$(LABEL="$required_label" yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels[strenv(LABEL)] // ""' "$operator_rendered")" == "" ]]; then
+      printf '%s operator Deployment selector is missing legacy compatibility label %s\n' \
         "$environment" "$required_label" >&2
       exit 1
     fi
