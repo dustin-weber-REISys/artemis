@@ -55,6 +55,23 @@ case " $* " in
     printf '{"spec":{"destinations":[{"server":"https://kubernetes.default.svc","namespace":"%s"}]}}\n' \
       "${MOCK_PROJECT_NAMESPACE:-PLACEHOLDER_TEST_NAMESPACE_SKY}"
     ;;
+  *' get activemqartemis '*)
+    if [ "${MOCK_BROKER_NO_STATUS:-false}" = true ]; then
+      conditions='[]'
+    elif [ "${MOCK_BROKER_RESOURCE_ERROR:-false}" = true ]; then
+      conditions='[{"type":"Deployed","status":"False","reason":"ResourceError","observedGeneration":3,"message":"StatefulSet creation denied"}]'
+    else
+      conditions='[{"type":"Valid","status":"True","reason":"ValidationSucceeded","observedGeneration":3,"message":"configuration is valid"},{"type":"Deployed","status":"True","reason":"Deployed","observedGeneration":3,"message":"broker resources created"}]'
+    fi
+    printf '{"metadata":{"generation":3},"status":{"conditions":%s}}\n' "$conditions"
+    ;;
+  *' get statefulset '*)
+    if [ "${MOCK_STATEFULSET_MISSING:-false}" = true ]; then
+      printf '%s\n' 'Error from server (NotFound): statefulset not found' >&2
+      exit 1
+    fi
+    printf '%s\n' '{"spec":{"replicas":2},"status":{"currentReplicas":2,"readyReplicas":2}}'
+    ;;
   *' get application '*)
     if [ "${MOCK_INVALID_SPEC:-false}" = true ]; then
       conditions='[{"type":"InvalidSpecError","message":"destination is not permitted"}]'
@@ -97,6 +114,8 @@ PATH="$temp_dir/bin:$PATH" \
 grep -Fq 'Approved project destination: https://kubernetes.default.svc/PLACEHOLDER_TEST_NAMESPACE_SKY' "$temp_dir/pass.out"
 grep -Fq 'ArkMQ operator: available (2/2 replicas)' "$temp_dir/pass.out"
 grep -Fq 'ArkMQ operator watch scope: cluster-wide' "$temp_dir/pass.out"
+grep -Fq 'Broker reconciliation conditions: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha generation=3' "$temp_dir/pass.out"
+grep -Fq 'Broker StatefulSet: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss desired=2 current=2 ready=2' "$temp_dir/pass.out"
 grep -Fq 'ApplicationSet verification: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
 
 if PATH="$temp_dir/bin:$PATH" \
@@ -193,6 +212,33 @@ if PATH="$temp_dir/bin:$PATH" \
 fi
 grep -Fq 'has RepeatedResourceWarning: Resource broker.amq.io/ActiveMQArtemis/artemis/int-sky/test-sky-artemis-artemis-ha appeared 2 times among application resources.' \
   "$temp_dir/repeated-resource.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_BROKER_NO_STATUS=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/broker-no-status.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted a broker CR the operator never processed' >&2
+  exit 1
+fi
+grep -Fq 'has no status conditions; the ArkMQ operator has not processed generation 3' \
+  "$temp_dir/broker-no-status.out"
+
+if PATH="$temp_dir/bin:$PATH" \
+  MOCK_BROKER_RESOURCE_ERROR=true \
+  MOCK_STATEFULSET_MISSING=true \
+    "$verifier" \
+      --context test-context \
+      --argocd-namespace argocd \
+      --environment test >"$temp_dir/broker-resource-error.out" 2>&1; then
+  printf '%s\n' 'ApplicationSet verifier accepted a broker ResourceError without a StatefulSet' >&2
+  exit 1
+fi
+grep -Fq 'reconciliation failed: Deployed=False reason=ResourceError: StatefulSet creation denied' \
+  "$temp_dir/broker-resource-error.out"
+grep -Fq 'has not created expected StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss' \
+  "$temp_dir/broker-resource-error.out"
 
 if PATH="$temp_dir/bin:$PATH" \
   MOCK_SOURCE_DRIFT=true \

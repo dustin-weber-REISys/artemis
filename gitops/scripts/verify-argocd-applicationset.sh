@@ -17,9 +17,9 @@ Usage: verify-argocd-applicationset.sh \
   --environment test|nonprod|prod \
   [--controller-deployment NAME]
 
-Read-only verification that the ApplicationSet controller is available, has
-reported reconciliation status, and created one Argo CD Application for every
-enabled broker pair in the environment topology.
+Read-only verification that the ApplicationSet controller and ArkMQ operator
+are available, every enabled broker pair has an Argo CD Application, and the
+operator has reconciled each ActiveMQArtemis CR into its expected StatefulSet.
 USAGE
 }
 
@@ -184,6 +184,26 @@ if [[ -n "$platform_namespace" ]]; then
         error "ArkMQ operator authorization review failed for $verb $resource at cluster scope: $authorization_result"
       fi
     done
+
+    for authorization_check in \
+      'create statefulsets.apps' \
+      'update statefulsets.apps' \
+      'create persistentvolumeclaims' \
+      'create services' \
+      'create secrets' \
+      'create configmaps'; do
+      read -r verb resource <<<"$authorization_check"
+      if authorization_result=$(kubectl --context "$context" auth can-i \
+        "$verb" "$resource" \
+        --namespace "$platform_namespace" \
+        --as "$operator_identity" 2>&1); then
+        if [[ "$authorization_result" != "yes" ]]; then
+          error "ArkMQ operator authorization denied for namespaced write: $verb $resource ($authorization_result)"
+        fi
+      else
+        error "ArkMQ operator authorization review failed for namespaced write $verb $resource: $authorization_result"
+      fi
+    done
   fi
 fi
 
@@ -289,6 +309,9 @@ for enabled_pair in "${enabled_pairs[@]}"; do
     printf 'Generated Application: %s/%s\n' "$argocd_namespace" "$application"
   fi
 
+  actual_release_name=$(yq -r \
+    '.spec.source.helm.releaseName // ""' <<<"$application_json")
+
   if [[ -n "$applicationset_json" ]]; then
     child_multi_source_count=$(yq -r '.spec.sources // [] | length' \
       <<<"$application_json")
@@ -304,8 +327,6 @@ for enabled_pair in "${enabled_pairs[@]}"; do
     actual_path=$(yq -r '.spec.source.path // ""' <<<"$application_json")
     actual_value_files=$(yq -o=json -I=0 \
       '.spec.source.helm.valueFiles // []' <<<"$application_json")
-    actual_release_name=$(yq -r \
-      '.spec.source.helm.releaseName // ""' <<<"$application_json")
     [[ "$actual_repo_url" == "$declared_repo_url" ]] || \
       error "Application $argocd_namespace/$application repoURL differs from ApplicationSet $applicationset"
     [[ "$actual_revision" == "$declared_revision" ]] || \
@@ -368,6 +389,63 @@ for enabled_pair in "${enabled_pairs[@]}"; do
       | join("; ")
     ' <<<"$application_json")
     error "Application $argocd_namespace/$application has RepeatedResourceWarning: $repeated_resource_message"
+  fi
+
+  # Argo owns the chart resources, but the operator owns the broker
+  # StatefulSet. A green ActiveMQArtemis node in Argo proves only that the CR
+  # was applied; its status and generated StatefulSet prove reconciliation.
+  helm_release_name=$actual_release_name
+  [[ -n "$helm_release_name" ]] || helm_release_name=$application
+  broker_cr="${helm_release_name}-artemis-ha"
+  if ((${#broker_cr} > 63)); then
+    broker_cr=${broker_cr:0:63}
+    broker_cr=${broker_cr%-}
+  fi
+
+  broker_json=
+  if ! broker_json=$(kubectl --context "$context" --namespace "$workload_namespace" \
+    get activemqartemis "$broker_cr" -o json); then
+    error "Application $argocd_namespace/$application did not produce readable ActiveMQArtemis $workload_namespace/$broker_cr"
+    continue
+  fi
+
+  broker_generation=$(yq -r '.metadata.generation // 0' <<<"$broker_json")
+  broker_condition_count=$(yq -r '.status.conditions // [] | length' <<<"$broker_json")
+  if [[ "$broker_condition_count" -eq 0 ]]; then
+    error "ActiveMQArtemis $workload_namespace/$broker_cr has no status conditions; the ArkMQ operator has not processed generation $broker_generation"
+  else
+    printf 'Broker reconciliation conditions: %s/%s generation=%s\n' \
+      "$workload_namespace" "$broker_cr" "$broker_generation"
+    yq -r '.status.conditions[] |
+      "  \(.type)=\(.status) reason=\(.reason) observedGeneration=\(.observedGeneration // 0): \(.message // \"\")"' \
+      <<<"$broker_json"
+
+    failed_conditions=$(yq -r '
+      (.status.conditions // [])
+      | map(select(
+          .status == "False" and
+          (.type == "Valid" or .type == "Deployed")
+        ))
+      | map(.type + "=False reason=" + .reason + ": " + (.message // ""))
+      | join("; ")
+    ' <<<"$broker_json")
+    if [[ -n "$failed_conditions" ]]; then
+      error "ActiveMQArtemis $workload_namespace/$broker_cr reconciliation failed: $failed_conditions"
+    fi
+  fi
+
+  statefulset="$broker_cr-ss"
+  statefulset_json=
+  if ! statefulset_json=$(kubectl --context "$context" --namespace "$workload_namespace" \
+    get statefulset "$statefulset" -o json); then
+    error "ArkMQ operator has not created expected StatefulSet $workload_namespace/$statefulset"
+  else
+    desired_replicas=$(yq -r '.spec.replicas // 0' <<<"$statefulset_json")
+    current_replicas=$(yq -r '.status.currentReplicas // 0' <<<"$statefulset_json")
+    ready_replicas=$(yq -r '.status.readyReplicas // 0' <<<"$statefulset_json")
+    printf 'Broker StatefulSet: %s/%s desired=%s current=%s ready=%s\n' \
+      "$workload_namespace" "$statefulset" "$desired_replicas" \
+      "$current_replicas" "$ready_replicas"
   fi
 done
 

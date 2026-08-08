@@ -25,10 +25,16 @@ tokens with values supplied by the cluster platform; do not commit them.
 
   A synced ApplicationSet with no status conditions has not been reconciled.
   The verifier also confirms that the ArkMQ operator Deployment has an
-  available replica and the exact on-demand-node toleration. For each enabled
-  broker pair, it verifies the local destination, a single Git/Helm source,
-  the source fields owned by the ApplicationSet, no `InvalidSpecError` or
-  `RepeatedResourceWarning`, and exactly the declared Helm parameter names.
+  available replica, the exact on-demand-node toleration, cluster-wide watch
+  scope, and the read/write RBAC needed to generate broker resources. For each
+  enabled broker pair, it verifies the local destination, a single Git/Helm
+  source, the source fields owned by the ApplicationSet, no `InvalidSpecError`
+  or `RepeatedResourceWarning`, exactly the declared Helm parameter names, the
+  `ActiveMQArtemis` reconciliation conditions, and the expected operator-owned
+  StatefulSet. A CR with no conditions identifies an operator observation
+  failure; `Valid=False` or `Deployed=False` preserves the operator's reason
+  and message; a missing `-ss` StatefulSet proves reconciliation never reached
+  workload creation.
   This catches duplicate sources as well as stale or UI-added overrides such
   as `networkPolicy.*Selector={}`; Helm interprets that syntax as an empty
   array, not the selector object required by the chart.
