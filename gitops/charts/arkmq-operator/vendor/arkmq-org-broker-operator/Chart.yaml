@@ -3,4 +3,4 @@ appVersion: 2.2.0
 description: 'ArkMQ Broker Operator: Apache ActiveMQ Artemis running on Kubernetes'
 name: arkmq-org-broker-operator
 type: application
-version: 2.2.0
+version: 2.2.0-enterprise.1

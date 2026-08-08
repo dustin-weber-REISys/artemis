@@ -16,6 +16,8 @@ spec:
       parameters:
         - name: global.requiredLabels.env
           value: nonprod
+        - name: arkmq-org-broker-operator.clusterScoped
+          value: "true"
         - name: arkmq-org-broker-operator.controllerManager.manager.image.repository
           value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator
         - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository

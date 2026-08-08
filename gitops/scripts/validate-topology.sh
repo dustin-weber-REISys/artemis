@@ -407,6 +407,9 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment operator required env label" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "global.requiredLabels.env") | .value' "$operator")" \
     "$environment"
+  assert_equal "$environment operator cluster scope" \
+    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.clusterScoped") | .value' "$operator")" \
+    true
   assert_equal "$environment operator image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"

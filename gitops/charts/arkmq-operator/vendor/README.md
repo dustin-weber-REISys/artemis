@@ -1,7 +1,9 @@
 # Vendored ArkMQ chart
 
-`arkmq-org-broker-operator` 2.2.0 is copied from the public Quay chart with four
-intentional template changes:
+`arkmq-org-broker-operator` chart version `2.2.0-enterprise.1` is copied from
+the public Quay `2.2.0` chart with four intentional template changes. The
+distinct version prevents a dependency cache from substituting the unpatched
+upstream package:
 
 - `_helpers.tpl` defines `requiredLabels` and includes them in resource labels.
 - `_helpers.tpl` defines the eight-label legacy Deployment selector separately

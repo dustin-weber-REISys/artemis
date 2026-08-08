@@ -1,7 +1,9 @@
 # ArkMQ operator wrapper
 
-This chart pins a repository-local copy of `arkmq-org-broker-operator` `2.2.0`,
-originally published in the public Quay OCI namespace at digest
+This chart pins a repository-local enterprise patch of
+`arkmq-org-broker-operator` as chart version `2.2.0-enterprise.1`, based on
+upstream application version `2.2.0` originally published in the public Quay
+OCI namespace at digest
 `sha256:bf75b448cc62374cfca3f9ad7b405d76584e09e13034446b30b19c3ad36ad285`.
 The target clusters require `app`, `contact`, `env`, and `fismaid` on the
 operator Deployment and pod template, but the upstream chart does not expose a
@@ -33,6 +35,11 @@ environment, `app`, `contact`, and `fismaid` as immutable for an installed
 operator; changing one requires a planned Deployment replacement. Any future
 required metadata labels must remain outside this explicitly enumerated legacy
 selector.
+
+The distinct vendored chart version is intentional. Reusing upstream chart
+version `2.2.0` for modified templates allows Helm or Argo CD dependency caches
+to serve an older four-label selector package after the source templates have
+changed.
 
 Upstream values belong under the `arkmq-org-broker-operator` key in this
 chart's [`values.yaml`](values.yaml). Each environment's operator Application

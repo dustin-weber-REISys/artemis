@@ -144,9 +144,10 @@ Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
 Artemis Git source, and the exact cluster-scoped kinds rendered by the approved
-ArkMQ chart. Because the current
-operator values set `clusterScoped: true`, the allowlist includes `Namespace`,
-`CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at minimum.
+ArkMQ chart. Each operator Application explicitly sets `clusterScoped: true`,
+and the wrapper values repeat that default as defense in depth. The allowlist
+therefore includes `Namespace`, `CustomResourceDefinition`, `ClusterRole`, and
+`ClusterRoleBinding` at minimum.
 
 Keep the operator's cluster scope, CRD ownership, and watch scope as
 architecture decisions. Narrowing or expanding them requires RBAC and

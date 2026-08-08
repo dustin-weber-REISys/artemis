@@ -2,9 +2,9 @@ apiVersion: v2
 name: artemis-arkmq-operator
 description: Enterprise-label wrapper for the upstream ArkMQ Broker Operator chart
 type: application
-version: 2.2.0-4
+version: 2.2.0-5
 appVersion: 2.2.0
 dependencies:
   - name: arkmq-org-broker-operator
-    version: 2.2.0
+    version: 2.2.0-enterprise.1
     repository: file://vendor/arkmq-org-broker-operator

@@ -175,6 +175,13 @@ assert_bootstrap_rejected \
   'prod operator Git revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
 
 assert_bootstrap_rejected \
+  namespaced-operator-rbac \
+  test \
+  operator-application.yaml \
+  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.clusterScoped") | .value) = "false"' \
+  'test operator cluster scope: expected true, got false'
+
+assert_bootstrap_rejected \
   wrong-topology-file \
   prod \
   artemis-workloads-applicationset.yaml \

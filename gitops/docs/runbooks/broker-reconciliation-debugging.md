@@ -95,6 +95,11 @@ kubectl -n "$ARGOCD_NAMESPACE" get application "$OPERATOR_APPLICATION" -o json |
         .spec.source.helm.parameters[]? |
         select(.name == "global.requiredLabels.env") |
         .value
+      ][0] // ""),
+      "clusterScoped": ([
+        .spec.source.helm.parameters[]? |
+        select(.name == "arkmq-org-broker-operator.clusterScoped") |
+        .value
       ][0] // "")
     },
     "reconciledSource": (.status.sync.comparedTo.source // {}),
