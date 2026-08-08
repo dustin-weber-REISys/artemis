@@ -192,15 +192,15 @@ assert_bootstrap_rejected \
   wrong-private-init-image-tag \
   test \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag") | .value) = "2.52.0"' \
-  'test operator init-image private tag: expected 2.53.0, got 2.52.0'
+  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag") | .value) = "artemis.2.52.0"' \
+  'test operator init-image private tag: expected artemis.2.53.0, got artemis.2.52.0'
 
 assert_bootstrap_rejected \
   wrong-private-broker-image-tag \
   prod \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag") | .value) = "2.52.0"' \
-  'prod operator broker-image private tag: expected 2.53.0, got 2.52.0'
+  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag") | .value) = "artemis.2.52.0"' \
+  'prod operator broker-image private tag: expected artemis.2.53.0, got artemis.2.52.0'
 
 assert_bootstrap_rejected \
   missing-operator-prune-last \

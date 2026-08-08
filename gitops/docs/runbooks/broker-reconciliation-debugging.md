@@ -800,8 +800,8 @@ kubectl -n "$PLATFORM_NAMESPACE" get deployment "$OPERATOR_DEPLOYMENT" -o json |
 ```
 
 For broker version `2.53.0`, both the init and Kubernetes image variables ending
-in `2530` must exist and end in `:2.53.0`. A private repository combined with
-an upstream-only digest yields the `not found` failure shown here; an ECR
+in `2530` must exist and end in `:artemis.2.53.0`. A private repository combined
+with an upstream-only digest yields the `not found` failure shown here; an ECR
 authorization failure instead reports a token or pull-authorization error.
 
 Before syncing the fix, confirm that both immutable tags exist from the
@@ -817,7 +817,7 @@ for ECR_REPOSITORY in \
   aws ecr describe-images \
     --region "$AWS_REGION" \
     --repository-name "$ECR_REPOSITORY" \
-    --image-ids imageTag=2.53.0 \
+    --image-ids imageTag=artemis.2.53.0 \
     --query 'imageDetails[0].{digest:imageDigest,tags:imageTags,pushedAt:imagePushedAt}'
 done
 ```

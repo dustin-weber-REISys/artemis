@@ -52,6 +52,6 @@ It also overrides the manager image to the mirrored `2.2.0` ECR tag. The
 wrapper default records the upstream digest, but an upstream registry digest
 must not be combined with a private repository unless the promotion record
 confirms that the private registry preserved that exact manifest digest.
-The Applications therefore select the immutable ECR `2.53.0` tags for both
-related images used by the approved broker version. When the approved broker
-version changes, its two related-image mappings must be updated together.
+The Applications therefore select the immutable ECR `artemis.2.53.0` tags for
+both related images used by the approved broker version. When the approved
+broker version changes, its two related-image mappings must be updated together.
