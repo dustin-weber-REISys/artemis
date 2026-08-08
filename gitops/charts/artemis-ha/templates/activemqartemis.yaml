@@ -174,15 +174,18 @@ spec:
       periodSeconds: 20
       timeoutSeconds: 5
       failureThreshold: 6
+    # The image owns the broker MBean name (commonly "amq-broker"); it does
+    # not necessarily match the operator's Kubernetes application name.
     readinessProbe:
       exec:
         command:
           - /bin/bash
           - -ec
           - >-
-            curl -fsS --max-time 5 -u "$AMQ_USER:$AMQ_PASSWORD"
-            "http://$HOSTNAME:{{ $consolePort }}/console/jolokia/read/org.apache.activemq.artemis:broker=%22${APPLICATION_NAME}%22/Active"
-            | grep -q '"value":true'
+            curl -fsS --max-time 5 -H "Origin: http://localhost"
+            -u "$AMQ_USER:$AMQ_PASSWORD"
+            "http://$HOSTNAME:{{ $consolePort }}/console/jolokia/read/org.apache.activemq.artemis:broker=*/Active"
+            | grep -Eq '"Active"[[:space:]]*:[[:space:]]*true'
       initialDelaySeconds: 30
       periodSeconds: 10
       timeoutSeconds: 8

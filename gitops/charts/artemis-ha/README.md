@@ -22,6 +22,14 @@ policy allow only that internal port. Console Services, management and
 monitoring policies, and all probes share the chart's fixed console-port
 helper, so they cannot be configured independently.
 
+The readiness probe asks Jolokia for the `Active` attribute using a broker
+MBean pattern instead of deriving the MBean name from the Kubernetes
+application name. The operand's broker name is image configuration (for
+example, `amq-broker`) and is not required to match the `ActiveMQArtemis`
+resource name. The local request includes the Origin header required by the
+default Jolokia CORS policy. Only the peer whose returned `Active` attribute
+is `true` becomes ready.
+
 Broker scheduling requires two eligible zone and host domains and injects an
 explicit anti-affinity selector for the pair. A separate metrics Service
 publishes both broker endpoints so Prometheus can scrape the passive peer even

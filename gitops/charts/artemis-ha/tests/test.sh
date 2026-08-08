@@ -121,7 +121,20 @@ if rg -q 'addressSettings\.#\.(expiryAddress|autoCreateExpiryResources|expiryQue
   echo "message-expiry properties rendered while expiry is disabled" >&2
   exit 1
 fi
-rg -q 'console/jolokia/read/org\.apache\.activemq\.artemis:broker=%22\$\{APPLICATION_NAME\}%22/Active' "$rendered"
+rg -q 'console/jolokia/read/org\.apache\.activemq\.artemis:broker=\*/Active' "$rendered"
+rg -Fq 'Origin: http://localhost' "$rendered"
+rg -Fq "| grep -Eq '\"Active\"[[:space:]]*:[[:space:]]*true'" "$rendered"
+if rg -q 'console/jolokia/read/.*APPLICATION_NAME' "$rendered"; then
+  echo "readiness probe must not assume the broker MBean name equals APPLICATION_NAME" >&2
+  exit 1
+fi
+active_pattern_response='{"value":{"org.apache.activemq.artemis:broker=\"amq-broker\"":{"Active":true}},"status":200}'
+passive_pattern_response='{"value":{"org.apache.activemq.artemis:broker=\"amq-broker\"":{"Active":false}},"status":200}'
+printf '%s\n' "$active_pattern_response" | grep -Eq '"Active"[[:space:]]*:[[:space:]]*true'
+if printf '%s\n' "$passive_pattern_response" | grep -Eq '"Active"[[:space:]]*:[[:space:]]*true'; then
+  echo "readiness response check accepted a passive broker" >&2
+  exit 1
+fi
 if rg -q 'vault.hashicorp.com/' "$rendered"; then
   echo "default chart unexpectedly enabled the incomplete Vault integration" >&2
   exit 1
