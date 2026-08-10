@@ -1,0 +1,22 @@
+schemaVersion: releases.artemis.apache.org/v1
+
+platform:
+  kubernetesVersion: 1.31.0
+
+# Canonical deployed versions. prepare-upgrade updates broker and ZooKeeper
+# consumers; operator upgrades additionally require a reviewed vendor rebase.
+operator:
+  version: 2.2.0
+  wrapperChartVersion: 2.2.0-7
+  vendoredChartVersion: 2.2.0-enterprise.4
+  manifest:
+    url: https://github.com/arkmq-org/arkmq-org-broker-operator/releases/download/v2.2.0/activemq-artemis-operator.yaml
+    sha256: ae8ce2672e1cb17dc888e249b076c08e5fb4c44f8cc90dcaef067e86bb4b49f3
+  image:
+    upstreamDigest: sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
+
+broker:
+  version: 2.53.0
+
+zookeeper:
+  version: 3.9.5

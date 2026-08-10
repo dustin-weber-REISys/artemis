@@ -1,0 +1,17 @@
+apiVersion: artemis.apache.org/vendor-lock/v1
+kind: HelmChartVendorLock
+metadata:
+  name: arkmq-org-broker-operator
+spec:
+  upstream:
+    name: arkmq-org-broker-operator
+    version: 2.2.0
+    ociReference: oci://quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator
+    ociDigest: sha256:bf75b448cc62374cfca3f9ad7b405d76584e09e13034446b30b19c3ad36ad285
+    artifactSha256: aeff38fb2d7cbe4a8b0017e89479fb5329a5299298405b51cfd4c76608a17dcd
+  enterprise:
+    version: 2.2.0-enterprise.4
+    patches:
+      - patches/0001-required-admission-labels.patch
+      - patches/0002-replacement-deployment-identity.patch
+      - patches/0003-private-mirror-tags.patch

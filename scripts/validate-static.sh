@@ -4,13 +4,34 @@ set -euo pipefail
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 report="$repo_root/reports/static-validation.json"
+schema_mode=${ARTEMIS_SCHEMA_MODE:-offline}
+kubernetes_version=${ARTEMIS_KUBERNETES_VERSION:-}
 
 while (($#)); do
   case "$1" in
     --report) report=$2; shift 2 ;;
+    --schema-mode) schema_mode=$2; shift 2 ;;
+    --kubernetes-version) kubernetes_version=$2; shift 2 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
+
+
+case "$schema_mode" in
+  offline) schema_status=NOT_RUN ;;
+  network)
+    schema_status=PASS
+    ;;
+  *) printf 'invalid schema mode: %s\n' "$schema_mode" >&2; exit 2 ;;
+esac
+
+if [[ "$schema_mode" == network && -z "$kubernetes_version" && -f "$repo_root/gitops/releases/current.yaml" ]] && command -v yq >/dev/null 2>&1; then
+  kubernetes_version=$(yq -r '.platform.kubernetesVersion // ""' "$repo_root/gitops/releases/current.yaml")
+fi
+if [[ "$schema_mode" == network && -z "$kubernetes_version" ]]; then
+  printf '%s\n' 'network schema mode requires --kubernetes-version or platform.kubernetesVersion in gitops/releases/current.yaml' >&2
+  exit 2
+fi
 
 errors=0
 required_files='
@@ -20,8 +41,13 @@ local/compose.yaml
 local/.env.example
 local/scripts/validate-compose.sh
 gitops/Makefile
+gitops/releases/current.yaml
 gitops/charts/arkmq-operator/values.yaml
+gitops/charts/arkmq-operator/vendor/upstream.lock.yaml
 gitops/scripts/validate-topology.sh
+gitops/scripts/validate-rendered-schema.sh
+gitops/scripts/prepare-arkmq-vendor.sh
+gitops/scripts/vendor-check.sh
 gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/tests/topology/test.sh
@@ -81,10 +107,6 @@ if command -v yq >/dev/null 2>&1; then
     '.image.digest // ""' \
     "$repo_root/gitops/charts/zookeeper/values.yaml" \
     '^sha256:[0-9a-f]{64}$'
-  assert_yaml_pattern 'operator release image digest' \
-    '."arkmq-org-broker-operator".controllerManager.manager.image.tag // ""' \
-    "$repo_root/gitops/charts/arkmq-operator/values.yaml" \
-    '^2[.]2[.]0@sha256:[0-9a-f]{64}$'
 
   if rg -n '^[[:space:]]*(image|images|tag|digest):' "$repo_root/gitops/environments" >/dev/null; then
     printf '%s\n' 'environment values must not contain image locations or release pins' >&2
@@ -94,14 +116,18 @@ else
   printf '%s\n' 'yq unavailable; YAML syntax checks skipped' >&2
 fi
 
-if command -v kubeconform >/dev/null 2>&1; then
-  kubeconform -strict -summary -ignore-missing-schemas \
-    "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
-    "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml" || {
-      printf '%s\n' 'temporary isolation manifests failed kubeconform' >&2
-      errors=$((errors + 1))
-    }
+schema_args=(--mode "$schema_mode")
+if [[ -n "$kubernetes_version" ]]; then
+  schema_args+=(--kubernetes-version "$kubernetes_version")
 fi
+"$repo_root/gitops/scripts/validate-rendered-schema.sh" \
+  "${schema_args[@]}" \
+  "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
+  "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml" || {
+    printf '%s\n' 'temporary isolation manifests failed Kubernetes schema validation' >&2
+    errors=$((errors + 1))
+    schema_status=FAIL
+  }
 
 dockerfile="$repo_root/performance/client/Dockerfile"
 if [[ -f "$dockerfile" ]]; then
@@ -131,7 +157,7 @@ fi
 mkdir -p "$(dirname -- "$report")"
 status=PASS
 [[ "$errors" -eq 0 ]] || status=FAIL
-printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"static-invariants","status":"%s","errors":%d}\n' \
-  "$status" "$errors" > "$report"
-printf '%s\n' "static validation: $status ($errors errors)"
+printf '{"schemaVersion":"validation.artemis.apache.org/report/v1","check":"static-invariants","status":"%s","errors":%d,"schemaMode":"%s","schemaValidation":"%s"}\n' \
+  "$status" "$errors" "$schema_mode" "$schema_status" > "$report"
+printf '%s\n' "static validation: $status ($errors errors; Kubernetes schema: $schema_status/$schema_mode)"
 [[ "$errors" -eq 0 ]]

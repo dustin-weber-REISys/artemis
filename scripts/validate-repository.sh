@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=11
+check_count=12
 run_check() {
   local label=$1
   local exit_code
@@ -76,6 +76,8 @@ run_check() {
   fi
 }
 
+run_check 'Central release contract' \
+  "$repo_root/gitops/scripts/validate-release.sh"
 run_check 'Static invariants' \
   "$script_dir/validate-static.sh" \
   --report "$report_dir/static-validation.json"

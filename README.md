@@ -80,3 +80,7 @@ validation, and validation-client unit tests. Some checks require network
 access to their configured artifact sources.
 
 Run `make help` for the complete command list.
+
+## Work laptop with GitHub UI copy/paste only
+
+Use the [work-laptop copy/paste checklist](gitops/docs/work-laptop-copy-paste-checklist.md).

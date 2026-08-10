@@ -48,10 +48,10 @@ identity or selector.
 Upstream values belong under the `arkmq-org-broker-operator` key in this
 chart's [`values.yaml`](values.yaml). Each environment's operator Application
 sets `global.requiredLabels.env` and its private ECR repositories explicitly.
-It also overrides the manager image to the mirrored `2.2.0` ECR tag. The
-wrapper default records the upstream digest, but an upstream registry digest
-must not be combined with a private repository unless the promotion record
-confirms that the private registry preserved that exact manifest digest.
-The Applications therefore select the immutable ECR `artemis.2.53.0` tags for
-both related images used by the approved broker version. When the approved
-broker version changes, its two related-image mappings must be updated together.
+The Applications do not own version overrides. This wrapper centrally selects
+the approved manager tag and both related-image tags, while the Applications
+provide only environment-specific repositories. The upstream digest remains
+provenance and must not be combined with a private repository unless the
+promotion record confirms that the target registry preserved it. When the
+approved broker version changes, its init and Kubernetes related-image
+mappings must be updated together.

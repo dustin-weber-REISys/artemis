@@ -182,25 +182,25 @@ assert_bootstrap_rejected \
   'test operator cluster scope: expected true, got false'
 
 assert_bootstrap_rejected \
-  upstream-digest-on-private-operator-image \
+  operator-version-override \
   test \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.tag") | .value) = "2.2.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
-  'test operator private image tag: expected 2.2.0, got 2.2.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.image.tag","value":"2.2.1"}]' \
+  'test operator tag override count: expected 0, got 1'
 
 assert_bootstrap_rejected \
-  wrong-private-init-image-tag \
+  broker-init-version-override \
   test \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag") | .value) = "artemis.2.52.0"' \
-  'test operator init-image private tag: expected artemis.2.53.0, got artemis.2.52.0'
+  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag","value":"artemis.2.52.0"}]' \
+  'test operator tag override count: expected 0, got 1'
 
 assert_bootstrap_rejected \
-  wrong-private-broker-image-tag \
+  broker-image-version-override \
   prod \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag") | .value) = "artemis.2.52.0"' \
-  'prod operator broker-image private tag: expected artemis.2.53.0, got artemis.2.52.0'
+  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag","value":"artemis.2.52.0"}]' \
+  'prod operator tag override count: expected 0, got 1'
 
 assert_bootstrap_rejected \
   missing-operator-prune-last \

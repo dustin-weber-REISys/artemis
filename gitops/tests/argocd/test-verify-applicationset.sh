@@ -2,130 +2,65 @@
 set -euo pipefail
 
 test_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(CDPATH= cd -- "$test_dir/../.." && pwd)
-verifier="$repo_root/scripts/verify-argocd-applicationset.sh"
+gitops_root=$(CDPATH= cd -- "$test_dir/../.." && pwd)
+verifier="$gitops_root/scripts/verify-argocd-applicationset.sh"
 
-temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-applicationset-test.XXXXXX")
+temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-health-test.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
 mkdir -p "$temp_dir/bin"
 
 cat > "$temp_dir/bin/kubectl" <<'EOF'
 #!/bin/sh
 case " $* " in
-  *' auth can-i '*)
-    if [ "${MOCK_OPERATOR_RBAC_DENIED:-false}" = true ] && \
-       echo " $* " | grep -q ' list activemqartemises.broker.amq.io '; then
-      printf '%s\n' 'no'
-    else
-      printf '%s\n' 'yes'
-    fi
-    ;;
-  *' get deployment activemq-artemis-controller-manager-v2 '*)
-    if [ "${MOCK_OPERATOR_UNAVAILABLE:-false}" = true ]; then
-      available=0
-    else
-      available=2
-    fi
-    if [ "${MOCK_OPERATOR_MISSING_TOLERATION:-false}" = true ]; then
-      tolerations='[]'
-    else
-      tolerations='[{"key":"eid-platform/node-lifecycle","operator":"Equal","value":"ondemand","effect":"NoSchedule"}]'
-    fi
-    if [ "${MOCK_OPERATOR_WATCH_NAMESPACE:-cluster}" = cluster ]; then
-      watch_namespace=''
-    else
-      watch_namespace=$MOCK_OPERATOR_WATCH_NAMESPACE
-    fi
-    printf '{"spec":{"replicas":2,"template":{"spec":{"tolerations":%s,"containers":[{"name":"manager","env":[{"name":"WATCH_NAMESPACE","value":"%s"}]}]}}},"status":{"availableReplicas":%s}}\n' \
-      "$tolerations" "$watch_namespace" "$available"
-    ;;
-  *' get deployment '*)
+  *' get deployment argocd-applicationset-controller '*)
     printf '%s\n' '{"spec":{"replicas":1},"status":{"availableReplicas":1}}'
     ;;
+  *' get deployment activemq-artemis-controller-manager-v2 '*)
+    available=2
+    [ "${MOCK_OPERATOR_UNAVAILABLE:-false}" = true ] && available=0
+    printf '{"spec":{"replicas":2},"status":{"availableReplicas":%s}}\n' "$available"
+    ;;
   *' get applicationset '*)
-    if [ "${MOCK_PARENT_INVALID_SELECTOR:-false}" = true ]; then
-      parameters='[{"name":"ha.coordinationId","value":"{{.coordinationId}}"},{"name":"networkPolicy.managementSources[0].namespaceSelector","value":"{}"},{"name":"networkPolicy.managementSources[0].podSelector","value":"{}"}]'
+    if [ "${MOCK_APPLICATIONSET_ERROR:-false}" = true ]; then
+      conditions='[{"type":"ErrorOccurred","status":"True","message":"template failed"}]'
     else
-      parameters='[{"name":"ha.coordinationId","value":"{{.coordinationId}}"}]'
+      conditions='[{"type":"ResourcesUpToDate","status":"True","message":"ok"}]'
     fi
-    printf '{"spec":{"template":{"spec":{"source":{"repoURL":"https://example.invalid/artemis.git","targetRevision":"main","path":"gitops/charts/artemis-ha","helm":{"valueFiles":["../../environments/{{.environment}}/artemis-values.yaml"],"parameters":%s}}}}},"status":{"conditions":[{"type":"ResourcesUpToDate","status":"True","message":"ok"}]}}\n' \
-      "$parameters"
+    printf '{"status":{"conditions":%s}}\n' "$conditions"
     ;;
   *' get appproject '*)
-    printf '{"spec":{"destinations":[{"server":"https://kubernetes.default.svc","namespace":"%s"}]}}\n' \
-      "${MOCK_PROJECT_NAMESPACE:-PLACEHOLDER_TEST_NAMESPACE_SKY}"
-    ;;
-  *' get activemqartemis '*)
-    if [ "${MOCK_BROKER_NO_STATUS:-false}" = true ]; then
-      conditions='[]'
-    elif [ "${MOCK_BROKER_RESOURCE_ERROR:-false}" = true ]; then
-      conditions='[{"type":"Deployed","status":"False","reason":"ResourceError","observedGeneration":3,"message":"StatefulSet creation denied"}]'
-    else
-      conditions='[{"type":"Valid","status":"True","reason":"ValidationSucceeded","observedGeneration":3,"message":"configuration is valid"},{"type":"Deployed","status":"True","reason":"Deployed","observedGeneration":3,"message":"broker resources created"}]'
-    fi
-    if [ "${MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS:-false}" = true ]; then
-      resource_templates='[]'
-    else
-      resource_templates='[{"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}}]'
-    fi
-    printf '{"metadata":{"generation":3,"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}},"spec":{"deploymentPlan":{"labels":{"app":"artemis","contact":"team","env":"test","fismaid":"system"}},"resourceTemplates":%s},"status":{"conditions":%s}}\n' \
-      "$resource_templates" "$conditions"
-    ;;
-  *' get statefulset '*)
-    if [ "${MOCK_STATEFULSET_MISSING:-false}" = true ]; then
-      printf '%s\n' 'Error from server (NotFound): statefulset not found' >&2
-      exit 1
-    fi
-    printf '%s\n' '{"spec":{"replicas":2},"status":{"currentReplicas":2,"readyReplicas":2}}'
+    namespace=${MOCK_PROJECT_NAMESPACE:-PLACEHOLDER_TEST_NAMESPACE_SKY}
+    printf '{"spec":{"destinations":[{"server":"https://kubernetes.default.svc","namespace":"%s"}]}}\n' "$namespace"
     ;;
   *' get application test-arkmq-operator '*)
-    operator_environment=test
-    operator_release=test-arkmq-operator
-    if [ "${MOCK_OPERATOR_ENVIRONMENT_DRIFT:-false}" = true ]; then
-      operator_environment=nonprod
-      operator_release=nonprod-arkmq-operator
-    fi
-    if [ "${MOCK_OPERATOR_RBAC_RESOURCES_MISSING:-false}" = true ]; then
-      operator_resources='[]'
-    else
-      operator_resources='[{"group":"rbac.authorization.k8s.io","kind":"ClusterRole","name":"activemq-artemis-operator-role","status":"Synced"},{"group":"rbac.authorization.k8s.io","kind":"ClusterRoleBinding","name":"activemq-artemis-operator-rolebinding","status":"Synced"}]'
-    fi
-    if [ "${MOCK_OPERATOR_REPEATED_RESOURCE:-false}" = true ]; then
-      operator_conditions='[{"type":"RepeatedResourceWarning","message":"Resource rbac.authorization.k8s.io/Role/artemis-platform/activemq-artemis-leader-election-role appeared 2 times among application resources."}]'
-    else
-      operator_conditions='[]'
-    fi
-    operator_revision=${MOCK_OPERATOR_RECONCILED_REVISION:-}
-    printf '{"spec":{"source":{"path":"gitops/charts/arkmq-operator","helm":{"releaseName":"%s","parameters":[{"name":"global.requiredLabels.env","value":"%s"},{"name":"arkmq-org-broker-operator.clusterScoped","value":"true"}]}},"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_PLATFORM_NAMESPACE"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s,"resources":%s}}\n' \
-      "$operator_release" "$operator_environment" "$operator_revision" \
-      "$operator_conditions" "$operator_resources"
+    health=Healthy
+    [ "${MOCK_OPERATOR_UNHEALTHY:-false}" = true ] && health=Degraded
+    printf '{"spec":{"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_PLATFORM_NAMESPACE"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"%s"},"conditions":[]}}\n' \
+      "${MOCK_OPERATOR_REVISION:-remote-operator-revision}" "$health"
     ;;
-  *' get application '*)
-    if [ "${MOCK_INVALID_SPEC:-false}" = true ]; then
-      conditions='[{"type":"InvalidSpecError","message":"destination is not permitted"}]'
-    elif [ "${MOCK_REPEATED_RESOURCE:-false}" = true ]; then
-      conditions='[{"type":"RepeatedResourceWarning","message":"Resource broker.amq.io/ActiveMQArtemis/artemis/int-sky/test-sky-artemis-artemis-ha appeared 2 times among application resources."}]'
+  *' get application test-sky-artemis '*)
+    if [ "${MOCK_REPEATED_RESOURCE:-false}" = true ]; then
+      conditions='[{"type":"RepeatedResourceWarning","message":"duplicate broker identity"}]'
     else
       conditions='[]'
     fi
-    if [ "${MOCK_PARENT_INVALID_SELECTOR:-false}" = true ]; then
-      parameters='[{"name":"ha.coordinationId","value":"test-sky-01"},{"name":"networkPolicy.managementSources[0].namespaceSelector","value":"{}"},{"name":"networkPolicy.managementSources[0].podSelector","value":"{}"}]'
-    elif [ "${MOCK_PARAMETER_DRIFT:-false}" = true ]; then
-      parameters='[{"name":"ha.coordinationId","value":"test-sky-01"},{"name":"networkPolicy.managementSources[0].namespaceSelector","value":"{}"}]'
+    printf '{"metadata":{"name":"test-sky-artemis","ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"helm":{"releaseName":"test-sky-artemis"}},"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_TEST_NAMESPACE_SKY"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s}}\n' \
+      "${MOCK_WORKLOAD_REVISION:-remote-workload-revision}" "$conditions"
+    ;;
+  *' get activemqartemis test-sky-artemis-artemis-ha '*)
+    if [ "${MOCK_BROKER_NO_STATUS:-false}" = true ]; then
+      conditions='[]'
+    elif [ "${MOCK_BROKER_FAILED:-false}" = true ]; then
+      conditions='[{"type":"Deployed","status":"False","reason":"ResourceError","observedGeneration":3,"message":"StatefulSet denied"}]'
     else
-      parameters='[{"name":"ha.coordinationId","value":"test-sky-01"}]'
+      conditions='[{"type":"Valid","status":"True","reason":"ValidationSucceeded","observedGeneration":3},{"type":"Deployed","status":"True","reason":"Deployed","observedGeneration":3}]'
     fi
-    path=gitops/charts/artemis-ha
-    if [ "${MOCK_SOURCE_DRIFT:-false}" = true ]; then
-      path=gitops/charts/duplicate-artemis
-    fi
-    sources=''
-    if [ "${MOCK_MULTI_SOURCE:-false}" = true ]; then
-      sources=',"sources":[{"repoURL":"https://example.invalid/artemis.git","path":"gitops/charts/artemis-ha"},{"repoURL":"https://example.invalid/artemis.git","path":"gitops/charts/artemis-ha"}]'
-    fi
-    workload_revision=${MOCK_WORKLOAD_RECONCILED_REVISION:-}
-    printf '{"metadata":{"ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"repoURL":"https://example.invalid/artemis.git","targetRevision":"main","path":"%s","helm":{"valueFiles":["../../environments/test/artemis-values.yaml"],"parameters":%s}}%s,"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_TEST_NAMESPACE_SKY"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s}}\n' \
-      "$path" "$parameters" "$sources" "$workload_revision" "$conditions"
+    printf '{"metadata":{"generation":3},"status":{"conditions":%s}}\n' "$conditions"
+    ;;
+  *' get statefulset test-sky-artemis-artemis-ha-ss '*)
+    ready=2
+    [ "${MOCK_STATEFULSET_UNREADY:-false}" = true ] && ready=1
+    printf '{"spec":{"replicas":2},"status":{"currentReplicas":2,"readyReplicas":%s}}\n' "$ready"
     ;;
   *)
     printf 'unexpected kubectl arguments: %s\n' "$*" >&2
@@ -135,253 +70,76 @@ esac
 EOF
 chmod +x "$temp_dir/bin/kubectl"
 
-PATH="$temp_dir/bin:$PATH" \
-  "$verifier" \
+run_verifier() {
+  PATH="$temp_dir/bin:$PATH" "$verifier" \
     --context test-context \
     --argocd-namespace argocd \
-    --environment test >"$temp_dir/pass.out"
-grep -Fq 'Approved project destination: https://kubernetes.default.svc/PLACEHOLDER_TEST_NAMESPACE_SKY' "$temp_dir/pass.out"
-grep -Fq 'ArkMQ operator: available (2/2 replicas)' "$temp_dir/pass.out"
-grep -Fq 'ArkMQ operator watch scope: cluster-wide' "$temp_dir/pass.out"
-grep -Fq 'Local chart render: one ActiveMQArtemis, no duplicate identities, required resourceTemplate labels present' "$temp_dir/pass.out"
-grep -Fq 'Broker reconciliation conditions: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha generation=3' "$temp_dir/pass.out"
-grep -Fq 'Broker StatefulSet: PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss desired=2 current=2 ready=2' "$temp_dir/pass.out"
-grep -Fq 'ApplicationSet verification: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
+    --environment test
+}
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_ENVIRONMENT_DRIFT=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-environment-drift.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted operator environment drift' >&2
-  exit 1
-fi
-grep -Fq 'uses Helm release nonprod-arkmq-operator; expected test-arkmq-operator' \
-  "$temp_dir/operator-environment-drift.out"
-grep -Fq 'must set global.requiredLabels.env=test exactly once' \
-  "$temp_dir/operator-environment-drift.out"
+run_verifier >"$temp_dir/pass.out"
+grep -Fq 'Application test-arkmq-operator: Synced/Healthy revision=remote-operator-revision' "$temp_dir/pass.out"
+grep -Fq 'Application test-sky-artemis: Synced/Healthy revision=remote-workload-revision' "$temp_dir/pass.out"
+grep -Fq 'Broker StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss: desired=2 current=2 ready=2' "$temp_dir/pass.out"
+grep -Fq 'Live Artemis health: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_RBAC_RESOURCES_MISSING=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-rbac-resources-missing.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted missing operator RBAC resources' >&2
-  exit 1
-fi
-grep -Fq 'does not track expected ClusterRole activemq-artemis-operator-role' \
-  "$temp_dir/operator-rbac-resources-missing.out"
-grep -Fq 'does not track expected ClusterRoleBinding activemq-artemis-operator-rolebinding' \
-  "$temp_dir/operator-rbac-resources-missing.out"
+# A workstation checkout revision is deliberately irrelevant to live health.
+MOCK_OPERATOR_REVISION=not-local-head \
+MOCK_WORKLOAD_REVISION=also-not-local-head \
+  run_verifier >"$temp_dir/remote-revision.out"
+grep -Fq 'revision=not-local-head' "$temp_dir/remote-revision.out"
+grep -Fq 'revision=also-not-local-head' "$temp_dir/remote-revision.out"
+grep -Fq 'Live Artemis health: PASS' "$temp_dir/remote-revision.out"
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_REPEATED_RESOURCE=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-repeated-resource.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted duplicate operator resources' >&2
-  exit 1
-fi
-grep -Fq 'ArkMQ operator Application argocd/test-arkmq-operator has RepeatedResourceWarning' \
-  "$temp_dir/operator-repeated-resource.out"
+assert_failure() {
+  name=$1
+  expected=$2
+  shift 2
+  if "$@" >"$temp_dir/$name.out" 2>&1; then
+    printf 'expected failure for %s\n' "$name" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$temp_dir/$name.out"
+}
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_RECONCILED_REVISION=f7675b8ab3dfa84d859b583b86f44fc3a4604f5e \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-revision-drift.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a stale operator revision' >&2
-  exit 1
-fi
-grep -Fq 'reconciled revision f7675b8ab3dfa84d859b583b86f44fc3a4604f5e differs from repository checkout' \
-  "$temp_dir/operator-revision-drift.out"
+assert_failure operator-unavailable \
+  'ArkMQ operator has 0 available replicas (desired: 2)' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_OPERATOR_UNAVAILABLE=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_UNAVAILABLE=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-unavailable.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted an unavailable ArkMQ operator' >&2
-  exit 1
-fi
-grep -Fq 'ArkMQ operator has 0 available replicas (desired: 2); a synced broker CR cannot produce a StatefulSet until the operator runs' \
-  "$temp_dir/operator-unavailable.out"
+assert_failure operator-unhealthy \
+  'Application argocd/test-arkmq-operator health is Degraded; expected Healthy' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_OPERATOR_UNHEALTHY=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_MISSING_TOLERATION=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-toleration.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted an operator without the platform lifecycle toleration' >&2
-  exit 1
-fi
-grep -Fq 'ArkMQ operator Deployment does not contain exactly one eid-platform/node-lifecycle=ondemand:NoSchedule toleration' \
-  "$temp_dir/operator-toleration.out"
+assert_failure repeated-resource \
+  'RepeatedResourceWarning: duplicate broker identity' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_REPEATED_RESOURCE=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_WATCH_NAMESPACE=artemis-platform \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-watch-namespace.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a namespace-scoped ArkMQ operator' >&2
-  exit 1
-fi
-grep -Fq "ArkMQ operator WATCH_NAMESPACE is 'artemis-platform'; this repository requires cluster-wide watch scope" \
-  "$temp_dir/operator-watch-namespace.out"
+assert_failure applicationset-error \
+  'ApplicationSet argocd/test-artemis-workloads reports: template failed' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_APPLICATIONSET_ERROR=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_OPERATOR_RBAC_DENIED=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/operator-rbac.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted denied ArkMQ operator cluster RBAC' >&2
-  exit 1
-fi
-grep -Fq 'ArkMQ operator authorization denied: list activemqartemises.broker.amq.io at cluster scope (no)' \
-  "$temp_dir/operator-rbac.out"
+assert_failure broker-no-status \
+  'has no status conditions; operator has not processed generation 3' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_BROKER_NO_STATUS=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_PROJECT_NAMESPACE=wrong-namespace \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/project-mismatch.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a disallowed project destination' >&2
-  exit 1
-fi
-grep -Fq 'does not allow destination https://kubernetes.default.svc namespace PLACEHOLDER_TEST_NAMESPACE_SKY' \
-  "$temp_dir/project-mismatch.out"
+assert_failure broker-failed \
+  'reconciliation failed: Deployed=False reason=ResourceError: StatefulSet denied' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_BROKER_FAILED=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_INVALID_SPEC=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/invalid-spec.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted an Application InvalidSpecError' >&2
-  exit 1
-fi
-grep -Fq 'has InvalidSpecError: destination is not permitted' "$temp_dir/invalid-spec.out"
+assert_failure statefulset-unready \
+  'has 1/2 ready replicas' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_STATEFULSET_UNREADY=true "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_MULTI_SOURCE=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/multi-source.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a generated Application with multiple sources' >&2
-  exit 1
-fi
-grep -Fq 'declares spec.sources with 2 entries; this can render the same ActiveMQArtemis identity more than once' \
-  "$temp_dir/multi-source.out"
+assert_failure project-destination \
+  'does not allow https://kubernetes.default.svc namespace PLACEHOLDER_TEST_NAMESPACE_SKY' \
+  env PATH="$temp_dir/bin:$PATH" MOCK_PROJECT_NAMESPACE=wrong-namespace "$verifier" \
+    --context test-context --argocd-namespace argocd --environment test
 
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_REPEATED_RESOURCE=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/repeated-resource.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted RepeatedResourceWarning' >&2
-  exit 1
-fi
-grep -Fq 'has RepeatedResourceWarning: Resource broker.amq.io/ActiveMQArtemis/artemis/int-sky/test-sky-artemis-artemis-ha appeared 2 times among application resources.' \
-  "$temp_dir/repeated-resource.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_BROKER_NO_STATUS=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/broker-no-status.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a broker CR the operator never processed' >&2
-  exit 1
-fi
-grep -Fq 'has no status conditions; the ArkMQ operator has not processed generation 3' \
-  "$temp_dir/broker-no-status.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_BROKER_RESOURCE_ERROR=true \
-  MOCK_STATEFULSET_MISSING=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/broker-resource-error.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a broker ResourceError without a StatefulSet' >&2
-  exit 1
-fi
-grep -Fq 'reconciliation failed: Deployed=False reason=ResourceError: StatefulSet creation denied' \
-  "$temp_dir/broker-resource-error.out"
-grep -Fq 'has not created expected StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss' \
-  "$temp_dir/broker-resource-error.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/broker-resource-template-labels.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted a broker CR without StatefulSet label propagation' >&2
-  exit 1
-fi
-grep -Fq 'has no unscoped spec.resourceTemplates entry carrying required labels: app,contact,env,fismaid; sync gitops/charts/artemis-ha/templates/activemqartemis.yaml' \
-  "$temp_dir/broker-resource-template-labels.out"
-
-checkout_revision=$(git -C "$repo_root/.." rev-parse HEAD)
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_BROKER_MISSING_RESOURCE_TEMPLATE_LABELS=true \
-  MOCK_WORKLOAD_RECONCILED_REVISION="$checkout_revision" \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/same-revision-manifest-drift.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted live manifest drift at the checkout revision' >&2
-  exit 1
-fi
-grep -Fq "differs from the valid local Helm render at the same revision $checkout_revision; inspect Argo CD's generated manifests and request a hard refresh through the authorized workflow" \
-  "$temp_dir/same-revision-manifest-drift.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_SOURCE_DRIFT=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/source-drift.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted generated Application source drift' >&2
-  exit 1
-fi
-grep -Fq 'path differs from ApplicationSet test-artemis-workloads' \
-  "$temp_dir/source-drift.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_PARAMETER_DRIFT=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/parameter-drift.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted an unmanaged Helm parameter' >&2
-  exit 1
-fi
-grep -Fq 'Helm parameters differ from ApplicationSet test-artemis-workloads; unexpected: networkPolicy.managementSources[0].namespaceSelector' \
-  "$temp_dir/parameter-drift.out"
-
-if PATH="$temp_dir/bin:$PATH" \
-  MOCK_PARENT_INVALID_SELECTOR=true \
-    "$verifier" \
-      --context test-context \
-      --argocd-namespace argocd \
-      --environment test >"$temp_dir/parent-selector.out" 2>&1; then
-  printf '%s\n' 'ApplicationSet verifier accepted an empty selector override from its parent' >&2
-  exit 1
-fi
-grep -Fq 'ApplicationSet argocd/test-artemis-workloads declares selector parameters with value {}; Helm parses {} as an array, not an object' \
-  "$temp_dir/parent-selector.out"
-
-printf '%s\n' 'ApplicationSet verification tests passed'
+printf '%s\n' 'Live Artemis health tests passed'

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 chart_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+gitops_dir=$(CDPATH= cd -- "$chart_dir/../.." && pwd)
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-ha-tests.XXXXXX")
 rendered="$temp_dir/default.yaml"
 autocreate_rendered="$temp_dir/autocreate.yaml"
@@ -12,6 +13,11 @@ prod_rendered="$temp_dir/prod.yaml"
 nonprod_rendered="$temp_dir/nonprod.yaml"
 test_rendered="$temp_dir/test.yaml"
 trap 'rm -rf "$temp_dir"' EXIT
+schema_mode=${ARTEMIS_SCHEMA_MODE:-offline}
+schema_args=(--mode "$schema_mode" --quiet-offline)
+if [[ -n "${ARTEMIS_KUBERNETES_VERSION:-}" ]]; then
+  schema_args+=(--kubernetes-version "$ARTEMIS_KUBERNETES_VERSION")
+fi
 
 helm_args=(
   --set 'ha.coordinationId=pair-id-test01'
@@ -29,6 +35,11 @@ fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
   --set-string 'commonLabels.contact=ELISSkynet@uscis.dhs.gov' >/dev/null 2>&1; then
   echo "expected an email address used as a label value to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'broker.adminUser=' >/dev/null 2>&1; then
+  echo "expected an empty broker administrator username to fail" >&2
   exit 1
 fi
 
@@ -167,6 +178,8 @@ fi
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.size' "$rendered")" == "2" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$rendered")" == "PLACEHOLDER_ARTEMIS_ADMIN_USERNAME" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec | has("adminPassword")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan | has("image") or has("initImage")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-console") | .spec.ports[0].port' "$rendered")" == "8161" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-metrics") | .spec.publishNotReadyAddresses' "$rendered")" == "true" ]]
@@ -189,11 +202,19 @@ for environment in prod nonprod test; do
 done
 
 for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered"; do
+  [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$environment_rendered")" == "PLACEHOLDER_ARTEMIS_ADMIN_USERNAME" ]]
   if rg -q '^kind: StorageClass$' "$environment_rendered"; then
     echo "Artemis chart unexpectedly rendered a platform-owned StorageClass: $environment_rendered" >&2
     exit 1
   fi
 done
+
+custom_admin_rendered="$temp_dir/custom-admin.yaml"
+helm template artemis-custom-admin "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  --set-string 'broker.adminUser=elis-admin' \
+  > "$custom_admin_rendered"
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$custom_admin_rendered")" == "elis-admin" ]]
 for environment in prod nonprod test; do
   environment_rendered="$temp_dir/$environment.yaml"
   yq -e "select(.kind == \"ActiveMQArtemis\") |
@@ -270,6 +291,9 @@ if rg -n -i '^[[:space:]]*(password|token):[[:space:]]+[^<{]' "$rendered"; then
   exit 1
 fi
 
-kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
-kubeconform -strict -ignore-missing-schemas -summary "$prod_rendered" >/dev/null
-echo "artemis-ha focused chart tests passed"
+"$gitops_dir/scripts/validate-rendered-schema.sh" "${schema_args[@]}" "$rendered" "$prod_rendered" >/dev/null
+if [[ "$schema_mode" == offline ]]; then
+  echo "artemis-ha focused chart tests passed (Kubernetes schema: NOT_RUN/offline)"
+else
+  echo "artemis-ha focused chart tests passed (Kubernetes schema: PASS/network)"
+fi

@@ -2,8 +2,15 @@
 set -euo pipefail
 
 chart_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+gitops_dir=$(CDPATH= cd -- "$chart_dir/../.." && pwd)
+release_file="$gitops_dir/releases/current.yaml"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/arkmq-operator-test.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
+
+operator_version=$(yq -r '.operator.version' "$release_file")
+broker_version=$(yq -r '.broker.version' "$release_file")
+broker_image_tag="artemis.$broker_version"
+broker_compact=${broker_version//./}
 
 cp -R "$chart_dir/." "$work_dir/chart"
 helm dependency build "$work_dir/chart" >/dev/null
@@ -25,11 +32,11 @@ for environment in test nonprod prod; do
     --namespace example-platform \
     --set-string "global.requiredLabels.env=$environment" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=$operator_version" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag=artemis.2.53.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit$broker_compact.tag=$broker_image_tag" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag=artemis.2.53.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes$broker_compact.tag=$broker_image_tag" \
     > "$rendered"
 
   duplicate_resources=$(
@@ -56,18 +63,18 @@ for environment in test nonprod prod; do
         ] | length) == 1)
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" yq -e '
+  ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" OPERATOR_VERSION="$operator_version" BROKER_COMPACT="$broker_compact" BROKER_IMAGE_TAG="$broker_image_tag" yq -e '
     select(.kind == "Deployment")
     | (.metadata.name == "activemq-artemis-controller-manager-v2")
       and (.spec.replicas == 2)
       and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
-      and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:2.2.0"))
+      and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:" + strenv(OPERATOR_VERSION)))
       and ([.spec.template.spec.containers[0].env[] |
-        select(.name == "RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_2530" and
-          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-init:artemis.2.53.0"))] | length == 1)
+        select(.name == ("RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_" + strenv(BROKER_COMPACT)) and
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-init:" + strenv(BROKER_IMAGE_TAG)))] | length == 1)
       and ([.spec.template.spec.containers[0].env[] |
-        select(.name == "RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_2530" and
-          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:artemis.2.53.0"))] | length == 1)
+        select(.name == ("RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_" + strenv(BROKER_COMPACT)) and
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:" + strenv(BROKER_IMAGE_TAG)))] | length == 1)
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
       and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
       and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")

@@ -3,40 +3,82 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-operator_manifest_url=${ARKMQ_OPERATOR_MANIFEST_URL:-https://github.com/arkmq-org/arkmq-org-broker-operator/releases/download/v2.2.0/activemq-artemis-operator.yaml}
-operator_manifest_sha256=${ARKMQ_OPERATOR_MANIFEST_SHA256:-ae8ce2672e1cb17dc888e249b076c08e5fb4c44f8cc90dcaef067e86bb4b49f3}
+release_file="$repo_root/releases/current.yaml"
+schema_mode=offline
+local_manifest=''
 
-for command_name in curl helm kubeconform yq; do
+while (($#)); do
+  case "$1" in
+    --network) schema_mode=network; shift ;;
+    --manifest) schema_mode=local; local_manifest=$2; shift 2 ;;
+    *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+
+for command_name in helm yq; do
   command -v "$command_name" >/dev/null 2>&1 || {
     printf '%s is required\n' "$command_name" >&2
     exit 2
   }
 done
+if [[ "$schema_mode" != offline ]]; then
+  command -v kubeconform >/dev/null 2>&1 || {
+    printf '%s\n' 'kubeconform is required for --manifest or --network schema validation' >&2
+    exit 2
+  }
+fi
+if [[ "$schema_mode" == network ]]; then
+  command -v curl >/dev/null 2>&1 || {
+    printf '%s\n' 'curl is required for --network schema validation' >&2
+    exit 2
+  }
+fi
+
+operator_version=$(yq -r '.operator.version' "$release_file")
+operator_image_tag=$operator_version
+broker_version=$(yq -r '.broker.version' "$release_file")
+broker_image_tag="artemis.$broker_version"
+operator_manifest_url=${ARKMQ_OPERATOR_MANIFEST_URL:-$(yq -r '.operator.manifest.url' "$release_file")}
+operator_manifest_sha256=${ARKMQ_OPERATOR_MANIFEST_SHA256:-$(yq -r '.operator.manifest.sha256' "$release_file")}
 
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-operator-schema.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
-manifest="$temp_dir/activemq-artemis-operator.yaml"
 schema="$temp_dir/activemqartemis-v1beta1.json"
 
-curl -fsSL "$operator_manifest_url" -o "$manifest"
-if command -v sha256sum >/dev/null 2>&1; then
-  actual_sha256=$(sha256sum "$manifest" | awk '{print $1}')
-else
-  actual_sha256=$(shasum -a 256 "$manifest" | awk '{print $1}')
-fi
-if [[ "$actual_sha256" != "$operator_manifest_sha256" ]]; then
-  printf 'ArkMQ manifest checksum mismatch: expected %s, got %s\n' \
-    "$operator_manifest_sha256" "$actual_sha256" >&2
-  exit 1
-fi
+if [[ "$schema_mode" != offline ]]; then
+  manifest="$temp_dir/activemq-artemis-operator.yaml"
+  if [[ "$schema_mode" == network ]]; then
+    curl -fsSL "$operator_manifest_url" -o "$manifest"
+  else
+    [[ -f "$local_manifest" ]] || {
+      printf 'operator manifest not found: %s\n' "$local_manifest" >&2
+      exit 1
+    }
+    cp "$local_manifest" "$manifest"
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_sha256=$(sha256sum "$manifest" | awk '{print $1}')
+  else
+    actual_sha256=$(shasum -a 256 "$manifest" | awk '{print $1}')
+  fi
+  if [[ "$actual_sha256" != "$operator_manifest_sha256" ]]; then
+    printf 'ArkMQ manifest checksum mismatch: expected %s, got %s\n' \
+      "$operator_manifest_sha256" "$actual_sha256" >&2
+    exit 1
+  fi
 
-yq -o=json '
-  select(.kind == "CustomResourceDefinition"
-    and .metadata.name == "activemqartemises.broker.amq.io")
-  | .spec.versions[]
-  | select(.name == "v1beta1")
-  | .schema.openAPIV3Schema
-' "$manifest" > "$schema"
+  yq -o=json '
+    select(.kind == "CustomResourceDefinition"
+      and .metadata.name == "activemqartemises.broker.amq.io")
+    | .spec.versions[]
+    | select(.name == "v1beta1")
+    | .schema.openAPIV3Schema
+  ' "$manifest" > "$schema"
+  [[ -s "$schema" ]] || {
+    printf '%s\n' 'ActiveMQArtemis v1beta1 schema was not found in the operator manifest' >&2
+    exit 1
+  }
+fi
 
 operator_chart_dir="$temp_dir/arkmq-operator"
 cp -R "$repo_root/charts/arkmq-operator/." "$operator_chart_dir"
@@ -53,7 +95,9 @@ for environment in test nonprod prod; do
     --values "$repo_root/environments/$environment/artemis-values.yaml" \
     > "$rendered"
   yq 'select(.kind == "ActiveMQArtemis")' "$rendered" > "$broker_cr"
-  kubeconform -strict -schema-location "$schema" "$broker_cr" >/dev/null
+  if [[ "$schema_mode" != offline ]]; then
+    kubeconform -strict -schema-location "$schema" "$broker_cr" >/dev/null
+  fi
   if [[ "$(yq -r '.spec.resourceTemplates | length' "$broker_cr")" != 1 ]] || \
      [[ "$(yq -r '.spec.resourceTemplates[0] | has("selector")' "$broker_cr")" != false ]]; then
     printf '%s broker CR must apply one unscoped resourceTemplate to operator-generated resources\n' \
@@ -79,13 +123,15 @@ for environment in test nonprod prod; do
     --namespace example-platform \
     --set-string "global.requiredLabels.env=$environment" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=2.2.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=$operator_image_tag" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag=artemis.2.53.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit$compact_version.tag=$broker_image_tag" \
     --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag=artemis.2.53.0" \
+    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes$compact_version.tag=$broker_image_tag" \
     > "$operator_rendered"
-  kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
+  if [[ "$schema_mode" != offline ]]; then
+    kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
+  fi
 
   if [[ "$(yq -r 'select(.kind == "Deployment") | .metadata.name' "$operator_rendered")" != "activemq-artemis-controller-manager-v2" ]] || \
      [[ "$(yq -r 'select(.kind == "Deployment") | .spec.selector.matchLabels | length' "$operator_rendered")" != 2 ]] || \
@@ -96,9 +142,9 @@ for environment in test nonprod prod; do
     exit 1
   fi
 
-  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:2.2.0" ]]; then
-    printf '%s operator Deployment must resolve the private ECR image by its mirrored 2.2.0 tag\n' \
-      "$environment" >&2
+  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:$operator_image_tag" ]]; then
+    printf '%s operator Deployment must resolve the private ECR image by its centrally selected %s tag\n' \
+      "$environment" "$operator_image_tag" >&2
     exit 1
   fi
 
@@ -136,4 +182,9 @@ for environment in test nonprod prod; do
   fi
 done
 
-printf '%s\n' 'operator contract validation: PASS (ArkMQ 2.2.0, 3 overlays)'
+if [[ "$schema_mode" == offline ]]; then
+  printf '%s\n' 'operator CRD schema validation: NOT_RUN (offline default; use --manifest FILE or --network)'
+else
+  printf 'operator CRD schema validation: PASS (%s source)\n' "$schema_mode"
+fi
+printf 'operator contract validation: PASS (ArkMQ %s, 3 overlays)\n' "$operator_version"

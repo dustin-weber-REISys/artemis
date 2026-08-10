@@ -5,6 +5,11 @@ chart_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repository_dir=$(CDPATH= cd -- "$chart_dir/../.." && pwd)
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/zookeeper-test.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
+schema_mode=${ARTEMIS_SCHEMA_MODE:-offline}
+schema_args=(--mode "$schema_mode" --quiet-offline)
+if [[ -n "${ARTEMIS_KUBERNETES_VERSION:-}" ]]; then
+  schema_args+=(--kubernetes-version "$ARTEMIS_KUBERNETES_VERSION")
+fi
 
 command -v yq >/dev/null 2>&1 || {
   printf '%s\n' 'yq is required' >&2
@@ -78,7 +83,7 @@ rg -q 'operator: Exists' "$rendered"
 rg -q 'maxUnavailable: 1' "$rendered"
 rg -q 'minDomains: 3' "$rendered"
 rg -q 'topologyKey: "topology.kubernetes.io/zone"' "$rendered"
-kubeconform -strict -ignore-missing-schemas -summary "$rendered" >/dev/null
+"$repository_dir/scripts/validate-rendered-schema.sh" "${schema_args[@]}" "$rendered" >/dev/null
 
 scheduling_rendered="$work_dir/scheduling.yaml"
 helm template zookeeper "$chart_dir" --namespace example-platform \
@@ -94,7 +99,7 @@ yq -e 'select(.kind == "StatefulSet") |
   .spec.template.spec.tolerations[0].value == "messaging" and
   .spec.template.spec.tolerations[0].effect == "NoSchedule"' \
   "$scheduling_rendered" >/dev/null
-kubeconform -strict -ignore-missing-schemas -summary "$scheduling_rendered" >/dev/null
+"$repository_dir/scripts/validate-rendered-schema.sh" "${schema_args[@]}" "$scheduling_rendered" >/dev/null
 
 for environment in test nonprod prod; do
   values="$repository_dir/environments/$environment/zookeeper-values.yaml"
@@ -141,7 +146,11 @@ for environment in test nonprod prod; do
     .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[] |
     select(.topologyKey == "kubernetes.io/hostname")' \
     "$environment_rendered" >/dev/null
-  kubeconform -strict -ignore-missing-schemas -summary "$environment_rendered" >/dev/null
+  "$repository_dir/scripts/validate-rendered-schema.sh" "${schema_args[@]}" "$environment_rendered" >/dev/null
 done
 
-printf '%s\n' 'zookeeper focused chart tests passed'
+if [[ "$schema_mode" == offline ]]; then
+  printf '%s\n' 'zookeeper focused chart tests passed (Kubernetes schema: NOT_RUN/offline)'
+else
+  printf '%s\n' 'zookeeper focused chart tests passed (Kubernetes schema: PASS/network)'
+fi

@@ -28,6 +28,12 @@ letter or digit. In particular, do not use a raw email address for `contact`:
 contact identifier instead; keep a human-readable email in an annotation or
 the enterprise ownership system when one is also required.
 
+Replace `PLACEHOLDER_ARTEMIS_ADMIN_USERNAME` once with the approved shared,
+non-secret broker administrator name, such as `elis-admin`. That value is
+rendered as `spec.adminUser` for every test, nonprod, and prod broker. Do not
+add `spec.adminPassword` or a password value to Git; the operator generates a
+different password in each deployment's credential Secret.
+
 The local-cluster bootstraps are authoritative in
 [`argocd/bootstrap`](../argocd/bootstrap), and each cluster's broker-pair
 inventory is authoritative in [`argocd/topology`](../argocd/topology). Chart

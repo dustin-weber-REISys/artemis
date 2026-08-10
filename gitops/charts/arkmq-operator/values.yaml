@@ -42,8 +42,17 @@ arkmq-org-broker-operator:
         effect: NoSchedule
     manager:
       image:
-        tag: 2.2.0@sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
+        # Generated from gitops/releases/current.yaml. Environment bootstrap
+        # files override only the ECR repository, never the selected tag.
+        tag: 2.2.0
         pullPolicy: IfNotPresent
+      relatedImages:
+        # Generated from the central broker release. These tag overrides are
+        # safe with the environment-specific private ECR repositories.
+        activemqArtemisBrokerInit2530:
+          tag: artemis.2.53.0
+        activemqArtemisBrokerKubernetes2530:
+          tag: artemis.2.53.0
   # Keep cluster scope, watch scope, and CRD ownership explicit so an upstream
   # default change cannot silently alter the operator's deployment contract.
   clusterScoped: true

@@ -416,21 +416,15 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   assert_equal "$environment operator image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
     "$expected_ecr_repository/arkmq-operator"
-  assert_equal "$environment operator private image tag" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.tag") | .value' "$operator")" \
-    2.2.0
+  assert_equal "$environment operator tag override count" \
+    "$(yq -r '[.spec.source.helm.parameters[]? | select(.name | test("\\.tag$"))] | length' "$operator")" \
+    0
   assert_equal "$environment operator init-image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-init"
-  assert_equal "$environment operator init-image private tag" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag") | .value' "$operator")" \
-    artemis.2.53.0
   assert_equal "$environment operator broker-image repository" \
     "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
     "$expected_ecr_repository/activemq-artemis-broker-kubernetes"
-  assert_equal "$environment operator broker-image private tag" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag") | .value' "$operator")" \
-    artemis.2.53.0
   assert_singleton_application \
     "$zookeeper" "$environment" ZooKeeper "$environment-shared-zookeeper" -10
   assert_equal "$environment ZooKeeper release name" \

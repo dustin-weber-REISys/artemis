@@ -46,14 +46,12 @@ were rendered differently by earlier revisions. `PruneLast=true` keeps the old
 controller available until the replacement is healthy, then automated pruning
 removes it.
 Operator and operand image locations remain environment-specific ECR
-placeholders in the bootstrap manifests. The manager image uses the mirrored
-`2.2.0` tag rather than the upstream Quay digest: ECR returned `NotFound` when
-the private repository was combined with a digest that was not present in that
-repository. The private tag must be immutable under the platform's ECR policy.
-The approved `2.53.0` init and broker operands follow the same rule: their
-related-image variables use the private mirror's immutable
-`artemis.2.53.0` tags, not the upstream Quay digests stored as vendored-chart
-fallbacks.
+placeholders in the bootstrap manifests. Versions are not repeated there: the
+wrapper selects the approved manager, init, and broker tags from the central
+release. Private tags must be immutable under the platform's ECR policy.
+Upstream Quay digests remain provenance and vendored-chart fallbacks; do not
+combine them with private repositories unless promotion evidence proves those
+exact manifests exist in ECR.
 
 The repository-local chart dependency needs no runtime Helm-registry
 credentials. The separate ECR mirroring design remains documented in

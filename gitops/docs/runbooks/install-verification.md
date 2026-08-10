@@ -23,30 +23,12 @@ tokens with values supplied by the cluster platform; do not commit them.
   --environment test
 ```
 
-  A synced ApplicationSet with no status conditions has not been reconciled.
-  The verifier also confirms that the ArkMQ operator Deployment has an
-  available replica, the exact on-demand-node toleration, cluster-wide watch
-  scope, and the read/write RBAC needed to generate broker resources. For each
-  enabled broker pair, it verifies the local destination, a single Git/Helm
-  source, the source fields owned by the ApplicationSet, no `InvalidSpecError`
-  or `RepeatedResourceWarning`, exactly the declared Helm parameter names, the
-  `ActiveMQArtemis` reconciliation conditions, and the expected operator-owned
-  StatefulSet. A CR with no conditions identifies an operator observation
-  failure; `Valid=False` or `Deployed=False` preserves the operator's reason
-  and message; a missing `-ss` StatefulSet proves reconciliation never reached
-  workload creation.
-  This catches duplicate sources as well as stale or UI-added overrides such
-  as `networkPolicy.*Selector={}`; Helm interprets that syntax as an empty
-  array, not the selector object required by the chart.
-  Check the owning ApplicationSet first. If it declares the override, sync the
-  root Application to the approved Git revision and reconcile the
-  ApplicationSet; deleting generated child Applications only recreates the
-  same invalid parameters. If only the child differs, reconcile its owning
-  ApplicationSet. Do not weaken the values schema. Confirm the cluster's Argo CD
-  installation enables an available `argocd-applicationset-controller`
-  Deployment in the same namespace as the ApplicationSet. Enabling a topology
-  entry cannot create a valid child Application until the controller is
-  running and the AppProject permits its workload namespace.
+  The verifier compares the selected local topology with live ApplicationSet,
+  Application, AppProject, operator Deployment, `ActiveMQArtemis`, and
+  StatefulSet health. It reports live Git revisions without assuming the work
+  directory has Git metadata. Review any revision drift before promotion. For
+  failure ownership and evidence commands, use the
+  [broker reconciliation runbook](broker-reconciliation-debugging.md).
 - Confirm Vault, storage class, ingress TLS, Prometheus, and Keycloak inputs
   exist in the environment repository.
 - Run the destructive scenario harness once in its default dry-run mode:
@@ -59,10 +41,12 @@ tokens with values supplied by the cluster platform; do not commit them.
 ## Broker administrator credential handoff
 
 Keycloak is not the source of the initial Artemis administrator credential.
-When `spec.adminUser` and `spec.adminPassword` are absent, the ArkMQ operator
-generates both values in a Secret named
-`BROKER_CR-credentials-secret`. The keys are `AMQ_USER` and `AMQ_PASSWORD`.
-This repository intentionally contains neither value.
+The chart renders the shared, non-secret `spec.adminUser` configured by
+`broker.adminUser`. Because `spec.adminPassword` remains absent, the ArkMQ
+operator generates a separate password for each broker deployment in a Secret
+named `BROKER_CR-credentials-secret`. The Secret keys remain `AMQ_USER` and
+`AMQ_PASSWORD`; `AMQ_USER` should equal the configured shared username. This
+repository intentionally contains no password.
 
 Run the commands in this section only from the authorized work computer. First
 confirm the context and inventory the generated credential Secrets without
@@ -85,17 +69,17 @@ kubectl --context CONTEXT get secrets --all-namespaces \
   | awk '$2 ~ /-credentials-secret$/ {print $1, $2}'
 ```
 
-For the current test Sky deployment, the generated Secret is
-`test-sky-artemis-artemis-ha-credentials-secret` in `artemis-int-sky`.
-Retrieve one credential pair at a time in a private terminal:
+Confirm that `AMQ_USER` matches the configured shared username, then retrieve
+one credential pair at a time in a private terminal by supplying the exact
+workload namespace and broker CR:
 
 ```sh
-kubectl --context CONTEXT -n artemis-int-sky get secret \
-  test-sky-artemis-artemis-ha-credentials-secret \
+kubectl --context CONTEXT -n NAMESPACE get secret \
+  BROKER_CR-credentials-secret \
   -o jsonpath='{.data.AMQ_USER}' | base64 --decode; echo
 
-kubectl --context CONTEXT -n artemis-int-sky get secret \
-  test-sky-artemis-artemis-ha-credentials-secret \
+kubectl --context CONTEXT -n NAMESPACE get secret \
+  BROKER_CR-credentials-secret \
   -o jsonpath='{.data.AMQ_PASSWORD}' | base64 --decode; echo
 ```
 
@@ -109,12 +93,14 @@ kubectl --context CONTEXT -n NAMESPACE get secret \
   -o go-template='{{range $key, $value := .data}}{{$key}}{{"\n"}}{{end}}'
 ```
 
-Record the pair in the approved Vault location using the security team's
-authorized UI or secret-input workflow, then verify access and ownership. Do
-not put either value in Markdown, Git, Helm values, Argo parameters, tickets,
-chat, shell arguments, screenshots, or captured command output. Do not bulk
-dump all namespaces. The Vault path should identify the environment, workload
-namespace, and broker CR so each pair can be rotated independently.
+Record the shared username and deployment-specific password in the approved
+Vault location using the security team's authorized UI or secret-input
+workflow, then verify access and ownership. The username is non-secret and is
+already declared in Git; never put the password in Markdown, Git, Helm values,
+Argo parameters, tickets, chat, shell arguments, screenshots, or captured
+command output. Do not bulk dump all namespaces. The Vault path should identify
+the environment, workload namespace, and broker CR so each password can be
+rotated independently.
 
 This is a credential custody handoff, not completed runtime integration. The
 chart's `vault.enabled` option remains off because the injected file is not yet

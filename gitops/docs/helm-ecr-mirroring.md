@@ -172,9 +172,11 @@ parameters:
 The shared library selects the destination AWS account, provides AWS CLI
 access, and authenticates Docker. Chart pull and push run in a pinned Helm-only
 image mirrored to each destination ECR. Helm reads the host Docker login through
-a read-only registry-config mount. ECR repository immutability rejects an
-existing chart version. The destination region is fixed to `us-east-1` rather
-than exposed as a parameter.
+a read-only registry-config mount. Before transfer, the pipeline verifies that
+the destination repository is immutable. After transfer, it verifies the Helm
+artifact media type and destination digest, then archives a fingerprinted
+`helm-promotion-record.json`. The destination region is fixed to `us-east-1`
+rather than exposed as a parameter.
 
 Use `alpine/helm:<approved-version>` as the Helm runtime image, then mirror it
 into each environment's ECR and replace the pipeline's image and digest
@@ -196,22 +198,23 @@ Runtime image locations are derived from two ECR base placeholders:
 | `PLACEHOLDER_NONPROD_ECR_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 | `PLACEHOLDER_PROD_ECR_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 
-The checked-in operator wrapper currently resolves its pinned dependency from
-`quay.io/arkmq-org/helm-charts`. The operator Applications themselves use the
-Artemis Git repository as their source. The ECR base placeholders continue to
-supply operator and operand image repositories. The manager image is selected
-by the immutable `2.2.0` tag in each operator Application. Do not append the
-upstream Quay digest to that private ECR repository unless the promotion record
-shows the same digest exists in the target repository; registry-side manifest
-conversion or an incomplete copy otherwise produces `ErrImagePull: NotFound`.
-The same constraint applies to the operator's related init and broker images.
-The current Applications select immutable private `artemis.2.53.0` tags for
-both operands because upstream digests are not valid private-mirror references
-unless the import evidence proves that exact digest exists in ECR.
+The checked-in operator wrapper resolves its dependency from the repository's
+`file://vendor/arkmq-org-broker-operator` tree. The operator Applications use
+the Artemis Git repository as their source and override only the environment's
+private ECR repositories. The wrapper centrally selects the approved operator,
+init, and broker tags. Do not append an upstream Quay digest to a private ECR
+repository unless the promotion record proves that exact manifest digest exists
+there; registry-side conversion or an incomplete copy otherwise produces
+`ErrImagePull: NotFound`.
 
-When private chart mirroring is resumed, change the wrapper's dependency
-repository to the matching `<ECR base>/helm` namespace before enabling the
-credential flow below.
+The mirrored upstream Helm artifact is provenance and a controlled input to a
+future vendor rebase; it is not the chart dependency currently rendered by
+Argo CD. The deployed enterprise chart remains the reviewed Git-local vendor
+tree.
+
+If the deployment source later moves from the Git-local vendor tree to ECR,
+change the wrapper dependency and Argo credential flow together as a reviewed
+architecture change.
 
 Register each ECR chart namespace as a Helm repository with OCI enabled, but
 provide authentication once per registry through an Argo CD repository

@@ -209,6 +209,9 @@ fi
 if [[ -f "$chart_policy" ]] && yq -e '.' "$chart_policy" >/dev/null; then
   chart_check_count=$(yq -r '[.requiredChecks[]?] | length' "$chart_policy")
   [[ "$chart_check_count" -gt 0 ]] || error 'chart validation policy has no required checks'
+  network_chart_check_count=$(yq -r '[.networkChecks.requiredChecks[]?] | length' "$chart_policy")
+  [[ "$network_chart_check_count" -gt 0 ]] || \
+    error 'chart validation policy has no explicit network checks'
 fi
 
 if [[ "$report" != /* ]]; then

@@ -10,9 +10,14 @@ renderInputs:
 requiredChecks:
   - helm-lint
   - helm-template
-  - kubeconform
   - secret-pattern-scan
   - immutable-image-reference-check
   - active-passive-readiness-check
   - zone-spread-and-rwo-check
   - default-deny-network-policy-check
+networkChecks:
+  description: >-
+    These checks require an explicit network schema mode and the Kubernetes
+    version pinned in releases/current.yaml. Offline reports mark them NOT_RUN.
+  requiredChecks:
+    - kubeconform

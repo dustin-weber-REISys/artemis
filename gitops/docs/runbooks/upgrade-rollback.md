@@ -5,16 +5,47 @@ ZooKeeper, operator, and client libraries as one unobserved change.
 
 ## Upgrade
 
-1. Record source versions, immutable digests, SBOM, license inventory, scan
+1. Review the centrally selected versions:
+
+   ```sh
+   make versions
+   ```
+
+2. Run the approved ECR image/chart transfer jobs first. Record their build
+   URLs and fingerprinted promotion records; an application upgrade must refer
+   to artifacts that already exist in the destination immutable repositories.
+3. Preview exactly one broker or ZooKeeper change. The command is dry-run
+   unless `--write` is explicitly supplied:
+
+   ```sh
+   ./gitops/scripts/prepare-upgrade.sh \
+     --component broker \
+     --version VERSION
+   ```
+
+   ZooKeeper upgrades also require the immutable promoted image digest through
+   `--image-digest sha256:...`; changing a tag while retaining the old digest
+   does not change the image Kubernetes runs.
+
+   Operator upgrades are deliberately separate because the checked-in chart
+   contains reviewed enterprise customizations. On an approved connected build
+   host, obtain the upstream chart, update `upstream.lock.yaml`, rebase the
+   functional vendor patches, and regenerate the vendor tree. After that review,
+   update the operator provenance and wrapper versions in
+   `releases/current.yaml` and the wrapper chart. `validate-release.sh` rejects
+   any operator version that does not match the vendor lock, generated tree,
+   wrapper chart, and image mappings. Do not edit or version-replace the
+   generated vendor tree directly.
+4. Record source versions, immutable digests, SBOM, license inventory, scan
    result, and the operator/operand compatibility matrix.
-2. Run the canonical repository validation from the root
+5. Run the canonical repository validation from the root
    [`README`](../../README.md#validate).
-3. Apply the digest to test and run the required compatibility, durability,
+6. Apply the digest to test and run the required compatibility, durability,
    failure, credential rotation, management authorization, and load scenarios
    from [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml).
-4. Promote the same digest to nonprod. Run upgrade and rollback there, then
+7. Promote the same digest to nonprod. Run upgrade and rollback there, then
    obtain operational approval before prod.
-5. Upgrade one ZooKeeper member at a time, then one Artemis HA pair or
+8. Upgrade one ZooKeeper member at a time, then one Artemis HA pair or
    namespace at a time. Observe replication, queue depth, paging, disk, JVM,
    client reconnect, and Argo health between steps.
 

@@ -33,6 +33,10 @@ persistence:
 
 broker:
   version: 2.53.0
+  # Shared non-secret administrator name for every broker deployment. Replace
+  # this placeholder once in the environment-owned copy; the operator still
+  # generates a separate password in each broker credential Secret.
+  adminUser: PLACEHOLDER_ARTEMIS_ADMIN_USERNAME
   resources:
     requests:
       cpu: 500m

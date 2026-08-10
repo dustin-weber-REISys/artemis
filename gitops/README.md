@@ -13,6 +13,29 @@ This area is the deployable EKS baseline. It owns:
 - [`scripts`](scripts): rendering, schema, topology, and scenario validation;
 - [`docs`](docs): design decisions, environment import guidance, and runbooks.
 
+## Deterministic validation
+
+`make validate-charts` defaults to offline mode. It performs Helm linting,
+rendering, chart assertions, and policy checks without allowing kubeconform to
+download schemas. The JSON report records Kubernetes schema validation as
+`NOT_RUN`; a successful offline run does not claim that schemas were checked.
+
+Run the network-backed phase explicitly on a connected workstation:
+
+```sh
+ARTEMIS_SCHEMA_MODE=network make validate-charts
+```
+
+The target Kubernetes version comes from [`releases/current.yaml`](releases/current.yaml).
+Network mode fails when schema downloads fail. Custom-resource schema checks
+remain in `make validate-operator-schema`, which also distinguishes its offline
+contract checks from its explicit network phase.
+
+The vendored ArkMQ chart is generated from a checksum-locked upstream package
+and named patches. See [`charts/arkmq-operator/vendor`](charts/arkmq-operator/vendor)
+and run `make vendor-check ARKMQ_UPSTREAM_CHART=/path/to/chart.tgz` before an
+operator upgrade.
+
 The
 [`observed production workload baseline`](docs/production-workload-baseline.md)
 captures the consumer footprint, burst behavior, retained backlog, and

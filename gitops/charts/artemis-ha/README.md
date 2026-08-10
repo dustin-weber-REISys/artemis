@@ -10,6 +10,14 @@ The chart pins transactional and non-transactional journal sync, journal data
 sync, and large-message sync to `true`. Those keys and HA/replication identity
 keys are protected from `brokerProperties.extra` overrides.
 
+The non-secret broker administrator name is set once with `broker.adminUser`
+and is shared by every environment that consumes the chart. Replace
+`PLACEHOLDER_ARTEMIS_ADMIN_USERNAME` with the approved value (for example,
+`elis-admin`) in the environment-owned copy. The chart deliberately omits
+`spec.adminPassword`, so the operator continues to generate a separate password
+for each broker deployment and store it only in that deployment's credential
+Secret.
+
 Client listeners are configured under `acceptors`. Every enabled acceptor is
 rendered into the broker custom resource and gets a matching active-only
 `ClusterIP` Service. When client NetworkPolicy sources are configured, their
