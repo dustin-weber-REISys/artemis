@@ -41,7 +41,7 @@ pipelineJob('ECR-TransferHelmChart') {
                         url('PLACEHOLDER_SCM_URL')
                         credentials('PLACEHOLDER_SCM_CREDENTIALS_ID')
                     }
-                    branch('PLACEHOLDER_SCM_BRANCH')
+                    branch('main')
                 }
             }
         }

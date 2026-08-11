@@ -9,7 +9,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-30"
     composition.artemis.apache.org/environment: cluster
     composition.artemis.apache.org/catalog-path: gitops/argocd/topology/cluster.yaml
-    composition.artemis.apache.org/git-revision: PLACEHOLDER_GITOPS_REVISION
+    composition.artemis.apache.org/git-revision: main
     composition.artemis.apache.org/repository: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
     composition.artemis.apache.org/platform-namespace: artemis-platform
     composition.artemis.apache.org/zookeeper-image-repository: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper

@@ -16,7 +16,7 @@ spec:
         generators:
           - git:
               repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-              revision: PLACEHOLDER_GITOPS_REVISION
+              revision: main
               files:
                 - path: gitops/argocd/topology/cluster.yaml
           - list:
@@ -37,7 +37,7 @@ spec:
       project: messaging-platform
       source:
         repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
-        targetRevision: PLACEHOLDER_GITOPS_REVISION
+        targetRevision: main
         path: gitops/charts/artemis-ha
         helm:
           valueFiles:

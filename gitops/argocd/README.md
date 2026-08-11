@@ -113,10 +113,10 @@ spec:
 ```
 
 `spec.source.targetRevision` and the injected annotation value must be equal.
-`PLACEHOLDER_GITOPS_REVISION` remains in the offline copy so the work-laptop
-substitution workflow can resolve it. Every cluster remains deployable from
-`main`; a feature branch is a temporary Release Promotion input, not permanent
-cluster configuration.
+The checked-in default revision is `main`. The work-laptop deployment workflow
+may inject an approved tag, commit, or temporary feature branch through the
+root Application contract above; a feature branch is a Release Promotion
+input, not permanent cluster configuration.
 
 ## Controlled bootstrap
 
