@@ -3,12 +3,16 @@ schemaVersion: releases.artemis.apache.org/v1
 platform:
   kubernetesVersion: 1.31.0
 
-# Canonical deployed versions. prepare-upgrade updates broker and ZooKeeper
-# consumers; operator upgrades additionally require a reviewed vendor rebase.
+# Canonical deployed versions. The operator chart is consumed unmodified by
+# Kustomize; its digests retain the approved upstream provenance.
 operator:
   version: 2.2.0
-  wrapperChartVersion: 2.2.0-7
-  vendoredChartVersion: 2.2.0-enterprise.4
+  chart:
+    name: arkmq-org-broker-operator
+    repository: oci://quay.io/arkmq-org/helm-charts
+    version: 2.2.0
+    ociDigest: sha256:bf75b448cc62374cfca3f9ad7b405d76584e09e13034446b30b19c3ad36ad285
+    artifactSha256: aeff38fb2d7cbe4a8b0017e89479fb5329a5299298405b51cfd4c76608a17dcd
   manifest:
     url: https://github.com/arkmq-org/arkmq-org-broker-operator/releases/download/v2.2.0/activemq-artemis-operator.yaml
     sha256: ae8ce2672e1cb17dc888e249b076c08e5fb4c44f8cc90dcaef067e86bb4b49f3

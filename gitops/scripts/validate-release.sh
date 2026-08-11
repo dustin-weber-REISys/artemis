@@ -12,7 +12,7 @@ while (($#)); do
   esac
 done
 
-for command_name in helm yq; do
+for command_name in yq; do
   command -v "$command_name" >/dev/null 2>&1 || {
     printf '%s is required\n' "$command_name" >&2
     exit 2
@@ -52,7 +52,8 @@ assert_pattern() {
 
 # Keep the release contract dependency-free so it works on an offline laptop.
 assert_keys '.platform' 'kubernetesVersion'
-assert_keys '.operator' 'image,manifest,vendoredChartVersion,version,wrapperChartVersion'
+assert_keys '.operator' 'chart,image,manifest,version'
+assert_keys '.operator.chart' 'artifactSha256,name,ociDigest,repository,version'
 assert_keys '.operator.manifest' 'sha256,url'
 assert_keys '.' 'broker,operator,platform,schemaVersion,zookeeper'
 assert_keys '.operator.image' 'upstreamDigest'
@@ -61,13 +62,15 @@ assert_keys '.zookeeper' 'version'
 assert_equal 'schemaVersion' "$(yq -r '.schemaVersion // ""' "$release_file")" 'releases.artemis.apache.org/v1'
 
 version_pattern='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
-chart_version_pattern='^[0-9]+\.[0-9]+\.[0-9]+[-.+0-9A-Za-z]*$'
 digest_pattern='^sha256:[a-f0-9]{64}$'
 hex_pattern='^[a-f0-9]{64}$'
 
 operator_version=$(yq -r '.operator.version // ""' "$release_file")
-wrapper_chart_version=$(yq -r '.operator.wrapperChartVersion // ""' "$release_file")
-vendored_chart_version=$(yq -r '.operator.vendoredChartVersion // ""' "$release_file")
+operator_chart_name=$(yq -r '.operator.chart.name // ""' "$release_file")
+operator_chart_repository=$(yq -r '.operator.chart.repository // ""' "$release_file")
+operator_chart_version=$(yq -r '.operator.chart.version // ""' "$release_file")
+operator_chart_oci_digest=$(yq -r '.operator.chart.ociDigest // ""' "$release_file")
+operator_chart_artifact_sha256=$(yq -r '.operator.chart.artifactSha256 // ""' "$release_file")
 operator_manifest_url=$(yq -r '.operator.manifest.url // ""' "$release_file")
 operator_manifest_sha256=$(yq -r '.operator.manifest.sha256 // ""' "$release_file")
 operator_upstream_digest=$(yq -r '.operator.image.upstreamDigest // ""' "$release_file")
@@ -84,95 +87,95 @@ for entry in \
   "zookeeper.version:$zookeeper_version"; do
   assert_pattern "${entry%%:*}" "${entry#*:}" "$version_pattern"
 done
-assert_pattern 'operator.wrapperChartVersion' "$wrapper_chart_version" "$chart_version_pattern"
-assert_pattern 'operator.vendoredChartVersion' "$vendored_chart_version" "$chart_version_pattern"
+assert_equal 'operator chart name' "$operator_chart_name" 'arkmq-org-broker-operator'
+assert_equal 'operator chart version' "$operator_chart_version" "$operator_version"
+[[ "$operator_chart_repository" == oci://* ]] || \
+  error "operator.chart.repository must use oci: $operator_chart_repository"
+assert_pattern 'operator.chart.ociDigest' "$operator_chart_oci_digest" "$digest_pattern"
+assert_pattern 'operator.chart.artifactSha256' "$operator_chart_artifact_sha256" "$hex_pattern"
 assert_pattern 'operator.manifest.sha256' "$operator_manifest_sha256" "$hex_pattern"
 assert_pattern 'operator.image.upstreamDigest' "$operator_upstream_digest" "$digest_pattern"
 [[ "$operator_manifest_url" == https://* ]] || error "operator.manifest.url must use https: $operator_manifest_url"
 [[ "$operator_manifest_url" == *"/v$operator_version/"* ]] || \
   error "operator.manifest.url does not select operator.version $operator_version"
 
-chart="$repo_root/charts/arkmq-operator/Chart.yaml"
-values="$repo_root/charts/arkmq-operator/values.yaml"
-vendor_chart="$repo_root/charts/arkmq-operator/vendor/arkmq-org-broker-operator/Chart.yaml"
-vendor_values="$repo_root/charts/arkmq-operator/vendor/arkmq-org-broker-operator/values.yaml"
-vendor_lock="$repo_root/charts/arkmq-operator/vendor/upstream.lock.yaml"
-assert_equal 'wrapper Chart.yaml version' "$(yq -r '.version' "$chart")" "$wrapper_chart_version"
-assert_equal 'wrapper Chart.yaml appVersion' "$(yq -r '.appVersion' "$chart")" "$operator_version"
-assert_equal 'wrapper dependency version' \
-  "$(yq -r '.dependencies[] | select(.name == "arkmq-org-broker-operator") | .version' "$chart")" \
-  "$vendored_chart_version"
-assert_equal 'vendored chart version' "$(yq -r '.version' "$vendor_chart")" "$vendored_chart_version"
-assert_equal 'vendored chart appVersion' "$(yq -r '.appVersion' "$vendor_chart")" "$operator_version"
-if [[ -f "$vendor_lock" ]]; then
-  assert_equal 'vendor lock upstream version' \
-    "$(yq -r '.spec.upstream.version' "$vendor_lock")" "$operator_version"
-  assert_equal 'vendor lock enterprise version' \
-    "$(yq -r '.spec.enterprise.version' "$vendor_lock")" "$vendored_chart_version"
-  assert_pattern 'vendor lock OCI reference' \
-    "$(yq -r '.spec.upstream.ociReference // ""' "$vendor_lock")" '^oci://.+'
-  assert_pattern 'vendor lock OCI digest' \
-    "$(yq -r '.spec.upstream.ociDigest // ""' "$vendor_lock")" "$digest_pattern"
-  assert_pattern 'vendor lock artifact checksum' \
-    "$(yq -r '.spec.upstream.artifactSha256 // ""' "$vendor_lock")" "$hex_pattern"
-  locked_patches=$(yq -r '.spec.enterprise.patches[]?' "$vendor_lock" | sort)
-  actual_patches=$(find "$(dirname -- "$vendor_lock")/patches" -maxdepth 1 -type f -name '*.patch' -print | \
-    sed "s#^$(dirname -- "$vendor_lock")/##" | sort)
-  assert_equal 'vendor lock patch inventory' "$actual_patches" "$locked_patches"
-  while IFS= read -r relative_patch; do
-    [[ -n "$relative_patch" ]] || continue
-    case "$relative_patch" in
-      patches/*.patch) ;;
-      *) error "vendor lock contains invalid patch path: $relative_patch"; continue ;;
-    esac
-    [[ -f "$(dirname -- "$vendor_lock")/$relative_patch" ]] || \
-      error "vendor lock patch is missing: $relative_patch"
-  done <<< "$locked_patches"
-else
-  error 'vendor lock is missing'
-fi
-assert_equal 'vendored operator image tag' \
-  "$(yq -r '.controllerManager.manager.image.tag' "$vendor_values")" "$operator_image_tag"
-assert_equal 'wrapper operator image tag' \
-  "$(yq -r '."arkmq-org-broker-operator".controllerManager.manager.image.tag' "$values")" "$operator_image_tag"
+operator_base="$repo_root/kustomize/arkmq-operator/base"
+operator_kustomization="$operator_base/kustomization.yaml"
+operator_values="$operator_base/values.yaml"
+assert_equal 'Kustomize operator chart name' \
+  "$(yq -r '.helmCharts[0].name' "$operator_kustomization")" "$operator_chart_name"
+assert_equal 'Kustomize operator chart repository' \
+  "$(yq -r '.helmCharts[0].repo' "$operator_kustomization")" "$operator_chart_repository"
+assert_equal 'Kustomize operator chart version' \
+  "$(yq -r '.helmCharts[0].version' "$operator_kustomization")" "$operator_chart_version"
+assert_equal 'Kustomize operator image tag' \
+  "$(yq -r '.controllerManager.manager.image.tag' "$operator_values")" "$operator_image_tag"
+assert_equal 'Kustomize operator cluster scope' \
+  "$(yq -r '.clusterScoped' "$operator_values")" true
 
 broker_compact=${broker_version//./}
-for family in activemqArtemisBrokerInit activemqArtemisBrokerKubernetes; do
-  vendor_key="$family$broker_compact"
-  assert_equal "vendored operator $vendor_key support" \
-    "$(FAMILY="$vendor_key" yq -r '.controllerManager.manager.relatedImages | has(strenv(FAMILY))' "$vendor_values")" \
-    true
-  assert_equal "wrapper $family$broker_compact tag" \
-    "$(FAMILY="$family$broker_compact" yq -r '."arkmq-org-broker-operator".controllerManager.manager.relatedImages[strenv(FAMILY)].tag // ""' "$values")" \
-    "$broker_image_tag"
-done
-
-render_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-release-validation.XXXXXX")
-trap 'rm -rf "$render_dir"' EXIT
-cp -R "$repo_root/charts/arkmq-operator" "$render_dir/chart"
-if helm dependency build "$render_dir/chart" >/dev/null && \
-   helm template release-validation "$render_dir/chart" \
-     --set-string global.requiredLabels.env=test > "$render_dir/operator.yaml"; then
+for environment in test nonprod prod; do
+  overlay="$repo_root/kustomize/arkmq-operator/overlays/$environment"
+  image_patch="$overlay/private-images.patch.yaml"
+  expected_ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
+  fi
+  assert_equal "$environment overlay environment label" \
+    "$(yq -r '.labels[0].pairs.env' "$overlay/kustomization.yaml")" "$environment"
+  assert_equal "$environment operator image" \
+    "$(yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .image' "$image_patch")" \
+    "$expected_ecr_repository/arkmq-operator:$operator_image_tag"
   for image_kind in Init Kubernetes; do
     env_name="RELATED_IMAGE_ActiveMQ_Artemis_Broker_${image_kind}_$broker_compact"
-    assert_equal "rendered operator $env_name count" \
-      "$(ENV_NAME="$env_name" yq eval-all -r '[.] | [.[] | select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME))] | length' "$render_dir/operator.yaml")" \
-      1
+    repository_suffix=activemq-artemis-broker-init
+    if [[ "$image_kind" == Kubernetes ]]; then
+      repository_suffix=activemq-artemis-broker-kubernetes
+    fi
+    assert_equal "$environment operator $env_name" \
+      "$(ENV_NAME="$env_name" yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == strenv(ENV_NAME)) | .value' "$image_patch")" \
+      "$expected_ecr_repository/$repository_suffix:$broker_image_tag"
   done
-else
-  error 'operator wrapper did not render with the central release'
-fi
-
-for environment in test nonprod prod; do
   application="$repo_root/argocd/bootstrap/$environment/operator-application.yaml"
-  tag_override_count=$(yq -r \
-    '[.spec.source.helm.parameters[]? | select(.name | test("\\.tag$"))] | length' \
-    "$application")
-  assert_equal "$environment operator tag override count" "$tag_override_count" 0
+  assert_equal "$environment operator Kustomize path" \
+    "$(yq -r '.spec.source.path' "$application")" \
+    "gitops/kustomize/arkmq-operator/overlays/$environment"
+  assert_equal "$environment operator Helm source count" \
+    "$(yq -r '[.spec.source.helm] | map(select(. != null)) | length' "$application")" 0
 done
 
+if [[ -n "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
+  render_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-release-validation.XXXXXX")
+  trap 'rm -rf "$render_dir"' EXIT
+  upstream_values="$render_dir/upstream-values.yaml"
+  if tar -xOf "$ARKMQ_UPSTREAM_CHART" "$operator_chart_name/values.yaml" > "$upstream_values"; then
+    for family in activemqArtemisBrokerInit activemqArtemisBrokerKubernetes; do
+      related_image_key="$family$broker_compact"
+      assert_equal "upstream chart $related_image_key support" \
+        "$(RELATED_IMAGE_KEY="$related_image_key" yq -r '.controllerManager.manager.relatedImages | has(strenv(RELATED_IMAGE_KEY))' "$upstream_values")" \
+        true
+    done
+  else
+    error "upstream chart artifact does not contain $operator_chart_name/values.yaml"
+  fi
+  for environment in test nonprod prod; do
+    rendered="$render_dir/operator-$environment.yaml"
+    if "$repo_root/scripts/render-arkmq-operator.sh" \
+      --environment "$environment" --artifact "$ARKMQ_UPSTREAM_CHART" > "$rendered"; then
+      for image_kind in Init Kubernetes; do
+        env_name="RELATED_IMAGE_ActiveMQ_Artemis_Broker_${image_kind}_$broker_compact"
+        assert_equal "rendered $environment operator $env_name count" \
+          "$(ENV_NAME="$env_name" yq eval-all -r '[.] | [.[] | select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME))] | length' "$rendered")" \
+          1
+      done
+    else
+      error "$environment operator Kustomize overlay did not render with the approved artifact"
+    fi
+  done
+fi
+
 # These charts are generated consumers too. prepare-upgrade.sh rewrites the
-# broker and ZooKeeper fields; operator upgrades also require a vendor rebase.
+# broker and ZooKeeper fields and the operator Kustomize release inputs.
 assert_equal 'Artemis chart broker version' \
   "$(yq -r '.broker.version' "$repo_root/charts/artemis-ha/values.yaml")" "$broker_version"
 assert_equal 'ZooKeeper chart image tag' \

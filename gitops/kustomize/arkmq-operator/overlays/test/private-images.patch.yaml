@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activemq-artemis-controller-manager-v2
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          image: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator:2.2.0
+          env:
+            - name: RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_2530
+              value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init:artemis.2.53.0
+            - name: RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_2530
+              value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes:artemis.2.53.0

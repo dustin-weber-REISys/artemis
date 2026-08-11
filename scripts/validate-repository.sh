@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=12
+check_count=13
 run_check() {
   local label=$1
   local exit_code
@@ -96,6 +96,8 @@ run_check 'Argo CD ECR credential refresh regressions' \
 run_check 'Helm charts and overlays' \
   "$repo_root/gitops/scripts/validate-charts.sh" \
   --report "$report_dir/chart-validation.json"
+run_check 'ArkMQ operator Kustomize overlays' \
+  "$repo_root/gitops/kustomize/arkmq-operator/tests/test.sh"
 run_check 'ArkMQ operator schema' \
   "$repo_root/gitops/scripts/validate-operator-schema.sh"
 run_check 'Docker Compose configuration' \

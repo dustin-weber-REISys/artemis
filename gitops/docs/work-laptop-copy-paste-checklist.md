@@ -1,180 +1,101 @@
 # Work-laptop GitHub UI copy/paste checklist
 
-Use this one-time change checklist when the work laptop can view repository
-files and diffs in the GitHub UI but cannot clone or download them. Copy only
-the reviewed plain-text files listed below. Remove this checklist from the
-work-laptop directory after the change record is complete.
+Use this one-time checklist when the work laptop can view repository files and
+diffs in GitHub but cannot clone or download them. Record the repository,
+commit, change ticket, reviewer, and the pre-change `git status --short` before
+editing. Preserve resolved work values and never paste them back into GitHub.
 
-## Change record
+## Platform prerequisite
 
-- [ ] Record the GitHub repository, branch, and commit being copied.
-- [ ] Record the date, change ticket, and reviewer required by local policy.
-- [ ] Confirm the GitHub diff contains no credentials or environment values.
-- [ ] Keep actual placeholder substitutions only on the work laptop.
-- [ ] If the directory has Git metadata, save `git status --short` and
-      `git diff --name-status` before editing.
+- [ ] Confirm the Argo CD administrators approved and applied
+      `kustomize.buildOptions: --enable-helm`, or the equivalent
+      version-specific setting.
+- [ ] Confirm repo-server can pull the pinned public ArkMQ OCI chart.
+- [ ] Confirm the approved Argo CD Kustomize version supports Helm OCI sources.
 
-GitHub repository: `____________________`
+## Create the Kustomize deployment
 
-Branch or commit: `____________________`
+Copy these directories and files from GitHub using the **Raw** view:
 
-Change ticket: `____________________`
+- [ ] `gitops/kustomize/arkmq-operator/base/kustomization.yaml`
+- [ ] `gitops/kustomize/arkmq-operator/base/values.yaml`
+- [ ] `gitops/kustomize/arkmq-operator/base/deployment-identity.patch.yaml`
+- [ ] `gitops/kustomize/arkmq-operator/base/pdb.yaml`
+- [ ] `gitops/kustomize/arkmq-operator/overlays/test/*`
+- [ ] `gitops/kustomize/arkmq-operator/overlays/nonprod/*`
+- [ ] `gitops/kustomize/arkmq-operator/overlays/prod/*`
+- [ ] `gitops/kustomize/arkmq-operator/README.md`
+- [ ] `gitops/kustomize/arkmq-operator/tests/test.sh`
+- [ ] `gitops/scripts/render-arkmq-operator.sh`
 
-Reviewer: `____________________`
+Preserve the resolved platform namespace, contact/FISMA labels, and nonprod or
+production ECR bases when creating these files on the work laptop.
 
-## Protect the work-laptop configuration
+## Merge the integration changes
 
-- [ ] Back up each existing file to an approved location outside the tracked
-      checkout before editing it.
-- [ ] Use GitHub's **Files changed** view for existing files; do not replace a
-      whole operational file with its repository-template version.
-- [ ] Preserve locally resolved values in these files:
+Apply only the reviewed additions and removals from GitHub's **Files changed**
+view:
 
-  - `gitops/argocd/bootstrap/test/operator-application.yaml`
-  - `gitops/argocd/bootstrap/nonprod/operator-application.yaml`
-  - `gitops/argocd/bootstrap/prod/operator-application.yaml`
-  - `gitops/charts/arkmq-operator/values.yaml`
-  - `gitops/charts/artemis-ha/values.yaml`
-  - `resources/ecr/ecrHelmChartTransfer.groovy`
-
-- [ ] Preserve any other work-owned values, URLs, image repositories, digests,
-      namespaces, storage classes, secret names, Jenkins labels, imports, and
-      shared-library names encountered during review.
-- [ ] Never paste real work values back into GitHub, a ticket, or this checklist.
-
-## Create these new files
-
-For each file, use the GitHub **Raw** view, copy all text, create the same path
-on the work laptop, paste, save, and review the first and last lines.
-
-- [ ] `gitops/charts/arkmq-operator/vendor/patches/0001-required-admission-labels.patch`
-- [ ] `gitops/charts/arkmq-operator/vendor/patches/0002-replacement-deployment-identity.patch`
-- [ ] `gitops/charts/arkmq-operator/vendor/patches/0003-private-mirror-tags.patch`
-- [ ] `gitops/charts/arkmq-operator/vendor/upstream.lock.yaml`
-- [ ] `gitops/releases/current.yaml`
-- [ ] `gitops/scripts/collect-artemis-evidence.sh`
-- [ ] `gitops/scripts/prepare-arkmq-vendor.sh`
-- [ ] `gitops/scripts/prepare-upgrade.sh`
-- [ ] `gitops/scripts/validate-release.sh`
-- [ ] `gitops/scripts/validate-rendered-schema.sh`
-- [ ] `gitops/scripts/vendor-check.sh`
-
-The three files ending in `.patch` are readable source transformations for the
-vendored ArkMQ chart. They are not repository-transfer patches and are never
-applied to the work-laptop checkout. `prepare-arkmq-vendor.sh` applies them only
-to a checksum-locked upstream chart in a temporary directory during a future
-operator rebase.
-
-## Merge these existing files
-
-Apply only the additions and removals shown in GitHub's **Files changed** view.
-Review every deletion before saving.
-
-### Version source, commands, and validation
-
-- [ ] `Makefile`
-- [ ] `README.md`
-- [ ] `scripts/validate-repository.sh`
-- [ ] `gitops/Makefile`
-- [ ] `gitops/README.md`
-- [ ] `scripts/validate-static.sh`
-- [ ] `gitops/scripts/validate-charts.sh`
-- [ ] `gitops/scripts/validate-operator-schema.sh`
-- [ ] `gitops/scripts/validate-scenarios.sh`
-- [ ] `gitops/scripts/validate-topology.sh`
-- [ ] `gitops/scripts/verify-argocd-applicationset.sh`
-
-### Argo CD and Helm consumers
-
-- [ ] `gitops/argocd/README.md`
 - [ ] `gitops/argocd/bootstrap/test/operator-application.yaml`
 - [ ] `gitops/argocd/bootstrap/nonprod/operator-application.yaml`
 - [ ] `gitops/argocd/bootstrap/prod/operator-application.yaml`
-- [ ] `gitops/charts/arkmq-operator/values.yaml`
-- [ ] `gitops/charts/arkmq-operator/README.md`
-- [ ] `gitops/charts/arkmq-operator/vendor/README.md`
-- [ ] `gitops/charts/artemis-ha/templates/activemqartemis.yaml`
-- [ ] `gitops/charts/artemis-ha/values.schema.json`
-- [ ] `gitops/charts/artemis-ha/values.yaml`
-- [ ] `resources/ecr/ecrHelmChartTransfer.groovy`
-
-The operator Applications should retain their local repository, revision,
-namespace, and ECR substitutions. Remove only the duplicated version/tag
-overrides shown by the diff; the wrapper chart now owns those versions.
-
-### Tests
-
-- [ ] `gitops/charts/arkmq-operator/tests/test.sh`
-- [ ] `gitops/charts/artemis-ha/tests/test.sh`
-- [ ] `gitops/charts/zookeeper/tests/test.sh`
-- [ ] `gitops/tests/argocd/test-verify-applicationset.sh`
-- [ ] `gitops/tests/chart/validation-policy.yaml`
+- [ ] `gitops/releases/current.yaml`
+- [ ] `gitops/scripts/prepare-upgrade.sh`
+- [ ] `gitops/scripts/validate-release.sh`
+- [ ] `gitops/scripts/validate-operator-schema.sh`
+- [ ] `gitops/scripts/validate-topology.sh`
 - [ ] `gitops/tests/topology/test.sh`
+- [ ] `scripts/validate-static.sh`
+- [ ] `scripts/validate-repository.sh`
+- [ ] `Makefile` and `gitops/Makefile`
+- [ ] GitOps READMEs, upgrade runbook, import walkthrough, and ECR mirroring guide
 
-### Documentation
+The operator Applications must keep their local Git URL, revision, Argo
+namespace, destination namespace, sync policy, and `PruneLast=true`. Only their
+source path changes to the matching Kustomize overlay.
 
-- [ ] `gitops/charts/artemis-ha/README.md`
-- [ ] `gitops/docs/environment-import-walkthrough.md`
-- [ ] `gitops/docs/helm-ecr-mirroring.md`
-- [ ] `gitops/docs/runbooks/broker-reconciliation-debugging.md`
-- [ ] `gitops/docs/runbooks/install-verification.md`
-- [ ] `gitops/docs/runbooks/upgrade-rollback.md`
+## Remove the obsolete vendor implementation
 
-## File permissions
+After the Kustomize files and Applications have been reviewed:
 
-Text pasted into a newly created file may not retain the executable bit. Run
-this only for the new shell scripts listed above:
+- [ ] Remove `gitops/charts/arkmq-operator` in full, including the generated
+      chart archive, vendor tree, source patches, and wrapper chart.
+- [ ] Remove `gitops/scripts/prepare-arkmq-vendor.sh`.
+- [ ] Remove `gitops/scripts/vendor-check.sh`.
+
+These deletions are intentional. The unmodified chart now comes directly from
+the pinned upstream OCI reference, and repository-owned behavior lives in the
+Kustomize base and overlays.
+
+## Permissions and validation
 
 ```sh
 chmod +x \
-  gitops/scripts/collect-artemis-evidence.sh \
-  gitops/scripts/prepare-arkmq-vendor.sh \
-  gitops/scripts/prepare-upgrade.sh \
-  gitops/scripts/validate-release.sh \
-  gitops/scripts/validate-rendered-schema.sh \
-  gitops/scripts/vendor-check.sh
-```
+  gitops/scripts/render-arkmq-operator.sh \
+  gitops/kustomize/arkmq-operator/tests/test.sh
 
-- [ ] Confirm the six new shell scripts are executable.
+helm pull oci://quay.io/arkmq-org/helm-charts/arkmq-org-broker-operator \
+  --version 2.2.0 --destination /tmp
 
-## Repository-only validation
-
-These commands inspect local files and run local tests. They do not query the
-live Kubernetes cluster.
-
-```sh
+export ARKMQ_UPSTREAM_CHART=/tmp/arkmq-org-broker-operator-2.2.0.tgz
 make versions
-gitops/scripts/validate-release.sh
+make validate-release
+make validate-operator-kustomize
 ARTEMIS_SCHEMA_MODE=offline make validate
 git diff --check
 git status --short
 ```
 
-- [ ] `make versions` reports the intended Kubernetes, operator, broker, and
-      ZooKeeper versions from `gitops/releases/current.yaml`.
-- [ ] Release validation passes.
-- [ ] All repository validation checks pass.
-- [ ] Review unresolved operational placeholders without putting their values
-      into command output that will be shared externally:
+- [ ] The chart checksum matches `gitops/releases/current.yaml`.
+- [ ] All three overlays render the stable `-v2` Deployment, required labels,
+      PDB, scheduling policy, and approved private images.
+- [ ] Repository validation passes.
+- [ ] A second engineer reviewed the resolved placeholders and deletions.
 
-```sh
-rg -n 'PLACEHOLDER_|example\.invalid' \
-  gitops/argocd/bootstrap/test/operator-application.yaml \
-  gitops/argocd/bootstrap/nonprod/operator-application.yaml \
-  gitops/argocd/bootstrap/prod/operator-application.yaml \
-  gitops/charts/arkmq-operator/values.yaml \
-  gitops/charts/artemis-ha/values.yaml \
-  resources/ecr/ecrHelmChartTransfer.groovy
-```
+## Authorized live verification
 
-- [ ] Every operational placeholder reported above is intentional or resolved.
-
-## Read-only live ApplicationSet verification
-
-Run this section only from the authorized work laptop with the intended
-read-only Kubernetes context. The verifier reads the selected local topology
-file and makes `kubectl get` calls to the live cluster. It does not compare the
-entire work repository with GitHub.
+From the authorized work laptop, run the existing read-only verifier only
+against the intended context:
 
 ```sh
 ./gitops/scripts/verify-argocd-applicationset.sh \
@@ -183,26 +104,6 @@ entire work repository with GitHub.
   --environment test
 ```
 
-Repeat with `nonprod` or `prod` only when authorized.
-
-The verifier uses `bash`, read-only `kubectl get`, and `yq`. It compares the
-selected local topology with live state and reports reconciled Git revisions;
-review revision drift before promotion. See the
-[broker reconciliation runbook](runbooks/broker-reconciliation-debugging.md)
-for its exact checks and failure ownership.
-
-- [ ] Confirm the selected context and environment before running it.
-- [ ] Confirm the result ends with `Live Artemis health: PASS`.
-- [ ] Save the output in the approved ticket or evidence location.
-- [ ] If it fails, collect read-only evidence using the companion runbook; do
-      not deploy or mutate the cluster as part of verification.
-
-## Completion
-
-- [ ] Placeholder values remained local and unchanged.
-- [ ] Central release validation passed.
-- [ ] Complete offline repository validation passed.
-- [ ] Authorized live verification passed, or its failure evidence is attached.
-- [ ] A second engineer reviewed the manually merged operational files.
-- [ ] The GitHub commit and local completion evidence are recorded in the
-      change ticket.
+Repeat for nonprod or prod only when authorized. Confirm the operator
+Application is `Synced/Healthy`, save the approved evidence, and stop promotion
+if Argo reports a manifest-generation or Kustomize/Helm error.

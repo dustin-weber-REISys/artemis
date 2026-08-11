@@ -1,0 +1,7 @@
+- op: replace
+  path: /metadata/name
+  value: activemq-artemis-controller-manager-v2
+- op: remove
+  path: /spec/selector/matchLabels/app.kubernetes.io~1name
+- op: remove
+  path: /spec/selector/matchLabels/app.kubernetes.io~1instance

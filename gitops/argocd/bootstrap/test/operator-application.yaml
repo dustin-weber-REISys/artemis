@@ -10,20 +10,7 @@ spec:
   source:
     repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
     targetRevision: PLACEHOLDER_GITOPS_REVISION
-    path: gitops/charts/arkmq-operator
-    helm:
-      releaseName: test-arkmq-operator
-      parameters:
-        - name: global.requiredLabels.env
-          value: test
-        - name: arkmq-org-broker-operator.clusterScoped
-          value: "true"
-        - name: arkmq-org-broker-operator.controllerManager.manager.image.repository
-          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/arkmq-operator
-        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository
-          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-init
-        - name: arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository
-          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/activemq-artemis-broker-kubernetes
+    path: gitops/kustomize/arkmq-operator/overlays/test
   destination:
     server: https://kubernetes.default.svc
     namespace: PLACEHOLDER_PLATFORM_NAMESPACE

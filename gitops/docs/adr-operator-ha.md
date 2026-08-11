@@ -47,7 +47,7 @@ into this ADR. They are authoritative in:
 
 - [`charts/artemis-ha/values.yaml`](../charts/artemis-ha/values.yaml);
 - [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json);
-- [`charts/arkmq-operator/values.yaml`](../charts/arkmq-operator/values.yaml); and
+- [`kustomize/arkmq-operator`](../kustomize/arkmq-operator); and
 - the environment-local operator Applications under
   [`argocd/bootstrap`](../argocd/bootstrap).
 

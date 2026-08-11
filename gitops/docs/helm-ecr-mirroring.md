@@ -198,31 +198,28 @@ Runtime image locations are derived from two ECR base placeholders:
 | `PLACEHOLDER_NONPROD_ECR_REPOSITORY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 | `PLACEHOLDER_PROD_ECR_REPOSITORY` | `210987654321.dkr.ecr.us-east-1.amazonaws.com/artemis` |
 
-The checked-in operator wrapper resolves its dependency from the repository's
-`file://vendor/arkmq-org-broker-operator` tree. The operator Applications use
-the Artemis Git repository as their source and override only the environment's
-private ECR repositories. The wrapper centrally selects the approved operator,
-init, and broker tags. Do not append an upstream Quay digest to a private ECR
-repository unless the promotion record proves that exact manifest digest exists
-there; registry-side conversion or an incomplete copy otherwise produces
-`ErrImagePull: NotFound`.
+The operator Applications use the Artemis Git repository and point to the
+matching Kustomize overlay. Kustomize inflates the pinned, unmodified public
+OCI chart and patches only the final Kubernetes objects. The environment image
+patch selects the approved operator, init, and broker tags. Do not append an
+upstream Quay image digest to a private ECR repository unless the promotion
+record proves that exact manifest exists there; registry-side conversion or an
+incomplete copy otherwise produces `ErrImagePull: NotFound`.
 
-The mirrored upstream Helm artifact is provenance and a controlled input to a
-future vendor rebase; it is not the chart dependency currently rendered by
-Argo CD. The deployed enterprise chart remains the reviewed Git-local vendor
-tree.
-
-If the deployment source later moves from the Git-local vendor tree to ECR,
-change the wrapper dependency and Argo credential flow together as a reviewed
-architecture change.
+The mirrored upstream Helm artifact remains approved provenance and an offline
+validation input. The current Argo deployment source is the public chart in the
+Kustomize base, so repo-server does not need ECR chart credentials. Moving that
+source to ECR is a separate reviewed change because the Helm subprocess invoked
+by Kustomize must receive working registry authentication.
 
 Register each ECR chart namespace as a Helm repository with OCI enabled, but
 provide authentication once per registry through an Argo CD repository
 credential template. Argo CD applies that template to every repository URL
 with the registry hostname as its prefix, including charts owned by other
-applications. The operator Application's source remains Git, so its
-`AppProject.sourceRepos` entry remains the Git repository; repo-server
-credentials separately authorize the wrapper's dependency fetch.
+applications. The operator Application's Argo source remains Git, so its
+`AppProject.sourceRepos` entry remains the Git repository. Before changing the
+Kustomize `helmCharts.repo` to ECR, verify on the approved Argo CD version that
+the Kustomize-invoked Helm process receives the refreshed registry credentials.
 
 Do not store the output of `aws ecr get-login-password` as a long-lived
 Terraform secret: ECR authorization tokens expire. Connect the repo-server to
@@ -249,7 +246,7 @@ The caller needs `ecr:GetAuthorizationToken`; its Kubernetes identity needs
 only `get`, `create`, `patch`, and `update` access to the
 `ecr-helm-oci-creds` Secret in the Argo CD namespace. The credential-template
 URL is the ECR registry hostname without `https://`, `oci://`, a namespace, or
-a chart name. Repository definitions and the wrapper dependency must not
+a chart name. Repository definitions and the Kustomize chart reference must not
 contain credentials of their own, because Argo CD only applies a matching
 credential template when repository-specific credentials are absent.
 
@@ -266,13 +263,11 @@ precedence over a matching credential template, so leaving the old ECR token
 in place would cause Artemis to fail when that token expires even though the
 shared template is current.
 
-For secure CI, update and lock the wrapper dependency before running contract
-tests:
+For secure CI, download the promoted unmodified chart and pass it to the
+repository renderer. The recorded checksum is enforced before rendering:
 
 ```sh
-export ARKMQ_OPERATOR_REPOSITORY="oci://$ECR_REGISTRY/artemis/helm"
-yq -i '.dependencies[0].repository = strenv(ARKMQ_OPERATOR_REPOSITORY)' \
-  gitops/charts/arkmq-operator/Chart.yaml
-helm dependency update gitops/charts/arkmq-operator
+export ARKMQ_UPSTREAM_CHART=/approved/path/arkmq-org-broker-operator-2.2.0.tgz
+make validate-operator-kustomize
 make validate-operator-schema
 ```

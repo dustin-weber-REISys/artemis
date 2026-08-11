@@ -80,9 +80,7 @@ if [[ "$schema_mode" != offline ]]; then
   }
 fi
 
-operator_chart_dir="$temp_dir/arkmq-operator"
-cp -R "$repo_root/charts/arkmq-operator/." "$operator_chart_dir"
-helm dependency build "$operator_chart_dir" >/dev/null
+operator_rendered_count=0
 
 for environment in test nonprod prod; do
   ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
@@ -119,16 +117,16 @@ for environment in test nonprod prod; do
   fi
 
   operator_rendered="$temp_dir/operator-$environment.yaml"
-  helm template validation-operator "$operator_chart_dir" \
-    --namespace example-platform \
-    --set-string "global.requiredLabels.env=$environment" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=$operator_image_tag" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit$compact_version.tag=$broker_image_tag" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes$compact_version.tag=$broker_image_tag" \
-    > "$operator_rendered"
+  if [[ -n "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
+    "$repo_root/scripts/render-arkmq-operator.sh" --environment "$environment" \
+      --artifact "$ARKMQ_UPSTREAM_CHART" > "$operator_rendered"
+  elif [[ "$schema_mode" == network ]]; then
+    "$repo_root/scripts/render-arkmq-operator.sh" --environment "$environment" \
+      > "$operator_rendered"
+  else
+    continue
+  fi
+  operator_rendered_count=$((operator_rendered_count + 1))
   if [[ "$schema_mode" != offline ]]; then
     kubeconform -strict -ignore-missing-schemas "$operator_rendered" >/dev/null
   fi
@@ -187,4 +185,8 @@ if [[ "$schema_mode" == offline ]]; then
 else
   printf 'operator CRD schema validation: PASS (%s source)\n' "$schema_mode"
 fi
-printf 'operator contract validation: PASS (ArkMQ %s, 3 overlays)\n' "$operator_version"
+if [[ "$operator_rendered_count" -eq 3 ]]; then
+  printf 'operator contract validation: PASS (ArkMQ %s, 3 Kustomize overlays)\n' "$operator_version"
+else
+  printf '%s\n' 'operator rendered contract validation: NOT_RUN (set ARKMQ_UPSTREAM_CHART or use --network)'
+fi

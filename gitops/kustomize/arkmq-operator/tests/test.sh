@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-chart_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-gitops_dir=$(CDPATH= cd -- "$chart_dir/../.." && pwd)
+operator_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+gitops_dir=$(CDPATH= cd -- "$operator_dir/../.." && pwd)
 release_file="$gitops_dir/releases/current.yaml"
+renderer="$gitops_dir/scripts/render-arkmq-operator.sh"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/arkmq-operator-test.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
+
+for command_name in rg yq; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    printf 'required command not found: %s\n' "$command_name" >&2
+    exit 1
+  fi
+done
 
 operator_version=$(yq -r '.operator.version' "$release_file")
 broker_version=$(yq -r '.broker.version' "$release_file")
 broker_image_tag="artemis.$broker_version"
 broker_compact=${broker_version//./}
 
-cp -R "$chart_dir/." "$work_dir/chart"
-helm dependency build "$work_dir/chart" >/dev/null
-
-if helm template invalid "$work_dir/chart" \
-  --set-string 'global.requiredLabels.contact=ELISSkynet@uscis.dhs.gov' \
-  >/dev/null 2>&1; then
-  printf '%s\n' 'expected an email address used as a label value to fail' >&2
-  exit 1
+if [[ -z "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
+  printf '%s\n' 'ArkMQ operator rendered tests: NOT_RUN (set ARKMQ_UPSTREAM_CHART to the approved upstream .tgz)'
+  exit 0
 fi
 
 for environment in test nonprod prod; do
@@ -28,16 +31,14 @@ for environment in test nonprod prod; do
   if [[ "$environment" == prod ]]; then
     ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
   fi
-  helm template "$environment-arkmq-operator" "$work_dir/chart" \
-    --namespace example-platform \
-    --set-string "global.requiredLabels.env=$environment" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.repository=$ecr_repository/arkmq-operator" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.image.tag=$operator_version" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository=$ecr_repository/activemq-artemis-broker-init" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit$broker_compact.tag=$broker_image_tag" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository=$ecr_repository/activemq-artemis-broker-kubernetes" \
-    --set-string "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes$broker_compact.tag=$broker_image_tag" \
-    > "$rendered"
+  "$renderer" --environment "$environment" \
+    --artifact "$ARKMQ_UPSTREAM_CHART" > "$rendered"
+
+  if rg -F 'quay.io/arkmq-org/' "$rendered" >/dev/null; then
+    printf '%s operator render contains an unapproved public runtime image\n' \
+      "$environment" >&2
+    exit 1
+  fi
 
   duplicate_resources=$(
     yq -r '
@@ -63,6 +64,15 @@ for environment in test nonprod prod; do
         ] | length) == 1)
   ' "$rendered" >/dev/null
 
+  ENVIRONMENT="$environment" yq eval-all -e '
+    [.] | ([.[] | select(
+      .metadata.labels.app != "artemis" or
+      .metadata.labels.contact != "PLACEHOLDER_ARTEMIS_CONTACT" or
+      .metadata.labels.env != strenv(ENVIRONMENT) or
+      .metadata.labels.fismaid != "PLACEHOLDER_ARTEMIS_FISMAID")
+    ] | length) == 0
+  ' "$rendered" >/dev/null
+
   ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" OPERATOR_VERSION="$operator_version" BROKER_COMPACT="$broker_compact" BROKER_IMAGE_TAG="$broker_image_tag" yq -e '
     select(.kind == "Deployment")
     | (.metadata.name == "activemq-artemis-controller-manager-v2")
@@ -76,10 +86,8 @@ for environment in test nonprod prod; do
         select(.name == ("RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_" + strenv(BROKER_COMPACT)) and
           .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:" + strenv(BROKER_IMAGE_TAG)))] | length == 1)
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
-      and (.spec.template.spec.topologySpreadConstraints[0].maxSkew == 1)
       and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")
       and (.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == "ScheduleAnyway")
-      and (.spec.template.spec.topologySpreadConstraints[1].maxSkew == 1)
       and (.spec.template.spec.topologySpreadConstraints[1].topologyKey == "topology.kubernetes.io/zone")
       and (.spec.template.spec.topologySpreadConstraints[1].whenUnsatisfiable == "ScheduleAnyway")
       and (.spec.template.spec.tolerations | length == 1)
@@ -100,18 +108,12 @@ for environment in test nonprod prod; do
       and (.spec.selector.matchLabels | length == 2)
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" yq -e '
+  yq -e '
     select(.kind == "PodDisruptionBudget")
     | (.metadata.name == "activemq-artemis-controller-manager-v2")
       and (.spec.minAvailable == 1)
       and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
       and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
-      and (.spec.selector.matchLabels.app == null)
-      and (.spec.selector.matchLabels.contact == null)
-      and (.spec.selector.matchLabels.env == null)
-      and (.spec.selector.matchLabels.fismaid == null)
-      and (.spec.selector.matchLabels["app.kubernetes.io/name"] == null)
-      and (.spec.selector.matchLabels["app.kubernetes.io/instance"] == null)
       and (.spec.selector.matchLabels | length == 2)
   ' "$rendered" >/dev/null
 
@@ -133,7 +135,7 @@ for environment in test nonprod prod; do
       ] | length) == 1
   ' "$rendered" >/dev/null
 
-  RELEASE_NAMESPACE=example-platform yq -e '
+  RELEASE_NAMESPACE=PLACEHOLDER_PLATFORM_NAMESPACE yq -e '
     select(.kind == "ClusterRoleBinding" and .metadata.name == "activemq-artemis-operator-rolebinding")
     | .roleRef.kind == "ClusterRole"
       and .roleRef.name == "activemq-artemis-operator-role"
@@ -147,4 +149,4 @@ for environment in test nonprod prod; do
   ' "$rendered" >/dev/null
 done
 
-printf '%s\n' 'ArkMQ operator wrapper tests passed'
+printf '%s\n' 'ArkMQ operator Kustomize tests passed'

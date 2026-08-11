@@ -14,28 +14,40 @@ ZooKeeper, operator, and client libraries as one unobserved change.
 2. Run the approved ECR image/chart transfer jobs first. Record their build
    URLs and fingerprinted promotion records; an application upgrade must refer
    to artifacts that already exist in the destination immutable repositories.
-3. Preview exactly one broker or ZooKeeper change. The command is dry-run
+3. Preview exactly one operator, broker, or ZooKeeper change. The command is dry-run
    unless `--write` is explicitly supplied:
 
    ```sh
    ./gitops/scripts/prepare-upgrade.sh \
      --component broker \
-     --version VERSION
+     --version VERSION \
+     --chart-artifact /path/to/current-operator-chart.tgz
    ```
 
-   ZooKeeper upgrades also require the immutable promoted image digest through
+   The current unmodified operator chart is required for broker upgrades so
+   validation can prove that its related-image inventory supports the requested
+   broker version. ZooKeeper upgrades require the immutable promoted image digest through
    `--image-digest sha256:...`; changing a tag while retaining the old digest
    does not change the image Kubernetes runs.
 
-   Operator upgrades are deliberately separate because the checked-in chart
-   contains reviewed enterprise customizations. On an approved connected build
-   host, obtain the upstream chart, update `upstream.lock.yaml`, rebase the
-   functional vendor patches, and regenerate the vendor tree. After that review,
-   update the operator provenance and wrapper versions in
-   `releases/current.yaml` and the wrapper chart. `validate-release.sh` rejects
-   any operator version that does not match the vendor lock, generated tree,
-   wrapper chart, and image mappings. Do not edit or version-replace the
-   generated vendor tree directly.
+   Operator upgrades use the unmodified upstream chart and no longer require a
+   vendor rebase. Pull the exact chart and record the OCI, manifest, and image
+   provenance, then preview the complete Kustomize change:
+
+   ```sh
+   ./gitops/scripts/prepare-upgrade.sh \
+     --component operator \
+     --version VERSION \
+     --chart-artifact /path/to/chart.tgz \
+     --chart-oci-digest sha256:... \
+     --manifest-sha256 HEX \
+     --image-digest sha256:...
+   ```
+
+   The command updates the central release, pinned Helm chart version, common
+   operator values, and all three private-image overlays in a staged copy. It
+   renders every overlay against the supplied chart and fails if the upstream
+   Kubernetes objects no longer match the repository-owned transformations.
 4. Record source versions, immutable digests, SBOM, license inventory, scan
    result, and the operator/operand compatibility matrix.
 5. Run the canonical repository validation from the root

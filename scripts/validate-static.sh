@@ -42,12 +42,15 @@ local/.env.example
 local/scripts/validate-compose.sh
 gitops/Makefile
 gitops/releases/current.yaml
-gitops/charts/arkmq-operator/values.yaml
-gitops/charts/arkmq-operator/vendor/upstream.lock.yaml
+gitops/kustomize/arkmq-operator/base/kustomization.yaml
+gitops/kustomize/arkmq-operator/base/values.yaml
+gitops/kustomize/arkmq-operator/base/deployment-identity.patch.yaml
+gitops/kustomize/arkmq-operator/overlays/test/kustomization.yaml
+gitops/kustomize/arkmq-operator/overlays/nonprod/kustomization.yaml
+gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml
 gitops/scripts/validate-topology.sh
 gitops/scripts/validate-rendered-schema.sh
-gitops/scripts/prepare-arkmq-vendor.sh
-gitops/scripts/vendor-check.sh
+gitops/scripts/render-arkmq-operator.sh
 gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/tests/topology/test.sh
@@ -83,7 +86,16 @@ if command -v yq >/dev/null 2>&1; then
     "$repo_root/performance/profiles/sustained-load-profiles.yaml" \
     "$repo_root/gitops/tests/chart/validation-policy.yaml" \
     "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
-    "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml"; do
+    "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/base/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/base/values.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/base/pdb.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/test/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/test/private-images.patch.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/nonprod/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/nonprod/private-images.patch.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/private-images.patch.yaml"; do
     yq -e '.' "$yaml_file" >/dev/null || {
       printf 'invalid YAML: %s\n' "${yaml_file#"$repo_root/"}" >&2
       errors=$((errors + 1))
@@ -107,6 +119,11 @@ if command -v yq >/dev/null 2>&1; then
     '.image.digest // ""' \
     "$repo_root/gitops/charts/zookeeper/values.yaml" \
     '^sha256:[0-9a-f]{64}$'
+
+  assert_yaml_pattern 'ArkMQ Kustomize chart OCI repository' \
+    '.helmCharts[0].repo // ""' \
+    "$repo_root/gitops/kustomize/arkmq-operator/base/kustomization.yaml" \
+    '^oci://quay[.]io/arkmq-org/helm-charts$'
 
   if rg -n '^[[:space:]]*(image|images|tag|digest):' "$repo_root/gitops/environments" >/dev/null; then
     printf '%s\n' 'environment values must not contain image locations or release pins' >&2

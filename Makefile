@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release vendor-check test test-topology test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release test test-topology test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -16,13 +16,13 @@ help:
 		'' \
 		'GitOps and Helm:' \
 		'  versions          Show centrally selected platform and application versions' \
-		'  prepare-upgrade   Preview a broker/ZooKeeper upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
+		'  prepare-upgrade   Preview an operator/broker/ZooKeeper upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
 		'  validate-release  Validate central versions and generated consumers' \
-		'  vendor-check      Reproduce the ArkMQ vendor tree (ARKMQ_UPSTREAM_CHART=/path/chart.tgz)' \
 		'  validate-topology Validate the broker-pair catalog and Argo bootstrap' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \
 		'  validate-charts   Lint and render the Helm charts' \
+		'  validate-operator-kustomize Render operator overlays from the approved upstream chart' \
 		'  validate-scenarios Validate the EKS acceptance definitions' \
 		'  validate-operator-schema Validate broker CRs against the selected ArkMQ release' \
 		'' \
@@ -93,8 +93,11 @@ test-argocd-ecr-credentials:
 validate-charts:
 	$(MAKE) -C gitops validate-charts REPORT_DIR="$(abspath $(REPORT_DIR))"
 
+validate-operator-kustomize:
+	$(MAKE) -C gitops validate-operator-kustomize ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)"
+
 validate-operator-schema:
-	$(MAKE) -C gitops validate-operator-schema
+	$(MAKE) -C gitops validate-operator-schema ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)"
 
 versions:
 	$(MAKE) -C gitops versions
@@ -104,9 +107,6 @@ prepare-upgrade:
 
 validate-release:
 	$(MAKE) -C gitops validate-release
-
-vendor-check:
-	$(MAKE) -C gitops vendor-check ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)"
 
 validate-static:
 	./scripts/validate-static.sh --report "$(REPORT_DIR)/static-validation.json"

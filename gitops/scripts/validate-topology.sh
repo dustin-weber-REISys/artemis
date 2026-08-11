@@ -395,36 +395,22 @@ $(yq -r '.brokerPairs[].managementHost' "$topology")"
   if [[ "$environment" == prod ]]; then
     expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
   fi
-  assert_equal "$environment operator wrapper path" \
+  assert_equal "$environment operator Kustomize overlay path" \
     "$(yq -r '.spec.source.path // ""' "$operator")" \
-    gitops/charts/arkmq-operator
-  assert_equal "$environment operator release name" \
-    "$(yq -r '.spec.source.helm.releaseName // ""' "$operator")" \
-    "$environment-arkmq-operator"
-  assert_equal "$environment operator values file count" \
-    "$(yq -r '(.spec.source.helm.valueFiles // []) | length' "$operator")" \
+    "gitops/kustomize/arkmq-operator/overlays/$environment"
+  assert_equal "$environment operator Helm source count" \
+    "$(yq -r '[.spec.source.helm] | map(select(. != null)) | length' "$operator")" \
     0
-  assert_equal "$environment operator required env label" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "global.requiredLabels.env") | .value' "$operator")" \
-    "$environment"
-  assert_equal "$environment operator cluster scope" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.clusterScoped") | .value' "$operator")" \
-    true
   assert_equal "$environment operator PruneLast migration option count" \
     "$(yq -r '[.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true")] | length' "$operator")" \
     1
+  operator_image_patch="$repo_root/kustomize/arkmq-operator/overlays/$environment/private-images.patch.yaml"
   assert_equal "$environment operator image repository" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.image.repository") | .value' "$operator")" \
+    "$(yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .image | split(":")[0]' "$operator_image_patch")" \
     "$expected_ecr_repository/arkmq-operator"
-  assert_equal "$environment operator tag override count" \
-    "$(yq -r '[.spec.source.helm.parameters[]? | select(.name | test("\\.tag$"))] | length' "$operator")" \
-    0
-  assert_equal "$environment operator init-image repository" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInitRepository") | .value' "$operator")" \
-    "$expected_ecr_repository/activemq-artemis-broker-init"
-  assert_equal "$environment operator broker-image repository" \
-    "$(yq -r '.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetesRepository") | .value' "$operator")" \
-    "$expected_ecr_repository/activemq-artemis-broker-kubernetes"
+  assert_equal "$environment operator environment label" \
+    "$(yq -r '.labels[0].pairs.env' "$repo_root/kustomize/arkmq-operator/overlays/$environment/kustomization.yaml")" \
+    "$environment"
   assert_singleton_application \
     "$zookeeper" "$environment" ZooKeeper "$environment-shared-zookeeper" -10
   assert_equal "$environment ZooKeeper release name" \

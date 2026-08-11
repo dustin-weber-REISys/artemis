@@ -157,8 +157,8 @@ assert_bootstrap_rejected \
   wrong-operator-chart \
   test \
   operator-application.yaml \
-  '.spec.source.path = "gitops/charts/unapproved-operator"' \
-  'test operator wrapper path: expected gitops/charts/arkmq-operator, got gitops/charts/unapproved-operator'
+  '.spec.source.path = "gitops/kustomize/unapproved-operator"' \
+  'test operator Kustomize overlay path: expected gitops/kustomize/arkmq-operator/overlays/test, got gitops/kustomize/unapproved-operator'
 
 assert_bootstrap_rejected \
   wrong-operator-oci-repository \
@@ -175,32 +175,11 @@ assert_bootstrap_rejected \
   'prod operator Git revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
 
 assert_bootstrap_rejected \
-  namespaced-operator-rbac \
+  operator-helm-source \
   test \
   operator-application.yaml \
-  '(.spec.source.helm.parameters[] | select(.name == "arkmq-org-broker-operator.clusterScoped") | .value) = "false"' \
-  'test operator cluster scope: expected true, got false'
-
-assert_bootstrap_rejected \
-  operator-version-override \
-  test \
-  operator-application.yaml \
-  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.image.tag","value":"2.2.1"}]' \
-  'test operator tag override count: expected 0, got 1'
-
-assert_bootstrap_rejected \
-  broker-init-version-override \
-  test \
-  operator-application.yaml \
-  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerInit2530.tag","value":"artemis.2.52.0"}]' \
-  'test operator tag override count: expected 0, got 1'
-
-assert_bootstrap_rejected \
-  broker-image-version-override \
-  prod \
-  operator-application.yaml \
-  '.spec.source.helm.parameters += [{"name":"arkmq-org-broker-operator.controllerManager.manager.relatedImages.activemqArtemisBrokerKubernetes2530.tag","value":"artemis.2.52.0"}]' \
-  'prod operator tag override count: expected 0, got 1'
+  '.spec.source.helm = {"releaseName":"unapproved"}' \
+  'test operator Helm source count: expected 0, got 1'
 
 assert_bootstrap_rejected \
   missing-operator-prune-last \

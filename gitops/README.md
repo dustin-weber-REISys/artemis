@@ -6,7 +6,9 @@ This area is the deployable EKS baseline. It owns:
   environment-local broker-pair catalog, including disabled PP/PR batch
   placeholders;
 - [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
-  charts, plus the ArkMQ operator wrapper and its immutable release pin;
+  charts;
+- [`kustomize`](kustomize): the ArkMQ operator base and environment overlays
+  applied to the unmodified upstream Helm chart;
 - [`environments`](environments): test, non-production, and production runtime
   values without image locations or release pins;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
@@ -31,10 +33,11 @@ Network mode fails when schema downloads fail. Custom-resource schema checks
 remain in `make validate-operator-schema`, which also distinguishes its offline
 contract checks from its explicit network phase.
 
-The vendored ArkMQ chart is generated from a checksum-locked upstream package
-and named patches. See [`charts/arkmq-operator/vendor`](charts/arkmq-operator/vendor)
-and run `make vendor-check ARKMQ_UPSTREAM_CHART=/path/to/chart.tgz` before an
-operator upgrade.
+The ArkMQ operator uses Kustomize Helm inflation. Its base pins the public OCI
+chart and owns the shared platform policy; environment overlays own only their
+label and private image references. On a connected workstation, or with an
+approved downloaded chart, run
+`make validate-operator-kustomize ARKMQ_UPSTREAM_CHART=/path/to/chart.tgz`.
 
 The
 [`observed production workload baseline`](docs/production-workload-baseline.md)
@@ -49,7 +52,8 @@ Applications. All child destinations use the local cluster server
 `https://kubernetes.default.svc`.
 
 Argo CD paths are repository-relative and therefore include the `gitops/`
-prefix. Helm values files remain relative to their chart directories.
+prefix. Helm values files remain relative to their chart directories, and the
+operator Applications point to their Kustomize overlay directories.
 
 From the repository root:
 

@@ -1,0 +1,38 @@
+controllerManager:
+  replicas: 2
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          control-plane: controller-manager
+          name: activemq-artemis-operator
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          control-plane: controller-manager
+          name: activemq-artemis-operator
+  tolerations:
+    - key: eid-platform/node-lifecycle
+      operator: Equal
+      value: ondemand
+      effect: NoSchedule
+  manager:
+    image:
+      tag: 2.2.0
+      pullPolicy: IfNotPresent
+    relatedImages:
+      # The upstream chart emits mappings for every supported broker version.
+      # Fail closed for all of them; each environment overlay replaces only the
+      # centrally approved broker/init pair with reachable private ECR images.
+      activemqArtemisBrokerInitRepository: registry.invalid/unsupported/activemq-artemis-broker-init
+      activemqArtemisBrokerKubernetesRepository: registry.invalid/unsupported/activemq-artemis-broker-kubernetes
+
+clusterScoped: true
+watchNamespaces: []
+crds:
+  apply: true
+  keep: true

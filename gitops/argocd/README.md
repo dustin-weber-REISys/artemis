@@ -36,27 +36,21 @@ The existing EKS Terraform inputs map to Artemis as follows:
 | `standalone_argocd_repos` | Register the standalone Artemis Git repository with the cluster-local Argo CD instance. |
 | `argocd_repos` | Create one root Artemis Application using the matching bootstrap path, Git repository, and approved branch, tag, or commit. |
 
-The operator Applications use the repository-owned
-[`arkmq-operator`](../charts/arkmq-operator) wrapper chart as their Git source.
-The wrapper pins a repository-local copy of ArkMQ Broker Operator `2.2.0` and
-patches its label handling so Gatekeeper-required labels are present on the
-operator Deployment and pod template. Its `-v2` Deployment identity performs a
-one-time declarative replacement for installations whose immutable selectors
-were rendered differently by earlier revisions. `PruneLast=true` keeps the old
-controller available until the replacement is healthy, then automated pruning
-removes it.
-Operator and operand image locations remain environment-specific ECR
-placeholders in the bootstrap manifests. Versions are not repeated there: the
-wrapper selects the approved manager, init, and broker tags from the central
-release. Private tags must be immutable under the platform's ECR policy.
-Upstream Quay digests remain provenance and vendored-chart fallbacks; do not
-combine them with private repositories unless promotion evidence proves those
-exact manifests exist in ECR.
+The operator Applications use the matching repository-owned
+[`arkmq-operator`](../kustomize/arkmq-operator) Kustomize overlay as their Git
+source. Kustomize inflates the pinned, unmodified public ArkMQ Broker Operator
+chart, applies common scheduling and admission policy, and then applies the
+environment label and private ECR image references. Argo CD must enable Helm
+inflation with `kustomize.buildOptions: --enable-helm`.
 
-The repository-local chart dependency needs no runtime Helm-registry
-credentials. The separate ECR mirroring design remains documented in
-[`Helm chart mirroring to ECR`](../docs/helm-ecr-mirroring.md) for a future
-switch back to the private source.
+The `-v2` Deployment identity remains a declarative replacement for
+installations whose immutable selectors were rendered differently by earlier
+revisions. `PruneLast=true` keeps the old controller available until the
+replacement is healthy, then automated pruning removes it. Private image tags
+must be immutable under the platform's ECR policy. Upstream chart and image
+digests remain release provenance; do not combine an upstream image digest with
+a private repository unless promotion evidence proves that manifest exists in
+the target registry.
 
 The bootstrap-managed `messaging-platform` project allows:
 
@@ -74,11 +68,12 @@ The root Application uses the `default` project for bootstrap. Sync wave `-30`
 creates the environment-local `messaging-platform` project before the operator,
 ZooKeeper, and generated Artemis Applications reference it. Git and private
 image-registry credentials remain platform-owned and must exist before the
-root sync; the repository-local operator dependency needs no ECR Helm token.
+root sync. Repo-server also needs an approved network path to the pinned public
+chart, or the Kustomize base must reference an approved immutable OCI mirror.
 
 Set `PLACEHOLDER_GITOPS_REVISION` in the bootstrap manifests to the exact
 branch, tag, or commit configured for the root entry in `argocd_repos`. The
-operator wrapper source, ZooKeeper source, workload generator, and generated
+operator overlay source, ZooKeeper source, workload generator, and generated
 workload source must all use that same environment revision.
 
 ## Controlled bootstrap
@@ -111,8 +106,9 @@ expressions. The intended root source is the raw YAML bootstrap directory.
 Replace `PLACEHOLDER_NONPROD_ECR_REPOSITORY` and
 `PLACEHOLDER_PROD_ECR_REPOSITORY` with full ECR prefixes shaped like
 `123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/artemis`. The checked-in
-configuration appends image names. The wrapper resolves its chart dependency
-from the checked-in `vendor` directory rather than an Application source.
-Replace every other placeholder before sync. Each AppProject allows the exact
-Git source used by its children. Git and private image-registry credentials,
-AppProject policy, and secret values remain outside this repository.
+configuration appends image names. The operator Kustomize base inflates the
+pinned public chart while its environment overlay selects these private image
+references. Replace every other placeholder before sync. Each AppProject
+allows the exact Git source used by its children. Git and private image-registry
+credentials, AppProject policy, and secret values remain outside this
+repository.

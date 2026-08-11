@@ -33,13 +33,16 @@ make local-down
 ### [`gitops`](gitops)
 
 The deployable EKS baseline: standalone per-cluster Argo CD bootstraps, Helm
-charts, environment overlays, topology, acceptance scenarios, runbooks, and
-their validation scripts.
+charts, the Kustomized upstream ArkMQ operator, environment overlays, topology,
+acceptance scenarios, runbooks, and their validation scripts.
 
 ```sh
 make validate-topology
 make test-topology
 make validate-charts
+
+ARKMQ_UPSTREAM_CHART=/path/to/arkmq-org-broker-operator.tgz \
+  make validate-operator-kustomize
 ```
 
 ### [`performance`](performance)

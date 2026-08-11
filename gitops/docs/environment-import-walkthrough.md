@@ -94,10 +94,10 @@ Complete these checks before changing Argo CD resources:
 
 The canonical local workflow is in the root [`README`](../README.md#validate),
 [`Makefile`](../Makefile), and [`scripts`](../scripts). Install the tools those
-files check. The wrapper dependency in `charts/arkmq-operator/Chart.yaml` must
-point to the approved ECR OCI namespace before a restricted-environment
-promotion; the public upstream reference is for connected development and
-initial import.
+files check. Argo CD must enable Kustomize Helm inflation. The operator base
+currently pulls the pinned public OCI chart; before a restricted-environment
+promotion, confirm repo-server has the approved outbound path or change the
+base through review to an approved immutable internal OCI mirror.
 
 Cluster verification additionally needs the approved AWS, Kubernetes, Argo CD,
 OCI-copy, signing, SBOM, and vulnerability-scanning tools selected by the
@@ -129,15 +129,14 @@ Update the selected directory under
 [`topology`](../argocd/topology) file with the approved Argo namespace,
 Git source, immutable revision policy, local platform namespace, workload
 namespaces, and cluster identity. Replace the matching nonprod or prod ECR base
-placeholder for the image repositories in the bootstrap manifests. The
-repository-owned operator wrapper resolves its pinned, patched ArkMQ dependency
-from the checked-in `vendor` directory.
+placeholder in the matching operator Kustomize image patch. The repository
+does not fork or patch the upstream chart; the common base and environment
+overlay transform its rendered Kubernetes objects.
 
 In the cluster's Terraform configuration:
 
-1. register the Artemis Git repository through `standalone_argocd_repos`; the
-   repository-local operator dependency does not require chart-registry
-   credentials;
+1. register the Artemis Git repository through `standalone_argocd_repos` and
+   confirm repo-server can pull the pinned operator chart source;
 2. add one Artemis root entry to `argocd_repos` whose source path is exactly
    `gitops/argocd/bootstrap/<environment>`; and
 3. use the same approved branch, tag, or commit for the root entry and every
@@ -150,9 +149,9 @@ Application references the project.
 
 The bootstrap project allows the local platform and workload namespaces, the
 Artemis Git source, and the exact cluster-scoped kinds rendered by the approved
-ArkMQ chart. Each operator Application explicitly sets `clusterScoped: true`,
-and the wrapper values repeat that default as defense in depth. The allowlist
-therefore includes `Namespace`, `CustomResourceDefinition`, `ClusterRole`, and
+ArkMQ chart. The common Kustomize Helm values explicitly set
+`clusterScoped: true`, CRD ownership, and watch scope. The allowlist therefore
+includes `Namespace`, `CustomResourceDefinition`, `ClusterRole`, and
 `ClusterRoleBinding` at minimum.
 
 Keep the operator's cluster scope, CRD ownership, and watch scope as
@@ -174,10 +173,9 @@ Vault, client allowlist, queue, capacity, or alert differences in explicit
 workload configuration or ApplicationSet parameters.
 
 Artifact tags and digests are shared release data, not environment data. The
-pinned ArkMQ chart maps the Artemis `broker.version` to its broker and init
-digests; the [operator wrapper defaults](../charts/arkmq-operator/values.yaml)
-pin the operator container. Promote them together by advancing the
-environment's approved Git revision.
+[operator Kustomize deployment](../kustomize/arkmq-operator) pins the upstream
+chart, operator tag, and current private broker/init references. Promote them
+together by advancing the environment's approved Git revision.
 
 Review the effective schema and rendered manifest rather than following a
 copied property inventory. At minimum, resolve:
@@ -263,9 +261,10 @@ parent bootstrap or a phased procedure enforces health checks.
    backup prerequisites.
 2. In each cluster's Terraform, configure this standalone Git repository and
    the root Application through `argocd_repos`, pointing only to that cluster's
-   bootstrap path and approved revision. Confirm Argo CD can resolve the
-   repository-local operator dependency; no ECR Helm token is required. The
-   bootstrap creates the `messaging-platform` project.
+   bootstrap path and approved revision. Confirm repo-server can inflate the
+   pinned public Helm chart through Kustomize; no ECR chart token is required
+   for the current source. The bootstrap creates the `messaging-platform`
+   project.
 3. Create Vault policies/roles/data references, Keycloak clients, TLS
    material, and the namespace/pod labels required by policy.
 4. Run the canonical repository validation and inspect effective rendered
