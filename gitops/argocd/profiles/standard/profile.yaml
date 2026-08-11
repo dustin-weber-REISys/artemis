@@ -1,0 +1,22 @@
+schemaVersion: profiles.artemis.apache.org/v1
+name: standard
+description: Current supported Artemis capabilities for an active/passive Workload Cell.
+featureOverrides:
+  expiryResources:
+    type: boolean
+    default: false
+    helmPath: brokerProperties.addressSettings.expiry.enabled
+  diskGuardrail:
+    type: enum
+    default: standard
+    values:
+      - standard
+      - conservative
+    helmPath: brokerProperties.maxDiskUsage
+protectedPaths:
+  - broker.version
+  - ha
+  - zookeeper
+  - brokerProperties.durability
+  - persistence.size
+  - topology

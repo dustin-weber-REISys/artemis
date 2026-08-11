@@ -1,16 +1,9 @@
-# The test cluster's local ApplicationSet supplies namespace, coordination ID,
-# and shared-ZooKeeper service parameters.
+# Cluster integrations for the test cluster. Workload Cell identity, sizing,
+# Profile behavior, and release versions are owned elsewhere.
 commonLabels:
   env: test
 
 broker:
-  resources:
-    requests:
-      cpu: 500m
-      memory: 2Gi
-    limits:
-      cpu: "1"
-      memory: 3Gi
   # Environment worker nodes carry the platform's on-demand lifecycle taint.
   # Admit brokers only to that lifecycle class; do not use a blanket Exists
   # toleration because it would also admit unrelated protected node pools.
@@ -23,7 +16,7 @@ persistence:
   storageClassName: PLACEHOLDER_TEST_GP3_STORAGE_CLASS
 
 # Reuse the existing legacy Hawtio client in preprod Keycloak. The
-# ApplicationSet supplies the exact console redirect URI for each broker pair.
+# ApplicationSet supplies the exact console redirect URI for each Workload Cell.
 keycloak:
   enabled: true
   displayName: Legacy Hawtio Preprod

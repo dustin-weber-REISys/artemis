@@ -81,7 +81,7 @@ run_verifier >"$temp_dir/pass.out"
 grep -Fq 'Application test-arkmq-operator: Synced/Healthy revision=remote-operator-revision' "$temp_dir/pass.out"
 grep -Fq 'Application test-sky-artemis: Synced/Healthy revision=remote-workload-revision' "$temp_dir/pass.out"
 grep -Fq 'Broker StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss: desired=2 current=2 ready=2' "$temp_dir/pass.out"
-grep -Fq 'Live Artemis health: PASS (1 enabled broker pairs)' "$temp_dir/pass.out"
+grep -Fq 'Live Artemis health: PASS (1 enabled Workload Cells)' "$temp_dir/pass.out"
 
 # A workstation checkout revision is deliberately irrelevant to live health.
 MOCK_OPERATOR_REVISION=not-local-head \

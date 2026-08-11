@@ -36,9 +36,13 @@ production ECR bases when creating these files on the work laptop.
 Apply only the reviewed additions and removals from GitHub's **Files changed**
 view:
 
-- [ ] `gitops/argocd/bootstrap/test/operator-application.yaml`
-- [ ] `gitops/argocd/bootstrap/nonprod/operator-application.yaml`
-- [ ] `gitops/argocd/bootstrap/prod/operator-application.yaml`
+- [ ] `gitops/argocd/bootstrap/base/*`
+- [ ] `gitops/argocd/bootstrap/test/*`
+- [ ] `gitops/argocd/bootstrap/nonprod/*`
+- [ ] `gitops/argocd/bootstrap/prod/*`
+- [ ] `gitops/argocd/topology/*`
+- [ ] `gitops/argocd/profiles/standard/*`
+- [ ] `gitops/argocd/baseline-policy.yaml`
 - [ ] `gitops/releases/current.yaml`
 - [ ] `gitops/scripts/prepare-upgrade.sh`
 - [ ] `gitops/scripts/validate-release.sh`
@@ -50,9 +54,9 @@ view:
 - [ ] `Makefile` and `gitops/Makefile`
 - [ ] GitOps READMEs, upgrade runbook, import walkthrough, and ECR mirroring guide
 
-The operator Applications must keep their local Git URL, revision, Argo
-namespace, destination namespace, sync policy, and `PruneLast=true`. Only their
-source path changes to the matching Kustomize overlay.
+The rendered operator Applications must keep their identities, local Git URL,
+root-injected revision, Argo namespace, destination namespace, sync policy,
+and `PruneLast=true`. Do not recreate copied child manifests in the adapters.
 
 ## Remove the obsolete vendor implementation
 

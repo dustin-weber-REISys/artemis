@@ -13,7 +13,7 @@ broker credentials, tokens, or message bodies.
 
 Argo CD and the operator prove different things:
 
-1. The ApplicationSet creates one Argo CD Application per enabled broker pair.
+1. The ApplicationSet creates one Argo CD Application per enabled Workload Cell.
 2. Argo CD renders the Helm chart and applies the `ActiveMQArtemis` custom
    resource and chart-owned resources.
 3. The ArkMQ operator observes the custom resource and creates the broker

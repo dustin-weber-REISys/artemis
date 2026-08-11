@@ -11,7 +11,7 @@ help:
 		'validate-release         Validate central versions and generated consumers' \
 		'validate                 Run all GitOps and Helm checks' \
 		'validate-scenarios       Validate EKS acceptance definitions' \
-		'validate-topology        Validate broker-pair catalogs and local-cluster bootstraps' \
+		'validate-topology        Validate Workload Cell catalogs and rendered cluster composition' \
 		'verify-applicationset    Verify live ApplicationSet reconciliation (requires CONTEXT, ARGOCD_NAMESPACE, ENVIRONMENT)' \
 		'diagnose-pod-startup     Classify one live pod startup failure (requires CONTEXT, NAMESPACE, POD)' \
 		'test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \

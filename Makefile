@@ -18,7 +18,7 @@ help:
 		'  versions          Show centrally selected platform and application versions' \
 		'  prepare-upgrade   Preview an operator/broker/ZooKeeper upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
 		'  validate-release  Validate central versions and generated consumers' \
-		'  validate-topology Validate the broker-pair catalog and Argo bootstrap' \
+		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
 		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \

@@ -48,6 +48,17 @@ gitops/kustomize/arkmq-operator/base/deployment-identity.patch.yaml
 gitops/kustomize/arkmq-operator/overlays/test/kustomization.yaml
 gitops/kustomize/arkmq-operator/overlays/nonprod/kustomization.yaml
 gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml
+gitops/argocd/bootstrap/base/kustomization.yaml
+gitops/argocd/bootstrap/base/project.yaml
+gitops/argocd/bootstrap/base/operator-application.yaml
+gitops/argocd/bootstrap/base/zookeeper-application.yaml
+gitops/argocd/bootstrap/base/artemis-workloads-applicationset.yaml
+gitops/argocd/bootstrap/test/kustomization.yaml
+gitops/argocd/bootstrap/nonprod/kustomization.yaml
+gitops/argocd/bootstrap/prod/kustomization.yaml
+gitops/argocd/baseline-policy.yaml
+gitops/argocd/profiles/standard/profile.yaml
+gitops/argocd/profiles/standard/values.yaml
 gitops/scripts/validate-topology.sh
 gitops/scripts/validate-rendered-schema.sh
 gitops/scripts/render-arkmq-operator.sh
@@ -98,7 +109,21 @@ if command -v yq >/dev/null 2>&1; then
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/nonprod/kustomization.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/nonprod/private-images.patch.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml" \
-    "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/private-images.patch.yaml"; do
+    "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/private-images.patch.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/base/kustomization.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/base/project.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/base/operator-application.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/base/zookeeper-application.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/base/artemis-workloads-applicationset.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/test/kustomization.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/test/cluster.patch.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/nonprod/kustomization.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/nonprod/cluster.patch.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/prod/kustomization.yaml" \
+    "$repo_root/gitops/argocd/bootstrap/prod/cluster.patch.yaml" \
+    "$repo_root/gitops/argocd/baseline-policy.yaml" \
+    "$repo_root/gitops/argocd/profiles/standard/profile.yaml" \
+    "$repo_root/gitops/argocd/profiles/standard/values.yaml"; do
     yq -e '.' "$yaml_file" >/dev/null || {
       printf 'invalid YAML: %s\n' "${yaml_file#"$repo_root/"}" >&2
       errors=$((errors + 1))

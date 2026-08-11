@@ -2,9 +2,8 @@
 
 The ZooKeeper chart itself enforces the shared three-member quorum, persistent
 volumes, disruption budget, zone and host scheduling, network policy, and
-metrics defaults. The `test`, `nonprod`, and `prod` overlays contain stage-wide
-infrastructure references, resource defaults, and observability integration.
-Pair-specific Artemis identity and capacity live in
+metrics defaults. The `test`, `nonprod`, and `prod` overlays contain only
+cluster integration references. Workload Cell identity and sizing live in
 [`argocd/topology`](../argocd/topology).
 
 Image locations and release pins do not belong in environment overlays.
@@ -19,7 +18,7 @@ The test and nonprod Artemis overlays reuse the existing legacy Hawtio client
 and realm in preprod Keycloak. The prod overlay reuses the existing legacy
 Hawtio client and realm in production Keycloak for every production workload
 namespace. ApplicationSets continue to derive each client's exact redirect URI
-from its topology `managementHost`; every rendered URI must already be allowed
+from its catalog `managementHost`; every rendered URI must already be allowed
 by the reused client. These overlays do not provision or modify Keycloak.
 
 Local Docker Compose is the developer sandbox. There is no Kubernetes

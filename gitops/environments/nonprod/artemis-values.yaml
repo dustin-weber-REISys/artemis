@@ -1,16 +1,9 @@
-# Release-candidate capacity with the same HA and ZooKeeper coordination
-# semantics as test and prod.
+# Cluster integrations for the non-production cluster. Workload Cell identity,
+# sizing, Profile behavior, and release versions are owned elsewhere.
 commonLabels:
   env: nonprod
 
 broker:
-  resources:
-    requests:
-      cpu: "1"
-      memory: 4Gi
-    limits:
-      cpu: "2"
-      memory: 6Gi
   # Environment worker nodes carry the platform's on-demand lifecycle taint.
   # Admit brokers only to that lifecycle class; do not use a blanket Exists
   # toleration because it would also admit unrelated protected node pools.
@@ -23,7 +16,7 @@ persistence:
   storageClassName: PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
 
 # Reuse the same existing legacy Hawtio client and realm as test in preprod
-# Keycloak. Redirect URIs remain pair-specific ApplicationSet parameters.
+# Keycloak. Redirect URIs remain Workload Cell-specific parameters.
 keycloak:
   enabled: true
   displayName: Legacy Hawtio Preprod

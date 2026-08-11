@@ -63,9 +63,9 @@ Each workload's effective configuration must supply a pair-unique
 `ha.coordinationId`, a unique ZooKeeper curator namespace, the external
 ZooKeeper connection and selectors, ingress identity, and the approved policy
 sources. The operator maps `broker.version` to the immutable private broker and
-init images configured by its pinned chart. The ApplicationSet supplies the
-pair-specific fields from `argocd/topology`; environment overlays supply
-stage-wide runtime fields. Run
+init images configured by its pinned chart. The ApplicationSet supplies
+Workload Cell identity and sizing from `argocd/topology`, loads one approved
+Profile, and then loads environment-owned cluster integrations. Run
 `./tests/test.sh` for focused rendering, schema,
 port-coherence, and Kubernetes resource validation.
 
@@ -90,7 +90,7 @@ provides and tests the approved Vault-to-Artemis bridge.
 The chart consumes `persistence.storageClassName`; it never creates a
 cluster-scoped StorageClass. The platform-owned class must provide the approved
 EBS CSI provisioner, delayed binding, encryption, `Retain` reclaim policy, and
-volume expansion. Pair-specific capacity comes from the environment topology
+volume expansion. Workload Cell capacity comes from the cluster catalog
 and is passed as `persistence.size`.
 
 ## Dead-letter and expiry resources
@@ -114,11 +114,11 @@ Permanent application queue and address auto-creation remains disabled.
 Team-owned destinations are supplied declaratively through GitOps; automatic
 DLQ and expiry resources are broker-managed operational destinations.
 
-## Pair-specific management identity and storage
+## Workload Cell management identity and storage
 
 The environment-local ApplicationSet overrides `console.ingress.host`,
-`keycloak.redirectUri`, and `persistence.size` from each broker-pair entry in
-`argocd/topology`. This gives every pair an unambiguous Hawtio/Jolokia URL,
+`keycloak.redirectUri`, and `persistence.size` from each Workload Cell entry in
+`argocd/topology`. This gives every Workload Cell an unambiguous Hawtio/Jolokia URL,
 exact OIDC redirect URI, and explicit storage allocation. The host, redirect
 URI, shared-ALB certificate coverage, DNS record, and Keycloak client
-registration must agree before enabling a pair.
+registration must agree before enabling a Workload Cell.

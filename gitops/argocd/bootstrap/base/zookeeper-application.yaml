@@ -1,8 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: test-shared-zookeeper
+  name: cluster-shared-zookeeper
   namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  labels:
+    composition.artemis.apache.org/component: zookeeper
   annotations:
     argocd.argoproj.io/sync-wave: "-10"
 spec:
@@ -12,9 +14,9 @@ spec:
     targetRevision: PLACEHOLDER_GITOPS_REVISION
     path: gitops/charts/zookeeper
     helm:
-      releaseName: test-shared-zookeeper
+      releaseName: cluster-shared-zookeeper
       valueFiles:
-        - ../../environments/test/zookeeper-values.yaml
+        - ../../environments/cluster/zookeeper-values.yaml
       parameters:
         - name: image.repository
           value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper

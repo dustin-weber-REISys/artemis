@@ -2,9 +2,8 @@
 
 This area is the deployable EKS baseline. It owns:
 
-- [`argocd`](argocd): per-cluster standalone-repository bootstraps and the
-  environment-local broker-pair catalog, including disabled PP/PR batch
-  placeholders;
+- [`argocd`](argocd): one shared cluster-composition base, three thin adapters,
+  cluster-local Workload Cell catalogs, and reusable Workload Cell Profiles;
 - [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
   charts;
 - [`kustomize`](kustomize): the ArkMQ operator base and environment overlays

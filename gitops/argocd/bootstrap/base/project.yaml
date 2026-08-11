@@ -3,19 +3,25 @@ kind: AppProject
 metadata:
   name: messaging-platform
   namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  labels:
+    composition.artemis.apache.org/component: project
   annotations:
     argocd.argoproj.io/sync-wave: "-30"
+    composition.artemis.apache.org/environment: cluster
+    composition.artemis.apache.org/catalog-path: gitops/argocd/topology/cluster.yaml
+    composition.artemis.apache.org/git-revision: PLACEHOLDER_GITOPS_REVISION
+    composition.artemis.apache.org/repository: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
+    composition.artemis.apache.org/platform-namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    composition.artemis.apache.org/zookeeper-image-repository: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
 spec:
-  description: Artemis messaging platform workloads in the test cluster
+  description: Artemis messaging platform workloads in the local cluster
   sourceRepos:
     - https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: PLACEHOLDER_PLATFORM_NAMESPACE
     - server: https://kubernetes.default.svc
-      namespace: PLACEHOLDER_TEST_NAMESPACE_SKY
-    - server: https://kubernetes.default.svc
-      namespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
+      namespace: artemis-*
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace

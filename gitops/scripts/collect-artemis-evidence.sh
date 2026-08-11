@@ -99,9 +99,9 @@ capture kubectl --context "$context" --namespace "$platform_namespace" logs \
 capture kubectl --context "$context" auth can-i list activemqartemises.broker.amq.io \
   --all-namespaces --as="system:serviceaccount:$platform_namespace:activemq-artemis-controller-manager"
 
-while IFS=$'\t' read -r broker_pair workload_namespace; do
-  [[ -n "$broker_pair" ]] || continue
-  application="$broker_pair-artemis"
+while IFS=$'\t' read -r workload_cell workload_namespace; do
+  [[ -n "$workload_cell" ]] || continue
+  application="$workload_cell-artemis"
   application_json=$(kubectl --context "$context" --namespace "$argocd_namespace" \
     get application "$application" -o json 2>/dev/null || true)
   release_name=$(yq -r '.spec.source.helm.releaseName // .metadata.name // ""' <<<"$application_json" 2>/dev/null || true)
@@ -116,7 +116,7 @@ while IFS=$'\t' read -r broker_pair workload_namespace; do
     broker_cr=${broker_cr%-}
   fi
 
-  section "broker pair $broker_pair"
+  section "Workload Cell $workload_cell"
   capture kubectl --context "$context" --namespace "$argocd_namespace" get application "$application" -o yaml
   capture kubectl --context "$context" auth can-i create statefulsets.apps \
     --namespace "$workload_namespace" --as="system:serviceaccount:$platform_namespace:activemq-artemis-controller-manager"
@@ -127,7 +127,7 @@ while IFS=$'\t' read -r broker_pair workload_namespace; do
     statefulset "$broker_cr-ss"
   capture kubectl --context "$context" --namespace "$workload_namespace" get events \
     --sort-by=.metadata.creationTimestamp
-done < <(yq -r '.brokerPairs[] | select(.enabled == "true") | [.brokerPairName, .workloadNamespace] | @tsv' "$topology")
+done < <(yq -r '.workloadCells[] | select(.enabled == "true") | [.workloadCellName, .workloadNamespace] | @tsv' "$topology")
 
 section reminder
 printf '%s\n' 'No Secret objects were requested. Review this bundle before sharing it.'

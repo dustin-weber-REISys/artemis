@@ -1,24 +1,34 @@
-schemaVersion: topology.artemis.apache.org/v1
+schemaVersion: topology.artemis.apache.org/v2
 environment: test
 clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
 platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
 
-# This file is consumed only by the ApplicationSet running in the test
+# This catalog is consumed only by the ApplicationSet running in the test
 # cluster's local Argo CD instance.
-brokerPairs:
-  - brokerPairName: test-sky
+workloadCells:
+  - workloadCellName: test-sky
     workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
     coordinationId: test-sky-01
     logicalEnvironment: SKY
     trafficClass: internal
     managementHost: artemis-test-sky.example.invalid
     storageSize: 20Gi
+    resources:
+      requests: {cpu: 500m, memory: 2Gi}
+      limits: {cpu: "1", memory: 3Gi}
+    profile: standard
+    features: {}
     enabled: "true"
-  - brokerPairName: test-sky2
+  - workloadCellName: test-sky2
     workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
     coordinationId: test-sky2-01
     logicalEnvironment: SKY2
     trafficClass: internal
     managementHost: artemis-test-sky2.example.invalid
     storageSize: 20Gi
+    resources:
+      requests: {cpu: 500m, memory: 2Gi}
+      limits: {cpu: "1", memory: 3Gi}
+    profile: standard
+    features: {}
     enabled: "false"

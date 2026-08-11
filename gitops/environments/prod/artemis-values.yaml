@@ -1,15 +1,9 @@
-# Production capacity is confirmed from nonprod load results.
+# Cluster integrations for production. Workload Cell identity, sizing, Profile
+# behavior, and release versions are owned elsewhere.
 commonLabels:
   env: prod
 
 broker:
-  resources:
-    requests:
-      cpu: "1"
-      memory: 4Gi
-    limits:
-      cpu: "2"
-      memory: 6Gi
   # Environment worker nodes carry the platform's on-demand lifecycle taint.
   # Admit brokers only to that lifecycle class; do not use a blanket Exists
   # toleration because it would also admit unrelated protected node pools.
@@ -35,7 +29,3 @@ keycloak:
   podSelector:
     app.kubernetes.io/name: keycloak
   port: 8443
-brokerProperties:
-  # Preserve operating headroom and block producers before the dedicated
-  # broker volume approaches exhaustion.
-  maxDiskUsage: 80

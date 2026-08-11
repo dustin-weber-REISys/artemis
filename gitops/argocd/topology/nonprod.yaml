@@ -1,40 +1,60 @@
-schemaVersion: topology.artemis.apache.org/v1
+schemaVersion: topology.artemis.apache.org/v2
 environment: nonprod
 clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
 platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
 
 # The Artemis tenancy inventory is independent of the cluster's Kong or
-# microservice namespace inventory. Confirm every pair before bootstrap.
-brokerPairs:
-  - brokerPairName: nonprod-smktest-eut
+# microservice namespace inventory. Confirm every Workload Cell before bootstrap.
+workloadCells:
+  - workloadCellName: nonprod-smktest-eut
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
     coordinationId: np-eut-pair01
     logicalEnvironment: SMKTEST-EUT
     trafficClass: internal
     managementHost: artemis-nonprod-smktest-eut.example.invalid
     storageSize: 50Gi
+    resources:
+      requests: {cpu: "1", memory: 4Gi}
+      limits: {cpu: "2", memory: 6Gi}
+    profile: standard
+    features: {}
     enabled: "false"
-  - brokerPairName: nonprod-trn
+  - workloadCellName: nonprod-trn
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
     coordinationId: np-trn-pair01
     logicalEnvironment: TRN
     trafficClass: internal
     managementHost: artemis-nonprod-trn.example.invalid
     storageSize: 50Gi
+    resources:
+      requests: {cpu: "1", memory: 4Gi}
+      limits: {cpu: "2", memory: 6Gi}
+    profile: standard
+    features: {}
     enabled: "false"
-  - brokerPairName: nonprod-trn2
+  - workloadCellName: nonprod-trn2
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
     coordinationId: np-trn2-pair01
     logicalEnvironment: TRN2
     trafficClass: internal
     managementHost: artemis-nonprod-trn2.example.invalid
     storageSize: 50Gi
+    resources:
+      requests: {cpu: "1", memory: 4Gi}
+      limits: {cpu: "2", memory: 6Gi}
+    profile: standard
+    features: {}
     enabled: "false"
-  - brokerPairName: nonprod-pt
+  - workloadCellName: nonprod-pt
     workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
     coordinationId: np-pt-pair01
     logicalEnvironment: PT
     trafficClass: internal
     managementHost: artemis-nonprod-pt.example.invalid
     storageSize: 50Gi
+    resources:
+      requests: {cpu: "1", memory: 4Gi}
+      limits: {cpu: "2", memory: 6Gi}
+    profile: standard
+    features: {}
     enabled: "false"

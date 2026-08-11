@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  - path: cluster.patch.yaml
+    target:
+      kind: AppProject
+      name: messaging-platform
+
+# The root Application patches the AppProject revision annotation once. These
+# replacements propagate that interface value, plus the adapter's cluster
+# identity, to every child Git consumer.
+replacements:
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/environment'}
+    targets:
+      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=operator}
+        fieldPaths: [metadata.name]
+        options: {delimiter: '-', index: 0}
+      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=operator}
+        fieldPaths: [spec.source.path]
+        options: {delimiter: '/', index: 4}
+      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
+        fieldPaths: [metadata.name, spec.source.helm.releaseName]
+        options: {delimiter: '-', index: 0}
+      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
+        fieldPaths: [spec.source.helm.valueFiles.0]
+        options: {delimiter: '/', index: 3}
+      - select: {kind: ApplicationSet}
+        fieldPaths: [metadata.name]
+        options: {delimiter: '-', index: 0}
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/catalog-path'}
+    targets:
+      - select: {kind: ApplicationSet}
+        fieldPaths: [spec.generators.0.matrix.generators.0.git.files.0.path]
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/git-revision'}
+    targets:
+      - select: {kind: Application}
+        fieldPaths: [spec.source.targetRevision]
+      - select: {kind: ApplicationSet}
+        fieldPaths: [spec.generators.0.matrix.generators.0.git.revision, spec.template.spec.source.targetRevision]
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/repository'}
+    targets:
+      - select: {kind: AppProject}
+        fieldPaths: [spec.sourceRepos.0]
+      - select: {kind: Application}
+        fieldPaths: [spec.source.repoURL]
+      - select: {kind: ApplicationSet}
+        fieldPaths: [spec.generators.0.matrix.generators.0.git.repoURL, spec.template.spec.source.repoURL]
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/platform-namespace'}
+    targets:
+      - select: {kind: AppProject}
+        fieldPaths: [spec.destinations.0.namespace]
+      - select: {kind: Application}
+        fieldPaths: [spec.destination.namespace]
+  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/zookeeper-image-repository'}
+    targets:
+      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
+        fieldPaths: [spec.source.helm.parameters.0.value]

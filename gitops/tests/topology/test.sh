@@ -6,364 +6,279 @@ repo_root=$(CDPATH= cd -- "$test_dir/../.." && pwd)
 validator="$repo_root/scripts/validate-topology.sh"
 topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
+profile_dir="$repo_root/argocd/profiles"
+environment_dir="$repo_root/environments"
+baseline_policy="$repo_root/argocd/baseline-policy.yaml"
 
-command -v yq >/dev/null 2>&1 || {
-  printf '%s\n' 'yq is required (the repository baseline uses yq 4.53.3)' >&2
-  exit 2
-}
+for command_name in yq kubectl helm; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    printf '%s is required for topology regression tests\n' "$command_name" >&2
+    exit 2
+  }
+done
 
-temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-topology-tests.XXXXXX")
+temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-composition-tests.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
 
-"$validator" \
-  --topology-dir "$topology_dir" \
-  --bootstrap-dir "$bootstrap_dir" \
-  --report "$temp_dir/baseline-report.json" >/dev/null
+run_validator() {
+  local topology=$1 bootstrap=$2 profiles=$3 environments=$4 output=$5
+  "$validator" \
+    --topology-dir "$topology" \
+    --bootstrap-dir "$bootstrap" \
+    --profile-dir "$profiles" \
+    --environment-dir "$environments" \
+    --baseline-policy "$baseline_policy" \
+    --report "$temp_dir/report.json" >"$output" 2>&1
+}
 
-assert_topology_rejected() {
-  case_name=$1
-  environment=$2
-  mutation=$3
-  expected_diagnostic=$4
-  candidate_dir="$temp_dir/$case_name-topology"
-  output="$temp_dir/$case_name.out"
+base_output="$temp_dir/base.out"
+run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$base_output"
 
-  cp -R "$topology_dir" "$candidate_dir"
-  yq -i "$mutation" "$candidate_dir/$environment.yaml"
-
-  if "$validator" \
-      --topology-dir "$candidate_dir" \
-      --bootstrap-dir "$bootstrap_dir" \
-      --report "$temp_dir/$case_name-report.json" >"$output" 2>&1; then
-    printf 'topology validator accepted invalid topology case: %s\n' "$case_name" >&2
+assert_catalog_rejected() {
+  local case_name=$1 environment=$2 expression=$3 expected=$4
+  local candidate="$temp_dir/$case_name-topology" output="$temp_dir/$case_name.out"
+  cp -R "$topology_dir" "$candidate"
+  yq -i "$expression" "$candidate/$environment.yaml"
+  if run_validator "$candidate" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$output"; then
+    printf 'validator accepted invalid Workload Cell catalog case: %s\n' "$case_name" >&2
     exit 1
   fi
-
-  if ! grep -Fq "$expected_diagnostic" "$output"; then
-    printf 'topology validator did not report the expected %s diagnostic\n' "$case_name" >&2
-    sed -n '1,160p' "$output" >&2
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
     exit 1
-  fi
+  }
 }
 
 assert_bootstrap_rejected() {
-  case_name=$1
-  environment=$2
-  file_name=$3
-  mutation=$4
-  expected_diagnostic=$5
-  candidate_dir="$temp_dir/$case_name-bootstrap"
-  output="$temp_dir/$case_name.out"
-
-  cp -R "$bootstrap_dir" "$candidate_dir"
-  yq -i "$mutation" "$candidate_dir/$environment/$file_name"
-
-  if "$validator" \
-      --topology-dir "$topology_dir" \
-      --bootstrap-dir "$candidate_dir" \
-      --report "$temp_dir/$case_name-report.json" >"$output" 2>&1; then
-    printf 'topology validator accepted invalid bootstrap case: %s\n' "$case_name" >&2
+  local case_name=$1 file=$2 expression=$3 expected=$4
+  local candidate="$temp_dir/$case_name-bootstrap" output="$temp_dir/$case_name.out"
+  cp -R "$bootstrap_dir" "$candidate"
+  yq -i "$expression" "$candidate/$file"
+  if run_validator "$topology_dir" "$candidate" "$profile_dir" "$environment_dir" "$output"; then
+    printf 'validator accepted invalid rendered composition case: %s\n' "$case_name" >&2
     exit 1
   fi
-
-  if ! grep -Fq "$expected_diagnostic" "$output"; then
-    printf 'topology validator did not report the expected %s diagnostic\n' "$case_name" >&2
-    sed -n '1,160p' "$output" >&2
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
     exit 1
-  fi
+  }
 }
 
-assert_yaml_value() {
-  description=$1
-  expression=$2
-  file=$3
-  expected=$4
-  actual=$(yq -r "$expression" "$file")
-  if [[ "$actual" != "$expected" ]]; then
-    printf '%s: expected %s, got %s\n' "$description" "$expected" "$actual" >&2
+assert_profile_rejected() {
+  local case_name=$1 file=$2 expression=$3 expected=$4
+  local candidate="$temp_dir/$case_name-profiles" output="$temp_dir/$case_name.out"
+  cp -R "$profile_dir" "$candidate"
+  yq -i "$expression" "$candidate/$file"
+  if run_validator "$topology_dir" "$bootstrap_dir" "$candidate" "$environment_dir" "$output"; then
+    printf 'validator accepted invalid Profile case: %s\n' "$case_name" >&2
     exit 1
   fi
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
+    exit 1
+  }
 }
 
-assert_topology_rejected \
-  duplicate-namespace \
-  test \
-  '.brokerPairs[1].workloadNamespace = .brokerPairs[0].workloadNamespace' \
-  'unique workloadNamespace count: expected 14, got 13'
+assert_environment_rejected() {
+  local case_name=$1 environment=$2 expression=$3 expected=$4
+  local candidate="$temp_dir/$case_name-environments" output="$temp_dir/$case_name.out"
+  cp -R "$environment_dir" "$candidate"
+  yq -i "$expression" "$candidate/$environment/artemis-values.yaml"
+  if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$candidate" "$output"; then
+    printf 'validator accepted invalid environment ownership case: %s\n' "$case_name" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
+    exit 1
+  }
+}
 
-assert_topology_rejected \
-  duplicate-broker-pair-name \
-  nonprod \
-  '.brokerPairs[2].brokerPairName = .brokerPairs[1].brokerPairName' \
-  'unique brokerPairName count: expected 14, got 13'
+assert_catalog_rejected duplicate-namespace test \
+  '.workloadCells[1].workloadNamespace = .workloadCells[0].workloadNamespace' \
+  'cluster test Workload Cell field workloadNamespace violates uniqueness rule'
 
-assert_topology_rejected \
-  duplicate-coordination-id \
-  prod \
-  '.brokerPairs[1].coordinationId = .brokerPairs[0].coordinationId' \
-  'unique coordinationId count: expected 14, got 13'
+assert_catalog_rejected duplicate-coordination prod \
+  '.workloadCells[1].coordinationId = .workloadCells[0].coordinationId' \
+  'cluster prod Workload Cell field coordinationId violates uniqueness rule'
 
-assert_topology_rejected \
-  duplicate-management-host \
-  prod \
-  '.brokerPairs[1].managementHost = .brokerPairs[0].managementHost' \
-  'unique managementHost count: expected 14, got 13'
+assert_catalog_rejected unknown-profile test \
+  '.workloadCells[0].profile = "unapproved"' \
+  'cluster test Workload Cell test-sky field profile violates rule: unknown Profile: unapproved'
 
-assert_topology_rejected \
-  invalid-coordination-id \
-  prod \
-  '.brokerPairs[0].coordinationId = "pe-pair"' \
-  'prod invalid coordination ID count: expected 0, got 1'
+assert_catalog_rejected unsupported-feature test \
+  '.workloadCells[0].features.rawHelm = true' \
+  'field features.rawHelm violates rule: Profile standard does not permit this override'
 
-assert_topology_rejected \
-  missing-broker-pair \
-  nonprod \
-  'del(.brokerPairs[3])' \
-  'nonprod broker pair count: expected 4, got 3'
+assert_catalog_rejected invalid-feature-type test \
+  '.workloadCells[0].features.expiryResources = "yes"' \
+  'field features.expiryResources violates rule: must be a boolean'
 
-assert_topology_rejected \
-  mismatched-environment \
-  test \
-  '.environment = "nonprod"' \
-  'test topology environment: expected test, got nonprod'
+assert_catalog_rejected invalid-feature-enum prod \
+  '.workloadCells[0].features.diskGuardrail = "unsafe"' \
+  'field features.diskGuardrail violates rule: value unsafe is not allowed by Profile standard'
 
-assert_topology_rejected \
-  wrong-name-prefix \
-  test \
-  '.brokerPairs[0].brokerPairName = "sky"' \
-  'test broker-pair name prefix mismatch count: expected 0, got 1'
+assert_catalog_rejected arbitrary-helm-parameters test \
+  '.workloadCells[0].helmParameters = [{"name":"ha.allowFailback","value":"true"}]' \
+  'field keys violates rule: allowed keys are'
 
-assert_topology_rejected \
-  invalid-enabled-value \
-  test \
-  '.brokerPairs[0].enabled = "yes"' \
-  'test invalid enabled value count: expected 0, got 1'
+assert_catalog_rejected per-cell-version test \
+  '.workloadCells[0].version = "9.9.9"' \
+  'field keys violates rule: allowed keys are'
 
-assert_bootstrap_rejected \
-  singleton-operator-appset \
-  test \
-  operator-application.yaml \
-  '.kind = "ApplicationSet"' \
-  'test operator kind: expected Application, got ApplicationSet'
+assert_catalog_rejected invalid-namespace test \
+  '.workloadCells[0].workloadNamespace = "default"' \
+  'field workloadNamespace violates rule: must resolve to the approved artemis-* namespace pattern'
 
-assert_bootstrap_rejected \
-  remote-operator-destination \
-  nonprod \
-  operator-application.yaml \
-  '.spec.destination.server = "https://remote.invalid"' \
-  'nonprod operator local destination: expected https://kubernetes.default.svc, got https://remote.invalid'
+assert_catalog_rejected implicit-enabled test \
+  '.workloadCells[0].enabled = true' \
+  'field enabled violates rule: must be a string'
 
-assert_bootstrap_rejected \
-  wrong-operator-chart \
-  test \
-  operator-application.yaml \
-  '.spec.source.path = "gitops/kustomize/unapproved-operator"' \
-  'test operator Kustomize overlay path: expected gitops/kustomize/arkmq-operator/overlays/test, got gitops/kustomize/unapproved-operator'
+assert_catalog_rejected removed-baseline-cell nonprod \
+  'del(.workloadCells[3])' \
+  'cluster nonprod Workload Cell nonprod-pt field workloadCellName violates rule: required baseline Workload Cell is missing'
 
-assert_bootstrap_rejected \
-  wrong-operator-oci-repository \
-  prod \
-  operator-application.yaml \
-  '.spec.source.repoURL = "https://example.invalid/unapproved.git"' \
-  'prod operator Git repository: expected https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git, got https://example.invalid/unapproved.git'
+assert_catalog_rejected changed-baseline-identity prod \
+  '.workloadCells[0].managementHost = "artemis-new.example.invalid"' \
+  'cluster prod Workload Cell prod-pe field managementHost violates rule: baseline requires artemis-pe-internal.example.invalid'
 
-assert_bootstrap_rejected \
-  mismatched-operator-revision \
-  prod \
-  operator-application.yaml \
-  '.spec.source.targetRevision = "other-revision"' \
-  'prod operator Git revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
-
-assert_bootstrap_rejected \
-  operator-helm-source \
-  test \
-  operator-application.yaml \
-  '.spec.source.helm = {"releaseName":"unapproved"}' \
-  'test operator Helm source count: expected 0, got 1'
-
-assert_bootstrap_rejected \
-  missing-operator-prune-last \
-  test \
-  operator-application.yaml \
-  'del(.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true"))' \
-  'test operator PruneLast migration option count: expected 1, got 0'
-
-assert_bootstrap_rejected \
-  wrong-topology-file \
-  prod \
-  artemis-workloads-applicationset.yaml \
-  '.spec.generators[0].matrix.generators[0].git.files[0].path = "gitops/argocd/topology/nonprod.yaml"' \
-  'prod workloads topology path: expected gitops/argocd/topology/prod.yaml, got gitops/argocd/topology/nonprod.yaml'
-
-assert_bootstrap_rejected \
-  missingkey-disabled \
-  test \
-  artemis-workloads-applicationset.yaml \
-  '.spec.goTemplateOptions = []' \
-  'test workloads missingkey=error option count: expected 1, got 0'
-
-assert_bootstrap_rejected \
-  enable-selector-removed \
-  test \
-  artemis-workloads-applicationset.yaml \
-  'del(.spec.generators[0].selector)' \
-  'test workloads enable selector: expected true, got '
-
-assert_bootstrap_rejected \
-  deletion-policy-weakened \
-  prod \
-  artemis-workloads-applicationset.yaml \
+assert_bootstrap_rejected weakened-deletion-policy \
+  'base/artemis-workloads-applicationset.yaml' \
   '.spec.syncPolicy.applicationsSync = "sync"' \
-  'prod workloads Application modification policy: expected create-update, got sync'
+  'cluster test workloads Application modification policy: expected create-update, got sync'
 
-assert_bootstrap_rejected \
-  pruning-disabled \
-  nonprod \
-  artemis-workloads-applicationset.yaml \
-  '.spec.template.spec.syncPolicy.automated.prune = false' \
-  'nonprod workloads automated prune: expected true, got false'
+assert_bootstrap_rejected remote-workload-destination \
+  'base/artemis-workloads-applicationset.yaml' \
+  '.spec.template.spec.destination.server = "https://remote.invalid"' \
+  'cluster test workloads local destination: expected https://kubernetes.default.svc, got https://remote.invalid'
 
-assert_bootstrap_rejected \
-  wrong-project-oci-repository \
-  prod \
-  project.yaml \
-  '.spec.sourceRepos += ["quay.io/arkmq-org/helm-charts"]' \
-  'prod project approved sources'
+assert_bootstrap_rejected wrong-catalog-interface \
+  'base/artemis-workloads-applicationset.yaml' \
+  '.spec.generators[0].matrix.generators[1].list.elementsYaml = "{{ .brokerPairs | toJson }}"' \
+  'cluster test workloads catalog expansion: expected {{ .workloadCells | toJson }}, got {{ .brokerPairs | toJson }}'
 
-assert_bootstrap_rejected \
-  remote-project-destination \
-  test \
-  project.yaml \
-  '.spec.destinations[0].server = "https://remote.invalid"' \
-  'test project local destination count: expected 3, got 2'
+assert_profile_rejected protected-ha-setting standard/values.yaml \
+  '.ha.retryReplicationWaitMs = 1' \
+  'Workload Cell Profile standard field ha.retryReplicationWaitMs violates protected-setting ownership'
 
-assert_bootstrap_rejected \
-  missing-project-cluster-resource \
-  nonprod \
-  project.yaml \
-  'del(.spec.clusterResourceWhitelist[0])' \
-  'nonprod project cluster resource allowlist'
+assert_profile_rejected protected-durability-setting standard/values.yaml \
+  '.brokerProperties.durability.journalDatasync = false' \
+  'Workload Cell Profile standard field brokerProperties.durability.journalDatasync violates protected-setting ownership'
 
-assert_bootstrap_rejected \
-  mismatched-zookeeper-revision \
-  test \
-  zookeeper-application.yaml \
-  '.spec.source.targetRevision = "other-revision"' \
-  'test ZooKeeper Git revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
+assert_environment_rejected profile-environment-collision prod \
+  '.brokerProperties.maxDiskUsage = 70' \
+  'cluster prod environment field brokerProperties.maxDiskUsage violates cluster-integration ownership'
 
-assert_bootstrap_rejected \
-  mismatched-workload-revision \
-  nonprod \
-  artemis-workloads-applicationset.yaml \
-  '.spec.template.spec.source.targetRevision = "other-revision"' \
-  'nonprod workloads source revision: expected PLACEHOLDER_GITOPS_REVISION, got other-revision'
+# Catalog growth is routine: a valid new Workload Cell is accepted without a
+# validator implementation change, but it must begin disabled.
+growth_topology="$temp_dir/growth-topology"
+cp -R "$topology_dir" "$growth_topology"
+yq -i '
+  .workloadCells += [(.workloadCells[1]
+    | .workloadCellName = "test-extra"
+    | .workloadNamespace = "artemis-test-extra"
+    | .coordinationId = "test-extra-01"
+    | .logicalEnvironment = "EXTRA"
+    | .managementHost = "artemis-test-extra.example.invalid"
+    | .enabled = "false")]
+' "$growth_topology/test.yaml"
+run_validator "$growth_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/growth.out"
 
-expected_broker_pairs=$(printf '%s\n' \
-  'nonprod:nonprod-pt' \
-  'nonprod:nonprod-smktest-eut' \
-  'nonprod:nonprod-trn' \
-  'nonprod:nonprod-trn2' \
-  'prod:prod-dm' \
-  'prod:prod-pe' \
-  'prod:prod-pp' \
-  'prod:prod-pp-batch' \
-  'prod:prod-pp-external' \
-  'prod:prod-pr' \
-  'prod:prod-pr-batch' \
-  'prod:prod-pr-external' \
-  'test:test-sky' \
-  'test:test-sky2' | sort)
-actual_broker_pairs=$(
-  for environment in test nonprod prod; do
-    ENVIRONMENT="$environment" yq -r \
-      '.brokerPairs[] | strenv(ENVIRONMENT) + ":" + .brokerPairName' \
-      "$topology_dir/$environment.yaml"
-  done | sort
-)
-if [[ "$actual_broker_pairs" != "$expected_broker_pairs" ]]; then
-  printf '%s\n' 'topology broker-pair identities do not match the required 2/4/8 topology' >&2
+enabled_growth="$temp_dir/enabled-growth-topology"
+cp -R "$growth_topology" "$enabled_growth"
+yq -i '.workloadCells[-1].enabled = "true"' "$enabled_growth/test.yaml"
+if run_validator "$enabled_growth" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/enabled-growth.out"; then
+  printf '%s\n' 'validator accepted a new Workload Cell that did not begin disabled' >&2
   exit 1
 fi
+grep -Fq 'cluster test Workload Cell test-extra field enabled violates rule: a new Workload Cell must begin disabled' \
+  "$temp_dir/enabled-growth.out"
 
-if rg -n \
-    'clusterServer|PLACEHOLDER_(TEST|NONPROD|PROD)_EKS_API_SERVER|workloadKey' \
-    "$topology_dir" "$bootstrap_dir" >/dev/null; then
-  printf '%s\n' 'cross-cluster or ambiguous topology data remains in the local bootstrap model' >&2
+# Both approved typed feature choices render through the shared template.
+feature_topology="$temp_dir/feature-topology"
+cp -R "$topology_dir" "$feature_topology"
+yq -i '.workloadCells[0].features.expiryResources = true' "$feature_topology/test.yaml"
+run_validator "$feature_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/feature.out"
+
+# A single temporary root revision is injected once and reaches every child.
+revision_bootstrap="$temp_dir/revision-bootstrap"
+cp -R "$bootstrap_dir" "$revision_bootstrap"
+yq -i '.metadata.annotations."composition.artemis.apache.org/git-revision" = "upgrade/platform-release"' \
+  "$revision_bootstrap/test/cluster.patch.yaml"
+run_validator "$topology_dir" "$revision_bootstrap" "$profile_dir" "$environment_dir" "$temp_dir/revision.out"
+kubectl kustomize "$revision_bootstrap/test" > "$temp_dir/revision-rendered.yaml"
+revision_values=$(yq ea -r '
+  select(.kind == "Application") | .spec.source.targetRevision,
+  select(.kind == "ApplicationSet") | .spec.generators[0].matrix.generators[0].git.revision,
+  select(.kind == "ApplicationSet") | .spec.template.spec.source.targetRevision
+' "$temp_dir/revision-rendered.yaml" | sed '/^---$/d' | sort -u)
+[[ "$revision_values" == 'upgrade/platform-release' ]] || {
+  printf 'root revision was not propagated uniformly: %s\n' "$revision_values" >&2
   exit 1
-fi
+}
+
+# The initial Profile is semantically neutral for current test behavior, and
+# the derived Application and broker custom-resource identities stay stable.
+helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
+  --namespace PLACEHOLDER_TEST_NAMESPACE_SKY \
+  -f "$profile_dir/standard/values.yaml" \
+  -f "$environment_dir/test/artemis-values.yaml" \
+  --set ha.coordinationId=test-sky-01 \
+  --set ha.groupName=test-sky-group \
+  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181 \
+  --set zookeeper.serviceNamespace=PLACEHOLDER_PLATFORM_NAMESPACE \
+  --set zookeeper.curatorNamespace=artemis/test/test-sky \
+  --set persistence.size=20Gi \
+  --set-string broker.resources.requests.cpu=500m \
+  --set-string broker.resources.requests.memory=2Gi \
+  --set-string broker.resources.limits.cpu=1 \
+  --set-string broker.resources.limits.memory=3Gi \
+  --set brokerProperties.maxDiskUsage=90 \
+  --set brokerProperties.addressSettings.expiry.enabled=false \
+  --set console.ingress.host=artemis-test-sky.example.invalid \
+  --set keycloak.redirectUri=https://artemis-test-sky.example.invalid/console \
+  > "$temp_dir/test-sky.yaml"
+asserted_broker_name=$(yq ea -r 'select(.kind == "ActiveMQArtemis") | .metadata.name' "$temp_dir/test-sky.yaml")
+[[ "$asserted_broker_name" == test-sky-artemis-artemis-ha ]] || {
+  printf 'broker identity changed: %s\n' "$asserted_broker_name" >&2
+  exit 1
+}
+
+legacy_values="$temp_dir/legacy-test-values.yaml"
+cp "$environment_dir/test/artemis-values.yaml" "$legacy_values"
+yq -i '
+  .broker.resources.requests.cpu = "500m"
+  | .broker.resources.requests.memory = "2Gi"
+  | .broker.resources.limits.cpu = "1"
+  | .broker.resources.limits.memory = "3Gi"
+' "$legacy_values"
+helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
+  --namespace PLACEHOLDER_TEST_NAMESPACE_SKY \
+  -f "$legacy_values" \
+  --set ha.coordinationId=test-sky-01 \
+  --set ha.groupName=test-sky-group \
+  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181 \
+  --set zookeeper.serviceNamespace=PLACEHOLDER_PLATFORM_NAMESPACE \
+  --set zookeeper.curatorNamespace=artemis/test/test-sky \
+  --set persistence.size=20Gi \
+  --set console.ingress.host=artemis-test-sky.example.invalid \
+  --set keycloak.redirectUri=https://artemis-test-sky.example.invalid/console \
+  > "$temp_dir/test-sky-legacy.yaml"
+cmp -s "$temp_dir/test-sky.yaml" "$temp_dir/test-sky-legacy.yaml" || {
+  printf '%s\n' 'standard Profile changed the current test Workload Cell render' >&2
+  diff -u "$temp_dir/test-sky-legacy.yaml" "$temp_dir/test-sky.yaml" >&2 || true
+  exit 1
+}
 
 for environment in test nonprod prod; do
-  project="$bootstrap_dir/$environment/project.yaml"
-  workloads="$bootstrap_dir/$environment/artemis-workloads-applicationset.yaml"
-  operator="$bootstrap_dir/$environment/operator-application.yaml"
-  zookeeper="$bootstrap_dir/$environment/zookeeper-application.yaml"
-
-  assert_yaml_value \
-    "$environment project kind" \
-    '.kind' \
-    "$project" \
-    AppProject
-  assert_yaml_value \
-    "$environment project name" \
-    '.metadata.name' \
-    "$project" \
-    messaging-platform
-  assert_yaml_value \
-    "$environment project sync wave" \
-    '.metadata.annotations."argocd.argoproj.io/sync-wave"' \
-    "$project" \
-    -30
-  assert_yaml_value \
-    "$environment operator kind" \
-    '.kind' \
-    "$operator" \
-    Application
-  assert_yaml_value \
-    "$environment ZooKeeper kind" \
-    '.kind' \
-    "$zookeeper" \
-    Application
-  assert_yaml_value \
-    "$environment workload Application name" \
-    '.spec.template.metadata.name' \
-    "$workloads" \
-    '{{.brokerPairName}}-artemis'
-  assert_yaml_value \
-    "$environment workload local destination" \
-    '.spec.template.spec.destination.server' \
-    "$workloads" \
-    'https://kubernetes.default.svc'
-  assert_yaml_value \
-    "$environment shared ZooKeeper connection template" \
-    '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.connectString") | .value' \
-    "$workloads" \
-    '{{.environment}}-shared-zookeeper-zookeeper-client.{{.platformNamespace}}.svc.cluster.local:2181'
-  assert_yaml_value \
-    "$environment unique Curator namespace template" \
-    '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.curatorNamespace") | .value' \
-    "$workloads" \
-    'artemis/{{.environment}}/{{.brokerPairName}}'
-  assert_yaml_value \
-    "$environment pair-specific storage template" \
-    '.spec.template.spec.source.helm.parameters[] | select(.name == "persistence.size") | .value' \
-    "$workloads" \
-    '{{.storageSize}}'
-  assert_yaml_value \
-    "$environment pair-specific management host template" \
-    '.spec.template.spec.source.helm.parameters[] | select(.name == "console.ingress.host") | .value' \
-    "$workloads" \
-    '{{.managementHost}}'
-  assert_yaml_value \
-    "$environment pair-specific redirect URI template" \
-    '.spec.template.spec.source.helm.parameters[] | select(.name == "keycloak.redirectUri") | .value' \
-    "$workloads" \
-    'https://{{.managementHost}}/console'
+  rendered="$temp_dir/$environment-rendered.yaml"
+  kubectl kustomize "$bootstrap_dir/$environment" > "$rendered"
+  assert_count=$(yq ea -r '[.] | [.[] | select(.kind == "AppProject" or .kind == "Application" or .kind == "ApplicationSet")] | length' "$rendered")
+  [[ "$assert_count" == 4 ]] || { printf 'unexpected rendered composition count for %s\n' "$environment" >&2; exit 1; }
 done
 
-if [[ -f "$repo_root/argocd/topology/catalog.yaml" ]] \
-    || find "$repo_root/argocd/applications" -type f -print -quit 2>/dev/null | grep -q .; then
-  printf '%s\n' 'legacy central-Argo composition paths still exist' >&2
-  exit 1
-fi
-
-printf '%s\n' 'topology validation tests passed'
+printf '%s\n' 'rendered topology validation tests passed'

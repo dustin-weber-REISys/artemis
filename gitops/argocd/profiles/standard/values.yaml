@@ -1,0 +1,54 @@
+# Capabilities and operating policy shared by standard Workload Cells. Release,
+# HA, durability, coordination, identity, and cluster integration values are
+# intentionally outside the Profile interface.
+acceptors:
+  openwire:
+    enabled: true
+  amqp:
+    enabled: true
+  stomp:
+    enabled: true
+  mqtt:
+    enabled: true
+  websocket:
+    enabled: true
+
+brokerProperties:
+  globalMaxSize: 512Mi
+  maxDiskUsage: 90
+  connectionTtlOverride: 60000
+  duplicateDetectionIdCacheSize: 20000
+  persistDuplicateDetectionIds: true
+  addressSettings:
+    match: "#"
+    maxSizeBytes: 104857600
+    pageSizeBytes: 10485760
+    addressFullPolicy: PAGE
+    maxDeliveryAttempts: 1
+    redeliveryDelay: 0
+    deadLetterAddress: DLA
+    autoCreateDeadLetterResources: true
+    deadLetterQueuePrefix: "DLQ."
+    deadLetterQueueSuffix: ""
+    autoDeleteQueues: false
+    autoDeleteAddresses: false
+    expiry:
+      enabled: false
+      address: ExpiryQueue
+      autoCreateResources: true
+      queuePrefix: "EXP."
+      queueSuffix: ""
+    autoCreateQueues: false
+    autoCreateAddresses: false
+    defaultAddressRoutingType: ANYCAST
+    defaultQueueRoutingType: ANYCAST
+
+networkPolicy:
+  enabled: true
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true

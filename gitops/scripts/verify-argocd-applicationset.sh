@@ -18,7 +18,7 @@ Usage: verify-argocd-applicationset.sh \
   [--controller-deployment NAME]
 
 Read-only desired-state check for the Argo CD ApplicationSet, ArkMQ operator,
-and every broker pair enabled in the selected local topology file. It compares
+and every Workload Cell enabled in the selected local catalog. It compares
 that local inventory with live cluster state. Run repository validation first.
 
 The reconciled Git revisions are reported for evidence. They are intentionally
@@ -157,19 +157,22 @@ if ! project_json=$(kubectl --context "$context" --namespace "$argocd_namespace"
   error "AppProject $argocd_namespace/$project is not readable"
 fi
 
-enabled_pairs=()
-while IFS= read -r enabled_pair; do
-  enabled_pairs[${#enabled_pairs[@]}]=$enabled_pair
-done < <(yq -r '.brokerPairs[] | select(.enabled == "true") | [.brokerPairName, .workloadNamespace] | @tsv' "$topology")
-[[ "${#enabled_pairs[@]}" -gt 0 ]] || error "$environment topology has no enabled broker pairs"
+enabled_cells=()
+while IFS= read -r enabled_cell; do
+  enabled_cells[${#enabled_cells[@]}]=$enabled_cell
+done < <(yq -r '.workloadCells[] | select(.enabled == "true") | [.workloadCellName, .workloadNamespace] | @tsv' "$topology")
+[[ "${#enabled_cells[@]}" -gt 0 ]] || error "$environment catalog has no enabled Workload Cells"
 
-for enabled_pair in "${enabled_pairs[@]}"; do
-  IFS=$'\t' read -r broker_pair workload_namespace <<<"$enabled_pair"
-  application="$broker_pair-artemis"
+for enabled_cell in "${enabled_cells[@]}"; do
+  IFS=$'\t' read -r workload_cell workload_namespace <<<"$enabled_cell"
+  application="$workload_cell-artemis"
 
   if [[ -n "$project_json" ]]; then
     destination_count=$(SERVER="$local_server" NAMESPACE="$workload_namespace" yq -r '
-      [.spec.destinations[]? | select(.server == strenv(SERVER) and .namespace == strenv(NAMESPACE))] | length
+      [.spec.destinations[]?
+        | select(.server == strenv(SERVER))
+        | select(.namespace == strenv(NAMESPACE) or (.namespace == "artemis-*" and strenv(NAMESPACE) | test("^artemis-")))
+      ] | length
     ' <<<"$project_json")
     [[ "$destination_count" -eq 1 ]] || \
       error "AppProject $argocd_namespace/$project does not allow $local_server namespace $workload_namespace"
@@ -178,7 +181,7 @@ for enabled_pair in "${enabled_pairs[@]}"; do
   application_json=
   if ! application_json=$(kubectl --context "$context" --namespace "$argocd_namespace" \
     get application "$application" -o json); then
-    error "enabled broker pair $broker_pair did not produce Application $argocd_namespace/$application"
+    error "enabled Workload Cell $workload_cell did not produce Application $argocd_namespace/$application"
     continue
   fi
   check_application_status "$application" "$application_json"
@@ -242,4 +245,4 @@ if [[ "$errors" -ne 0 ]]; then
   exit 1
 fi
 
-printf 'Live Artemis health: PASS (%s enabled broker pairs)\n' "${#enabled_pairs[@]}"
+printf 'Live Artemis health: PASS (%s enabled Workload Cells)\n' "${#enabled_cells[@]}"

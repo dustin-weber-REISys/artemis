@@ -31,9 +31,9 @@ changeable implementation facts belong in executable files:
 
 | Concern | Authoritative source |
 | --- | --- |
-| Local-cluster child Applications, workloads, namespaces, and coordination identities | [`argocd/bootstrap`](../argocd/bootstrap) and [`argocd/topology`](../argocd/topology) |
+| Local-cluster composition, child Applications, Workload Cells, namespaces, and coordination identities | Rendered [`argocd/bootstrap`](../argocd/bootstrap) adapters and [`argocd/topology`](../argocd/topology) catalogs |
 | Argo CD repository credentials and root Application | Per-cluster EKS Terraform inputs |
-| `messaging-platform` AppProject policy | Matching environment directory under [`argocd/bootstrap`](../argocd/bootstrap) |
+| `messaging-platform` AppProject policy | Shared [`argocd/bootstrap/base`](../argocd/bootstrap/base) rendered through the matching cluster adapter |
 | Current component and image versions | Chart values, schemas, and environment overlays under [`charts`](../charts) and [`environments`](../environments) |
 | Supported Artemis operands | [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json) |
 | Rendered broker and ZooKeeper behavior | Chart templates under [`charts`](../charts) |
@@ -79,9 +79,9 @@ cluster connections, federation, and bridges are absent unless separately
 designed and approved.
 
 Each EKS cluster runs its own Argo CD instance and consumes only its matching
-bootstrap and topology file. The intended workload inventory is defined and
-validated from the environment-local topology files and ApplicationSets, not
-repeated here. The ApplicationSet generates only topology entries whose
+thin Kustomize adapter and Workload Cell catalog. The intended workload
+inventory is defined and validated from rendered cluster composition, not
+copied bootstrap files. The ApplicationSet generates only catalog entries whose
 `enabled` field is `"true"`; the assignment below is design intent, not
 evidence that a pair is currently deployed. Sandbox is intentionally
 non-promotable and makes no HA, AZ-loss, durability, or upgrade claim.

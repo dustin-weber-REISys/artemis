@@ -12,13 +12,21 @@ environment bootstrap directory. The selected bootstrap owns the
 | Nonprod cluster | `gitops/argocd/bootstrap/nonprod` |
 | Production cluster | `gitops/argocd/bootstrap/prod` |
 
-Every bootstrap directory contains:
+Each stable root path is a thin Kustomize adapter over
+[`bootstrap/base`](bootstrap/base). The rendered adapter always contains:
 
 - one `AppProject` for the environment-local `messaging-platform` policy;
 - one ordinary `Application` for the cluster's ArkMQ operator;
 - one ordinary `Application` for the cluster's shared ZooKeeper ensemble; and
-- one `ApplicationSet` that generates only that cluster's Artemis broker-pair
-  Applications from the matching file under [`topology`](topology).
+- one `ApplicationSet` that generates only that cluster's Workload Cell
+  Applications from the matching catalog under [`topology`](topology).
+
+The adapter patch owns only cluster identity and integration placeholders. The
+shared base owns composition policy, sync safety, derived names, and chart
+inputs. [`profiles`](profiles) provides reusable capability policy; a Workload
+Cell selects exactly one Profile and can set only that Profile's typed feature
+choices. The centrally selected Platform Release remains outside every
+adapter, Profile, and Workload Cell.
 
 All destinations use `https://kubernetes.default.svc`. No Argo CD instance
 needs another EKS cluster's API endpoint or registration. The EKS
@@ -56,8 +64,8 @@ The bootstrap-managed `messaging-platform` project allows:
 
 - the standalone Artemis Git repository used by every child Application;
 - `https://kubernetes.default.svc` as the only destination server;
-- the local platform namespace and the workload namespaces listed in that
-  cluster's topology file; and
+- the local platform namespace explicitly and resolved Workload Cell
+  namespaces through the constrained `artemis-*` pattern; and
 - the exact cluster-scoped kinds rendered by the approved ArkMQ operator
   chart. With `clusterScoped: true`, this includes `Namespace`,
   `CustomResourceDefinition`, `ClusterRole`, and `ClusterRoleBinding` at
@@ -71,10 +79,41 @@ image-registry credentials remain platform-owned and must exist before the
 root sync. Repo-server also needs an approved network path to the pinned public
 chart, or the Kustomize base must reference an approved immutable OCI mirror.
 
-Set `PLACEHOLDER_GITOPS_REVISION` in the bootstrap manifests to the exact
-branch, tag, or commit configured for the root entry in `argocd_repos`. The
-operator overlay source, ZooKeeper source, workload generator, and generated
-workload source must all use that same environment revision.
+### Root revision injection contract
+
+The Terraform-owned root Application selects one branch, tag, or commit. It
+must inject that value by patching the rendered AppProject annotation
+`composition.artemis.apache.org/git-revision`; do not patch child resources.
+The adapter's Kustomize replacements copy this one value to the operator
+source, ZooKeeper source, ApplicationSet Git generator, and generated Workload
+Cell source.
+
+For example, the root Application's Kustomize options should contain a patch
+equivalent to:
+
+```yaml
+spec:
+  source:
+    path: gitops/argocd/bootstrap/test
+    targetRevision: upgrade/platform-release
+    kustomize:
+      patches:
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: AppProject
+            name: messaging-platform
+          patch: |-
+            - op: replace
+              path: /metadata/annotations/composition.artemis.apache.org~1git-revision
+              value: upgrade/platform-release
+```
+
+`spec.source.targetRevision` and the injected annotation value must be equal.
+`PLACEHOLDER_GITOPS_REVISION` remains in the offline copy so the work-laptop
+substitution workflow can resolve it. Every cluster remains deployable from
+`main`; a feature branch is a temporary Release Promotion input, not permanent
+cluster configuration.
 
 ## Controlled bootstrap
 
@@ -88,16 +127,18 @@ must still be health-gated:
 3. sync ZooKeeper, then verify placement, persistent volumes, quorum, policy,
    and metrics;
 4. preview the workload ApplicationSet;
-5. change `enabled` to `"true"` for one test broker pair, allow it to
+5. change `enabled` to `"true"` for one test Workload Cell, allow it to
    reconcile, and complete acceptance; and
-6. enable the remaining pairs one at a time before promoting the same
+6. enable the remaining Workload Cells one at a time before promoting the same
    artifacts.
 
-Broker pairs default to disabled. The workload ApplicationSet uses
+New Workload Cells must be added to the cluster-local catalog with an explicit
+`enabled: "false"`. The workload ApplicationSet uses
 `applicationsSync: create-update` and preserves resources on ApplicationSet
 deletion, so an accidental catalog edit cannot automatically delete an
 existing generated Application or its live resources. Retirement is a
-separate, explicitly approved operation.
+separate, explicitly approved operation documented in
+[`Workload Cell retirement`](../docs/runbooks/workload-cell-retirement.md).
 
 Do not copy these raw ApplicationSet manifests into an outer Helm
 `templates/` directory without escaping the ApplicationSet Go-template

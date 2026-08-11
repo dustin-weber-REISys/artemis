@@ -18,6 +18,16 @@ for command_name in yq; do
     exit 2
   }
 done
+if command -v kustomize >/dev/null 2>&1; then
+  composition_render_command=(kustomize build)
+elif command -v kubectl >/dev/null 2>&1; then
+  composition_render_command=(kubectl kustomize)
+else
+  printf '%s\n' 'kustomize or kubectl with embedded Kustomize is required' >&2
+  exit 2
+fi
+release_render_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-release-validation.XXXXXX")
+trap 'rm -rf "$release_render_dir"' EXIT
 [[ -f "$release_file" ]] || {
   printf 'release manifest not found: %s\n' "$release_file" >&2
   exit 1
@@ -136,17 +146,21 @@ for environment in test nonprod prod; do
       "$(ENV_NAME="$env_name" yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == strenv(ENV_NAME)) | .value' "$image_patch")" \
       "$expected_ecr_repository/$repository_suffix:$broker_image_tag"
   done
-  application="$repo_root/argocd/bootstrap/$environment/operator-application.yaml"
+  application="$release_render_dir/composition-$environment.yaml"
+  if ! "${composition_render_command[@]}" "$repo_root/argocd/bootstrap/$environment" > "$application"; then
+    error "$environment cluster composition did not render"
+    continue
+  fi
   assert_equal "$environment operator Kustomize path" \
-    "$(yq -r '.spec.source.path' "$application")" \
+    "$(ENVIRONMENT="$environment" yq ea -r 'select(.kind == "Application" and .metadata.name == strenv(ENVIRONMENT) + "-arkmq-operator") | .spec.source.path' "$application")" \
     "gitops/kustomize/arkmq-operator/overlays/$environment"
   assert_equal "$environment operator Helm source count" \
-    "$(yq -r '[.spec.source.helm] | map(select(. != null)) | length' "$application")" 0
+    "$(ENVIRONMENT="$environment" yq ea -r 'select(.kind == "Application" and .metadata.name == strenv(ENVIRONMENT) + "-arkmq-operator") | [.spec.source.helm] | map(select(. != null)) | length' "$application")" 0
 done
 
 if [[ -n "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
-  render_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-release-validation.XXXXXX")
-  trap 'rm -rf "$render_dir"' EXIT
+  render_dir="$release_render_dir/operator-artifact"
+  mkdir -p "$render_dir"
   upstream_values="$render_dir/upstream-values.yaml"
   if tar -xOf "$ARKMQ_UPSTREAM_CHART" "$operator_chart_name/values.yaml" > "$upstream_values"; then
     for family in activemqArtemisBrokerInit activemqArtemisBrokerKubernetes; do
