@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: cluster-arkmq-operator
-  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  namespace: argocd
   labels:
     composition.artemis.apache.org/component: operator
   annotations:
@@ -15,7 +15,7 @@ spec:
     path: gitops/kustomize/arkmq-operator/overlays/cluster
   destination:
     server: https://kubernetes.default.svc
-    namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    namespace: artemis-platform
   syncPolicy:
     automated:
       prune: true

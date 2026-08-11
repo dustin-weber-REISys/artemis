@@ -132,7 +132,11 @@ assert_catalog_rejected per-cell-version test \
 
 assert_catalog_rejected invalid-namespace test \
   '.workloadCells[0].workloadNamespace = "default"' \
-  'field workloadNamespace violates rule: must resolve to the approved artemis-* namespace pattern'
+  'field workloadNamespace violates rule: must equal artemis-int-sky'
+
+assert_catalog_rejected changed-platform-namespace test \
+  '.platformNamespace = "artemis-other"' \
+  'cluster test catalog platform namespace: expected artemis-platform, got artemis-other'
 
 assert_catalog_rejected implicit-enabled test \
   '.workloadCells[0].enabled = true' \
@@ -150,6 +154,11 @@ assert_bootstrap_rejected weakened-deletion-policy \
   'base/artemis-workloads-applicationset.yaml' \
   '.spec.syncPolicy.applicationsSync = "sync"' \
   'cluster test workloads Application modification policy: expected create-update, got sync'
+
+assert_bootstrap_rejected changed-argocd-namespace \
+  'base/project.yaml' \
+  '.metadata.namespace = "gitops"' \
+  'cluster test AppProject Argo CD namespace: expected argocd, got gitops'
 
 assert_bootstrap_rejected remote-workload-destination \
   'base/artemis-workloads-applicationset.yaml' \
@@ -180,7 +189,7 @@ cp -R "$topology_dir" "$growth_topology"
 yq -i '
   .workloadCells += [(.workloadCells[1]
     | .workloadCellName = "test-extra"
-    | .workloadNamespace = "artemis-test-extra"
+    | .workloadNamespace = "artemis-int-extra"
     | .coordinationId = "test-extra-01"
     | .logicalEnvironment = "EXTRA"
     | .managementHost = "artemis-test-extra.example.invalid"
@@ -224,13 +233,13 @@ revision_values=$(yq ea -r '
 # The initial Profile is semantically neutral for current test behavior, and
 # the derived Application and broker custom-resource identities stay stable.
 helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
-  --namespace PLACEHOLDER_TEST_NAMESPACE_SKY \
+  --namespace artemis-int-sky \
   -f "$profile_dir/standard/values.yaml" \
   -f "$environment_dir/test/artemis-values.yaml" \
   --set ha.coordinationId=test-sky-01 \
   --set ha.groupName=test-sky-group \
-  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181 \
-  --set zookeeper.serviceNamespace=PLACEHOLDER_PLATFORM_NAMESPACE \
+  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181 \
+  --set zookeeper.serviceNamespace=artemis-platform \
   --set zookeeper.curatorNamespace=artemis/test/test-sky \
   --set persistence.size=20Gi \
   --set-string broker.resources.requests.cpu=500m \
@@ -257,12 +266,12 @@ yq -i '
   | .broker.resources.limits.memory = "3Gi"
 ' "$legacy_values"
 helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
-  --namespace PLACEHOLDER_TEST_NAMESPACE_SKY \
+  --namespace artemis-int-sky \
   -f "$legacy_values" \
   --set ha.coordinationId=test-sky-01 \
   --set ha.groupName=test-sky-group \
-  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.PLACEHOLDER_PLATFORM_NAMESPACE.svc.cluster.local:2181 \
-  --set zookeeper.serviceNamespace=PLACEHOLDER_PLATFORM_NAMESPACE \
+  --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181 \
+  --set zookeeper.serviceNamespace=artemis-platform \
   --set zookeeper.curatorNamespace=artemis/test/test-sky \
   --set persistence.size=20Gi \
   --set console.ingress.host=artemis-test-sky.example.invalid \

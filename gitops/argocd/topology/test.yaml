@@ -1,13 +1,13 @@
 schemaVersion: topology.artemis.apache.org/v2
 environment: test
 clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
-platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+platformNamespace: artemis-platform
 
 # This catalog is consumed only by the ApplicationSet running in the test
 # cluster's local Argo CD instance.
 workloadCells:
   - workloadCellName: test-sky
-    workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY
+    workloadNamespace: artemis-int-sky
     coordinationId: test-sky-01
     logicalEnvironment: SKY
     trafficClass: internal
@@ -20,7 +20,7 @@ workloadCells:
     features: {}
     enabled: "true"
   - workloadCellName: test-sky2
-    workloadNamespace: PLACEHOLDER_TEST_NAMESPACE_SKY2
+    workloadNamespace: artemis-int-sky2
     coordinationId: test-sky2-01
     logicalEnvironment: SKY2
     trafficClass: internal

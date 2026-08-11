@@ -29,13 +29,13 @@ case " $* " in
     printf '{"status":{"conditions":%s}}\n' "$conditions"
     ;;
   *' get appproject '*)
-    namespace=${MOCK_PROJECT_NAMESPACE:-PLACEHOLDER_TEST_NAMESPACE_SKY}
+    namespace=${MOCK_PROJECT_NAMESPACE:-artemis-int-sky}
     printf '{"spec":{"destinations":[{"server":"https://kubernetes.default.svc","namespace":"%s"}]}}\n' "$namespace"
     ;;
   *' get application test-arkmq-operator '*)
     health=Healthy
     [ "${MOCK_OPERATOR_UNHEALTHY:-false}" = true ] && health=Degraded
-    printf '{"spec":{"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_PLATFORM_NAMESPACE"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"%s"},"conditions":[]}}\n' \
+    printf '{"spec":{"destination":{"server":"https://kubernetes.default.svc","namespace":"artemis-platform"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"%s"},"conditions":[]}}\n' \
       "${MOCK_OPERATOR_REVISION:-remote-operator-revision}" "$health"
     ;;
   *' get application test-sky-artemis '*)
@@ -44,7 +44,7 @@ case " $* " in
     else
       conditions='[]'
     fi
-    printf '{"metadata":{"name":"test-sky-artemis","ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"helm":{"releaseName":"test-sky-artemis"}},"destination":{"server":"https://kubernetes.default.svc","namespace":"PLACEHOLDER_TEST_NAMESPACE_SKY"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s}}\n' \
+    printf '{"metadata":{"name":"test-sky-artemis","ownerReferences":[{"kind":"ApplicationSet","name":"test-artemis-workloads"}]},"spec":{"source":{"helm":{"releaseName":"test-sky-artemis"}},"destination":{"server":"https://kubernetes.default.svc","namespace":"artemis-int-sky"}},"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"},"conditions":%s}}\n' \
       "${MOCK_WORKLOAD_REVISION:-remote-workload-revision}" "$conditions"
     ;;
   *' get activemqartemis test-sky-artemis-artemis-ha '*)
@@ -80,7 +80,7 @@ run_verifier() {
 run_verifier >"$temp_dir/pass.out"
 grep -Fq 'Application test-arkmq-operator: Synced/Healthy revision=remote-operator-revision' "$temp_dir/pass.out"
 grep -Fq 'Application test-sky-artemis: Synced/Healthy revision=remote-workload-revision' "$temp_dir/pass.out"
-grep -Fq 'Broker StatefulSet PLACEHOLDER_TEST_NAMESPACE_SKY/test-sky-artemis-artemis-ha-ss: desired=2 current=2 ready=2' "$temp_dir/pass.out"
+grep -Fq 'Broker StatefulSet artemis-int-sky/test-sky-artemis-artemis-ha-ss: desired=2 current=2 ready=2' "$temp_dir/pass.out"
 grep -Fq 'Live Artemis health: PASS (1 enabled Workload Cells)' "$temp_dir/pass.out"
 
 # A workstation checkout revision is deliberately irrelevant to live health.
@@ -138,7 +138,7 @@ assert_failure statefulset-unready \
     --context test-context --argocd-namespace argocd --environment test
 
 assert_failure project-destination \
-  'does not allow https://kubernetes.default.svc namespace PLACEHOLDER_TEST_NAMESPACE_SKY' \
+  'does not allow https://kubernetes.default.svc namespace artemis-int-sky' \
   env PATH="$temp_dir/bin:$PATH" MOCK_PROJECT_NAMESPACE=wrong-namespace "$verifier" \
     --context test-context --argocd-namespace argocd --environment test
 

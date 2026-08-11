@@ -1,14 +1,14 @@
 schemaVersion: topology.artemis.apache.org/v2
 environment: prod
 clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
-platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+platformNamespace: artemis-platform
 
 # PE, PP, DM, and PR each receive one internal active/passive pair. PP and PR
 # also receive a separate external pair. Disabled PP/PR batch entries reserve
 # the future workload-isolation pattern without deploying it.
 workloadCells:
   - workloadCellName: prod-pe
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PE
+    workloadNamespace: artemis-int-pe
     coordinationId: prod-pe-pair01
     logicalEnvironment: PE
     trafficClass: internal
@@ -21,7 +21,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pp
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP
+    workloadNamespace: artemis-int-pp
     coordinationId: prod-pp-pair01
     logicalEnvironment: PP
     trafficClass: internal
@@ -34,7 +34,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pp-external
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP_EXTERNAL
+    workloadNamespace: artemis-ext-pp
     coordinationId: prod-pp-ext01
     logicalEnvironment: PP
     trafficClass: external
@@ -47,7 +47,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pp-batch
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PP_BATCH
+    workloadNamespace: artemis-batch-pp
     coordinationId: prod-pp-batch01
     logicalEnvironment: PP
     trafficClass: batch
@@ -60,7 +60,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-dm
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_DM
+    workloadNamespace: artemis-int-dm
     coordinationId: prod-dm-pair01
     logicalEnvironment: DM
     trafficClass: internal
@@ -73,7 +73,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pr
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR
+    workloadNamespace: artemis-int-pr
     coordinationId: prod-pr-pair01
     logicalEnvironment: PR
     trafficClass: internal
@@ -86,7 +86,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pr-external
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR_EXTERNAL
+    workloadNamespace: artemis-ext-pr
     coordinationId: prod-pr-ext01
     logicalEnvironment: PR
     trafficClass: external
@@ -99,7 +99,7 @@ workloadCells:
     features: {diskGuardrail: conservative}
     enabled: "false"
   - workloadCellName: prod-pr-batch
-    workloadNamespace: PLACEHOLDER_PROD_NAMESPACE_PR_BATCH
+    workloadNamespace: artemis-batch-pr
     coordinationId: prod-pr-batch01
     logicalEnvironment: PR
     trafficClass: batch

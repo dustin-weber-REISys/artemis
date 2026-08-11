@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: cluster-shared-zookeeper
-  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  namespace: argocd
   labels:
     composition.artemis.apache.org/component: zookeeper
   annotations:
@@ -22,7 +22,7 @@ spec:
           value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
   destination:
     server: https://kubernetes.default.svc
-    namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    namespace: artemis-platform
   syncPolicy:
     automated:
       prune: true

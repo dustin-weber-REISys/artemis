@@ -177,6 +177,8 @@ for environment in test nonprod prod; do
     'clusterName,environment,platformNamespace,schemaVersion,workloadCells'
   assert_equal "cluster $environment catalog environment" \
     "$(yq -r '.environment // ""' "$topology")" "$environment"
+  assert_equal "cluster $environment catalog platform namespace" \
+    "$(yq -r '.platformNamespace // ""' "$topology")" artemis-platform
   for root_field in clusterName platformNamespace workloadCells; do
     ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology" >/dev/null || \
       record_error "cluster $environment catalog field $root_field is required"
@@ -198,6 +200,14 @@ for environment in test nonprod prod; do
   operator="$environment-arkmq-operator"
   zookeeper="$environment-shared-zookeeper"
   workloads="$environment-artemis-workloads"
+  assert_equal "cluster $environment AppProject Argo CD namespace" \
+    "$(render_scalar "$rendered" AppProject "$project" '.metadata.namespace')" argocd
+  for application in "$operator" "$zookeeper"; do
+    assert_equal "cluster $environment Application $application Argo CD namespace" \
+      "$(render_scalar "$rendered" Application "$application" '.metadata.namespace')" argocd
+  done
+  assert_equal "cluster $environment ApplicationSet $workloads Argo CD namespace" \
+    "$(render_scalar "$rendered" ApplicationSet "$workloads" '.metadata.namespace')" argocd
   assert_equal "cluster $environment project sync wave" \
     "$(render_scalar "$rendered" AppProject "$project" '.metadata.annotations."argocd.argoproj.io/sync-wave"')" -30
   assert_equal "cluster $environment composition interface annotations" \
@@ -318,10 +328,22 @@ for environment in test nonprod prod; do
 
     [[ "$cell" =~ ^$environment-[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || \
       cell_error "$environment" "$cell" workloadCellName "must start with $environment- and contain lowercase DNS-label characters"
+    logical=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].logicalEnvironment // ""' "$topology")
+    traffic=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].trafficClass // ""' "$topology")
+    case "$traffic" in
+      internal) namespace_class=int ;;
+      external) namespace_class=ext ;;
+      batch) namespace_class=batch ;;
+      *)
+        namespace_class=invalid
+        cell_error "$environment" "$cell" trafficClass 'must be internal, external, or batch'
+        ;;
+    esac
+    logical_slug=$(printf '%s' "$logical" | tr '[:upper:]' '[:lower:]')
     namespace=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].workloadNamespace // ""' "$topology")
-    if [[ ! "$namespace" =~ ^artemis-[a-z0-9]([a-z0-9-]*[a-z0-9])?$ && ! "$namespace" =~ ^PLACEHOLDER_[A-Z0-9_]+_NAMESPACE_[A-Z0-9_]+$ ]]; then
-      cell_error "$environment" "$cell" workloadNamespace 'must resolve to the approved artemis-* namespace pattern (repository placeholders are allowed offline)'
-    fi
+    expected_namespace="artemis-$namespace_class-$logical_slug"
+    [[ "$namespace" == "$expected_namespace" ]] || \
+      cell_error "$environment" "$cell" workloadNamespace "must equal $expected_namespace"
     coordination=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].coordinationId // ""' "$topology")
     [[ "$coordination" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{7,15}$ ]] || \
       cell_error "$environment" "$cell" coordinationId 'must be 8-16 safe path characters'
@@ -331,9 +353,6 @@ for environment in test nonprod prod; do
     storage=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].storageSize // ""' "$topology")
     [[ "$storage" =~ ^[1-9][0-9]*(Mi|Gi|Ti)$ ]] || \
       cell_error "$environment" "$cell" storageSize 'must be a positive Kubernetes binary quantity'
-    traffic=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].trafficClass // ""' "$topology")
-    [[ "$traffic" == internal || "$traffic" == external || "$traffic" == batch ]] || \
-      cell_error "$environment" "$cell" trafficClass 'must be internal, external, or batch'
     enabled=$(INDEX="$index" yq -r '.workloadCells[env(INDEX)].enabled // ""' "$topology")
     [[ "$enabled" == true || "$enabled" == false ]] || \
       cell_error "$environment" "$cell" enabled 'must be the explicit string "true" or "false"'

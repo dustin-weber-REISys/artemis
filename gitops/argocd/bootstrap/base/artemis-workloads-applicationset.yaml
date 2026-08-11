@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: cluster-artemis-workloads
-  namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+  namespace: argocd
   labels:
     composition.artemis.apache.org/component: workloads
   annotations:
@@ -30,7 +30,7 @@ spec:
   template:
     metadata:
       name: '{{.workloadCellName}}-artemis'
-      namespace: PLACEHOLDER_ARGOCD_NAMESPACE
+      namespace: argocd
       annotations:
         argocd.argoproj.io/sync-wave: "0"
     spec:

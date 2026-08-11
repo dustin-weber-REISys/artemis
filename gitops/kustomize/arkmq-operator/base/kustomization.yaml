@@ -9,7 +9,7 @@ helmCharts:
     repo: oci://quay.io/arkmq-org/helm-charts
     version: 2.2.0
     releaseName: arkmq-operator
-    namespace: PLACEHOLDER_PLATFORM_NAMESPACE
+    namespace: artemis-platform
     valuesFile: values.yaml
     includeCRDs: true
 

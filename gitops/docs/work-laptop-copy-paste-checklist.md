@@ -28,8 +28,8 @@ Copy these directories and files from GitHub using the **Raw** view:
 - [ ] `gitops/kustomize/arkmq-operator/tests/test.sh`
 - [ ] `gitops/scripts/render-arkmq-operator.sh`
 
-Preserve the resolved platform namespace, contact/FISMA labels, and nonprod or
-production ECR bases when creating these files on the work laptop.
+Preserve the fixed `artemis-platform` namespace, contact/FISMA labels, and
+nonprod or production ECR bases when creating these files on the work laptop.
 
 ## Merge the integration changes
 
@@ -104,7 +104,7 @@ against the intended context:
 ```sh
 ./gitops/scripts/verify-argocd-applicationset.sh \
   --context WORK_CONTEXT \
-  --argocd-namespace WORK_ARGOCD_NAMESPACE \
+  --argocd-namespace argocd \
   --environment test
 ```
 

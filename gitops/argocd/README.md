@@ -22,11 +22,14 @@ Each stable root path is a thin Kustomize adapter over
   Applications from the matching catalog under [`topology`](topology).
 
 The adapter patch owns only cluster identity and integration placeholders. The
-shared base owns composition policy, sync safety, derived names, and chart
-inputs. [`profiles`](profiles) provides reusable capability policy; a Workload
-Cell selects exactly one Profile and can set only that Profile's typed feature
-choices. The centrally selected Platform Release remains outside every
-adapter, Profile, and Workload Cell.
+shared base owns the fixed `argocd` and `artemis-platform` namespaces,
+composition policy, sync safety, derived names, and chart inputs. Workload Cell
+namespaces are fixed as `artemis-<traffic>-<logical-environment>`, where
+`internal` is abbreviated to `int`, `external` to `ext`, and functionality such
+as `batch` is named directly. [`profiles`](profiles) provides reusable
+capability policy; a Workload Cell selects exactly one Profile and can set only
+that Profile's typed feature choices. The centrally selected Platform Release
+remains outside every adapter, Profile, and Workload Cell.
 
 All destinations use `https://kubernetes.default.svc`. No Argo CD instance
 needs another EKS cluster's API endpoint or registration. The EKS

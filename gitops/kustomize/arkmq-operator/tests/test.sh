@@ -135,7 +135,7 @@ for environment in test nonprod prod; do
       ] | length) == 1
   ' "$rendered" >/dev/null
 
-  RELEASE_NAMESPACE=PLACEHOLDER_PLATFORM_NAMESPACE yq -e '
+  RELEASE_NAMESPACE=artemis-platform yq -e '
     select(.kind == "ClusterRoleBinding" and .metadata.name == "activemq-artemis-operator-rolebinding")
     | .roleRef.kind == "ClusterRole"
       and .roleRef.name == "activemq-artemis-operator-role"

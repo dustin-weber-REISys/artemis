@@ -1,13 +1,13 @@
 schemaVersion: topology.artemis.apache.org/v2
 environment: nonprod
 clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
-platformNamespace: PLACEHOLDER_PLATFORM_NAMESPACE
+platformNamespace: artemis-platform
 
 # The Artemis tenancy inventory is independent of the cluster's Kong or
 # microservice namespace inventory. Confirm every Workload Cell before bootstrap.
 workloadCells:
   - workloadCellName: nonprod-smktest-eut
-    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_SMKTEST_EUT
+    workloadNamespace: artemis-int-smktest-eut
     coordinationId: np-eut-pair01
     logicalEnvironment: SMKTEST-EUT
     trafficClass: internal
@@ -20,7 +20,7 @@ workloadCells:
     features: {}
     enabled: "false"
   - workloadCellName: nonprod-trn
-    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN
+    workloadNamespace: artemis-int-trn
     coordinationId: np-trn-pair01
     logicalEnvironment: TRN
     trafficClass: internal
@@ -33,7 +33,7 @@ workloadCells:
     features: {}
     enabled: "false"
   - workloadCellName: nonprod-trn2
-    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_TRN2
+    workloadNamespace: artemis-int-trn2
     coordinationId: np-trn2-pair01
     logicalEnvironment: TRN2
     trafficClass: internal
@@ -46,7 +46,7 @@ workloadCells:
     features: {}
     enabled: "false"
   - workloadCellName: nonprod-pt
-    workloadNamespace: PLACEHOLDER_NONPROD_NAMESPACE_PT
+    workloadNamespace: artemis-int-pt
     coordinationId: np-pt-pair01
     logicalEnvironment: PT
     trafficClass: internal
