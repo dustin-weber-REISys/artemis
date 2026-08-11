@@ -1,0 +1,2 @@
+Warning  FailedCreatePodSandBox  42s (x5 over 3m)  kubelet  Failed to create pod sandbox: rpc error: code = Unknown desc = failed to setup network for sandbox "<SANDBOX_ID>": plugin type="aws-cni" name="aws-cni" failed (add): add cmd: failed to assign an IP address to container
+Normal   SuccessfulAttachVolume   3m                     attachdetach-controller  AttachVolume.Attach succeeded for volume "<VOLUME_ID>"

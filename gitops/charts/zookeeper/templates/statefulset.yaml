@@ -9,6 +9,16 @@ spec:
   serviceName: {{ include "zookeeper.headlessServiceName" . }}
   replicas: {{ .Values.replicaCount }}
   podManagementPolicy: Parallel
+  # A replacement voter must remain healthy before a StatefulSet rollout can
+  # continue to the next ordinal. This protects quorum from transient startup
+  # success followed immediately by a crash or lost peer connection.
+  minReadySeconds: 30
+  # ZooKeeper identity and durable state belong to the ordinal. Preserve every
+  # claim across accidental scale-down or StatefulSet deletion so recovery can
+  # reattach the original EBS volume instead of silently creating an empty one.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   updateStrategy:
     type: RollingUpdate
   selector:

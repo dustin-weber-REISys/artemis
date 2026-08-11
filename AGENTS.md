@@ -21,3 +21,17 @@
 - If part of the fix is owned by an external platform or requires live credentials, still update every applicable repository-owned artifact so the intended configuration is encoded and testable. Clearly identify only the remaining external action.
 - Provide analysis without modifying files only when the user explicitly asks for analysis, explanation, review, or diagnosis without implementation.
 - Preserve unrelated and pre-existing user changes. Do not commit, push, deploy, or mutate live infrastructure unless the user explicitly requests it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five canonical label names without overrides. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses a single-context layout. See `docs/agents/domain.md`.

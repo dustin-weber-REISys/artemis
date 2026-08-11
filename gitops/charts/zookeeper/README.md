@@ -30,6 +30,32 @@ ZooKeeper host and zone constraints, leaving the pod with simultaneous
 `PersistentVolume node affinity` and topology-spread failures. Changing this
 chart or the StorageClass does not relocate an existing bound EBS volume.
 
+An ordinary node replacement does not relocate or replace the volume. The
+StatefulSet recreates the same ordinal, and Kubernetes schedules that Pod onto
+an eligible node in the EBS volume's availability zone before the EBS CSI
+driver detaches the volume from the old node and attaches it to the new one.
+The chart explicitly retains ordinal PVCs across StatefulSet deletion and
+scale-down. It also requires a replacement voter to remain Ready for 30 seconds
+before a StatefulSet rolling update proceeds to another ordinal.
+
+For node maintenance, keep capacity available in every zone containing a
+bound ZooKeeper volume, use eviction-based drain without force or
+`--disable-eviction`, and disrupt only one voter at a time. Wait until all
+three voters are Running and Ready and the ensemble reports one leader and two
+followers before touching another node. The PDB prevents a second voluntary
+eviction while one voter is unavailable, but it cannot prevent simultaneous
+instance loss, forced termination, an availability-zone outage, or a node
+group scale-down that bypasses eviction safeguards.
+
+For a whole-environment shutdown, stop or quiesce brokers and clients before
+workers, preserve the StatefulSet and PVCs, and leave the EBS volumes intact.
+On startup, restore eligible worker capacity in every bound-volume zone and
+allow all three stable ordinals to reattach their original claims and form
+quorum before starting or admitting broker traffic. A pod cannot attach its
+EBS volume in another zone; if its original zone will not return, recover that
+member one at a time from the approved backup procedure rather than deleting
+its initialized claim.
+
 For a new ensemble that has never formed or accepted data, first correct the
 StorageClass and then recreate its uninitialized claims so the scheduler can
 provision them against the corrected topology. Treat claim deletion as data

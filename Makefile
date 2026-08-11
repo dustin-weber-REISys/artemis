@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release test test-topology test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help:
 		'  validate-release  Validate central versions and generated consumers' \
 		'  validate-topology Validate the broker-pair catalog and Argo bootstrap' \
 		'  test-topology     Exercise topology validation regression cases' \
+		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
 		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \
 		'  validate-charts   Lint and render the Helm charts' \
 		'  validate-operator-kustomize Render operator overlays from the approved upstream chart' \
@@ -86,6 +87,9 @@ validate-topology:
 
 test-topology:
 	$(MAKE) -C gitops test-topology
+
+test-diagnose-pod-startup:
+	$(MAKE) -C gitops test-diagnose-pod-startup
 
 test-argocd-ecr-credentials:
 	$(MAKE) -C gitops test-argocd-ecr-credentials

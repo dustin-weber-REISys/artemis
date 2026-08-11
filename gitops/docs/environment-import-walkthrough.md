@@ -82,6 +82,10 @@ Complete these checks before changing Argo CD resources:
 - The cluster-local Argo CD and its ApplicationSet controller, the approved
   IngressClass/controller, Vault Agent Injector, Prometheus CRDs (when enabled), a
   NetworkPolicy-enforcing CNI, DNS, and the cluster log collector are healthy.
+- Every worker subnet has measured pod-IP headroom for the simultaneous broker,
+  ZooKeeper, operator, platform DaemonSet, rollout-surge, and failure-recovery
+  demand. Validate AWS VPC CNI ENI/IP or delegated-prefix capacity on each
+  approved instance type and alert on subnet address depletion before sync.
 - Actual namespace and pod labels are available for every NetworkPolicy
   selector. External Vault, Keycloak, DNS, or monitoring endpoints receive
   explicit least-privilege egress; pod selectors do not admit external IPs.

@@ -62,6 +62,11 @@ for required_label in app contact env fismaid; do
     "$rendered" >/dev/null
 done
 rg -q 'replicas: 3' "$rendered"
+yq -e 'select(.kind == "StatefulSet") |
+  .spec.minReadySeconds == 30 and
+  .spec.persistentVolumeClaimRetentionPolicy.whenDeleted == "Retain" and
+  .spec.persistentVolumeClaimRetentionPolicy.whenScaled == "Retain"' \
+  "$rendered" >/dev/null
 rg -q 'server\.1=zookeeper-zookeeper-0\.zookeeper-zookeeper-headless' "$rendered"
 rg -q 'server\.3=zookeeper-zookeeper-2\.zookeeper-zookeeper-headless' "$rendered"
 rg -q 'name: wait-for-peer-dns' "$rendered"

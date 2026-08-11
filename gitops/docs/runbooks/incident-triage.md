@@ -19,6 +19,87 @@ or redelivered in-flight messages.
 5. Preserve structured logs, Kubernetes events, metrics, Argo history, and the
    latest validation reports.
 
+## Pod cannot start: classify the failing stage first
+
+A pod shown as `Pending`, `ContainerCreating`, or unready is not necessarily an
+application failure. Read its events from oldest to newest and identify the last
+completed stage: scheduling, volume attachment/mount, pod-sandbox networking,
+image pull, container start, or application readiness.
+
+On the authorized work computer, collect and classify one affected pod with:
+
+```sh
+./gitops/scripts/diagnose-pod-startup.sh \
+  --context "$KUBE_CONTEXT" \
+  --namespace "$WORKLOAD_NAMESPACE" \
+  --pod "$POD_NAME" \
+  > pod-startup-evidence.txt
+```
+
+The command is read-only. Exit `1` means it recognized a blocking startup
+failure; the evidence file contains the classification and relevant cluster
+state. Review and redact account IDs, instance IDs, IP addresses, hostnames,
+and internal endpoints before moving the file outside the authorized team.
+
+### AWS VPC CNI cannot assign a pod IP
+
+An event containing all of the following is an EKS/platform-networking failure,
+not a ZooKeeper process failure:
+
+```text
+FailedCreatePodSandBox
+plugin type="aws-cni"
+failed to assign an IP address to container
+```
+
+The ZooKeeper container has not started, so it has no useful application logs
+yet. A successful EBS attachment does not contradict this diagnosis: storage
+attachment precedes pod-sandbox network creation. Do not delete/restart the pod
+or modify its probes as a first response; kubelet already retries sandbox
+creation and those actions do not create IP capacity.
+
+Use the diagnostic bundle to obtain the selected node and `aws-node` evidence.
+Then use read-only AWS queries from the same approved work-computer session to
+measure the node's subnet rather than guessing:
+
+```sh
+NODE_NAME='<node from pod-startup-evidence.txt>'
+INSTANCE_ID=$(kubectl --context "$KUBE_CONTEXT" get node "$NODE_NAME" \
+  -o 'jsonpath={.spec.providerID}')
+INSTANCE_ID=${INSTANCE_ID##*/}
+AWS_REGION=$(kubectl --context "$KUBE_CONTEXT" get node "$NODE_NAME" \
+  -o 'jsonpath={.metadata.labels.topology\.kubernetes\.io/region}')
+SUBNET_ID=$(aws ec2 describe-instances \
+  --region "$AWS_REGION" \
+  --instance-ids "$INSTANCE_ID" \
+  --query 'Reservations[0].Instances[0].SubnetId' \
+  --output text)
+aws ec2 describe-subnets \
+  --region "$AWS_REGION" \
+  --subnet-ids "$SUBNET_ID" \
+  --query 'Subnets[].{SubnetId:SubnetId,AZ:AvailabilityZone,CIDR:CidrBlock,AvailableIPs:AvailableIpAddressCount}' \
+  --output table
+```
+
+Interpret the evidence in this order:
+
+1. If subnet `AvailableIPs` is depleted or below the platform's scheduling
+   headroom, the platform owner must add usable address capacity or place new
+   capacity in a subnet with headroom.
+2. If the subnet has headroom but failures concentrate on one node, compare its
+   scheduled pod count, instance-type ENI/IP limit, and VPC CNI prefix/IP target
+   settings with a healthy node.
+3. If node capacity also has headroom, use the captured `aws-node` readiness and
+   logs to resolve IAM, EC2 API reachability/throttling, add-on health, or IPAM
+   reconciliation errors.
+4. Treat stale node-local CNI state as a last hypothesis. Any restart, node
+   recycle, CNI configuration change, subnet change, or prefix-delegation change
+   is platform-owned and requires its approved change process.
+
+After Kubernetes assigns the pod an IP and starts the container, continue with
+ZooKeeper logs, readiness probes, peer DNS, and quorum checks. Preserve the
+before/after events to prove which layer recovered.
+
 ## Decision paths
 
 - **Two active brokers or coordination uncertainty:** isolate client traffic
@@ -26,6 +107,9 @@ or redelivered in-flight messages.
   promote either side until ZooKeeper and journal ownership are proven.
 - **ZooKeeper quorum loss:** expect no new activation; restore quorum one
   member at a time and verify exactly one active broker.
+- **Pod sandbox / AWS VPC CNI failure:** the application container has not
+  started. Keep broker safety controls unchanged and hand the captured node,
+  subnet, `aws-node`, and event evidence to the EKS/platform-networking owner.
 - **Replication disconnected:** keep the surviving active broker under the
   approved write policy, measure the acknowledged-send boundary, and do not
   fail back until synchronization is complete.
