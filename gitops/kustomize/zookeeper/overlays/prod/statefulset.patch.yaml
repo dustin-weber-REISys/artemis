@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shared-zookeeper-zookeeper
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: configure-and-wait-for-peer-dns
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+      containers:
+        - name: zookeeper
+          env:
+            - name: JVMFLAGS
+              value: -Xms512m -Xmx1Gi
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi

@@ -1,6 +1,0 @@
-{{- if ne (int .Values.replicaCount) 3 -}}
-{{- fail "the ZooKeeper quorum requires exactly three members" -}}
-{{- end -}}
-{{- if not .Values.persistence.enabled -}}
-{{- fail "persistent storage is required for the ZooKeeper quorum" -}}
-{{- end -}}

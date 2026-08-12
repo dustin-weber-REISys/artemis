@@ -1,65 +1,129 @@
 # Upgrade and rollback
 
-Promote the exact tested image and chart digests. Do not upgrade broker,
-ZooKeeper, operator, and client libraries as one unobserved change.
+Promote the exact tested image and chart digests. Treat Kubernetes, operator,
+broker, ZooKeeper, and client-library changes as separate observed Platform
+Release changes. The operating system inside every promoted container image is
+part of that image's release evidence, not the EKS worker-node configuration.
+
+> This repository is an offline/test copy. Run registry, Kubernetes, and Argo CD
+> steps below only from the authorized work computer and approved
+> contexts. The repository commands are local, deterministic, and do not deploy.
 
 ## Upgrade
 
-1. Review the centrally selected versions:
+### 1. Select one change
 
-   ```sh
-   make versions
-   ```
+Review the centrally selected Platform Release:
 
-2. Run the approved ECR image/chart transfer jobs first. Record their build
-   URLs and fingerprinted promotion records; an application upgrade must refer
-   to artifacts that already exist in the destination immutable repositories.
-3. Preview exactly one operator, broker, or ZooKeeper change. The command is dry-run
-   unless `--write` is explicitly supplied:
+```sh
+make versions
+```
 
-   ```sh
-   ./gitops/scripts/prepare-upgrade.sh \
-     --component broker \
-     --version VERSION \
-     --chart-artifact /path/to/current-operator-chart.tgz
-   ```
+Replace every image-OS placeholder with `ID` and `VERSION_ID` read from
+`/etc/os-release` in the exact digest-qualified image before the first
+promotion. Use one pull request and change window per row:
 
-   The current unmodified operator chart is required for broker upgrades so
-   validation can prove that its related-image inventory supports the requested
-   broker version. ZooKeeper upgrades require the immutable promoted image digest through
-   `--image-digest sha256:...`; changing a tag while retaining the old digest
-   does not change the image Kubernetes runs.
+| Component | Required preview inputs | Repository-owned result |
+| --- | --- | --- |
+| Kubernetes | semantic version | central platform assumption used by schema validation |
+| Operator | chart artifact and provenance; image digest and OS identity | central version/provenance plus every operator overlay |
+| Broker | version, current operator chart, and separate init/runtime OS identities | central version, chart schema/default, related-image mappings, and image OS records |
+| ZooKeeper | version, immutable image digest, and image OS identity | central version, pod labels, image references, and image OS record |
 
-   Operator upgrades use the unmodified upstream chart and no longer require a
-   vendor rebase. Pull the exact chart and record the OCI, manifest, and image
-   provenance, then preview the complete Kustomize change:
+Do not combine control-plane, operator, operand, or client changes
+just because they are mutually compatible. Separate changes preserve a useful
+rollback boundary.
 
-   ```sh
-   ./gitops/scripts/prepare-upgrade.sh \
-     --component operator \
-     --version VERSION \
-     --chart-artifact /path/to/chart.tgz \
-     --chart-oci-digest sha256:... \
-     --manifest-sha256 HEX \
-     --image-digest sha256:...
-   ```
+### 2. Record artifact and live baselines
 
-   The command updates the central release, pinned Helm chart version, common
-   operator values, and all three private-image overlays in a staged copy. It
-   renders every overlay against the supplied chart and fails if the upstream
-   Kubernetes objects no longer match the repository-owned transformations.
-4. Record source versions, immutable digests, SBOM, license inventory, scan
-   result, and the operator/operand compatibility matrix.
-5. Run the canonical repository validation from the root
+Run the approved ECR image/chart transfer jobs first. Record their build URLs
+and fingerprinted promotion records; the target artifacts must already exist in
+the immutable destination repositories. Inspect each exact destination digest,
+not a mutable tag or an upstream Dockerfile:
+
+```sh
+docker pull REGISTRY/IMAGE@sha256:DIGEST
+./gitops/scripts/read-image-os.sh \
+  --image REGISTRY/IMAGE@sha256:DIGEST \
+  --format args
+```
+
+Run this independently for the operator, Artemis broker-init, Artemis broker
+runtime, and ZooKeeper images. If an image has no `/etc/os-release`, stop and
+record that exception from its SBOM rather than guessing a distribution. The
+SBOM, vulnerability scan, signature, digest, and OS identity must all describe
+the same image manifest and architecture. The helper creates a stopped
+temporary container only to copy `/etc/os-release`; it never runs the image and
+removes the container on exit.
+
+### 3. Preview and write the repository change
+
+Every command is a dry run unless `--write` is explicitly supplied. Preview
+one target:
+
+```sh
+./gitops/scripts/prepare-upgrade.sh \
+  --component kubernetes \
+  --version VERSION
+
+./gitops/scripts/prepare-upgrade.sh \
+  --component broker \
+  --version VERSION \
+  --chart-artifact /path/to/current-operator-chart.tgz \
+  --init-image-digest sha256:... \
+  --runtime-image-digest sha256:... \
+  --init-image-os-id ID \
+  --init-image-os-version VERSION_ID \
+  --runtime-image-os-id ID \
+  --runtime-image-os-version VERSION_ID
+
+./gitops/scripts/prepare-upgrade.sh \
+  --component zookeeper \
+  --version VERSION \
+  --image-digest sha256:... \
+  --image-os-id ID \
+  --image-os-version VERSION_ID
+```
+
+Operator upgrades use the unmodified upstream chart and no vendor rebase:
+
+```sh
+./gitops/scripts/prepare-upgrade.sh \
+  --component operator \
+  --version VERSION \
+  --chart-artifact /path/to/chart.tgz \
+  --chart-oci-digest sha256:... \
+  --manifest-sha256 HEX \
+  --image-digest sha256:... \
+  --image-os-id ID \
+  --image-os-version VERSION_ID
+```
+
+Review the exact diff, then rerun the same command with `--write`. The command
+stages and validates all generated consumers before copying them into the
+checkout. It does not download, mirror, commit, sync Argo CD, or deploy.
+
+The current operator chart is required for broker changes so validation can
+prove its related-image inventory supports the requested broker version. A
+ZooKeeper tag change without the matching digest does not change the image that
+Kubernetes runs. Historical labels on the ZooKeeper PVC template intentionally
+remain unchanged because the complete claim template is immutable.
+
+### 4. Validate and promote
+
+1. Record source versions, immutable digests, `/etc/os-release` identity, SBOM,
+   license inventory, scan result, and the applicable compatibility matrix.
+2. Run the canonical repository validation from the root
    [`README`](../../README.md#validate).
-6. Apply the digest to test and run the required compatibility, durability,
-   failure, credential rotation, management authorization, and load scenarios
-   from [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml).
-7. Promote the same digest to nonprod. Run upgrade and rollback there, then
-   obtain operational approval before prod.
-8. Upgrade one ZooKeeper member at a time, then one Artemis HA pair or
-   namespace at a time. Observe replication, queue depth, paging, disk, JVM,
-   client reconnect, and Argo health between steps.
+3. Promote the approved Git revision to test and
+   run the required compatibility, durability, failure, credential-rotation,
+   management-authorization, and load scenarios from
+   [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml).
+4. Promote the same revision and immutable artifacts to nonprod. Run upgrade
+   and rollback there, then obtain operational approval before prod.
+5. Upgrade one ZooKeeper member at a time, then one Workload Cell or namespace
+   at a time. Observe replication, queue depth, paging, disk, JVM, client
+   reconnect, and Argo health between steps.
 
 ## Rollback
 

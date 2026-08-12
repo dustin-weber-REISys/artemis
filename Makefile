@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release test-upgrade-workflow test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -16,13 +16,15 @@ help:
 		'' \
 		'GitOps and Helm:' \
 		'  versions          Show centrally selected platform and application versions' \
-		'  prepare-upgrade   Preview an operator/broker/ZooKeeper upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
+		'  prepare-upgrade   Preview one platform/component upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
 		'  validate-release  Validate central versions and generated consumers' \
+		'  test-upgrade-workflow Exercise Platform Release preview regressions' \
 		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
 		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \
-		'  validate-charts   Lint and render the Helm charts' \
+		'  validate-charts   Lint and render the Artemis Helm chart' \
+		'  validate-zookeeper-kustomize Render and validate ZooKeeper overlays' \
 		'  validate-operator-kustomize Render operator overlays from the approved upstream chart' \
 		'  validate-scenarios Validate the EKS acceptance definitions' \
 		'  validate-operator-schema Validate broker CRs against the selected ArkMQ release' \
@@ -97,6 +99,9 @@ test-argocd-ecr-credentials:
 validate-charts:
 	$(MAKE) -C gitops validate-charts REPORT_DIR="$(abspath $(REPORT_DIR))"
 
+validate-zookeeper-kustomize:
+	$(MAKE) -C gitops validate-zookeeper-kustomize
+
 validate-operator-kustomize:
 	$(MAKE) -C gitops validate-operator-kustomize ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)"
 
@@ -111,6 +116,9 @@ prepare-upgrade:
 
 validate-release:
 	$(MAKE) -C gitops validate-release
+
+test-upgrade-workflow:
+	$(MAKE) -C gitops test-upgrade-workflow
 
 validate-static:
 	./scripts/validate-static.sh --report "$(REPORT_DIR)/static-validation.json"

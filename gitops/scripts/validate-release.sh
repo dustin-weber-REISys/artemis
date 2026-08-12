@@ -66,9 +66,17 @@ assert_keys '.operator' 'chart,image,manifest,version'
 assert_keys '.operator.chart' 'artifactSha256,name,ociDigest,repository,version'
 assert_keys '.operator.manifest' 'sha256,url'
 assert_keys '.' 'broker,operator,platform,schemaVersion,zookeeper'
-assert_keys '.operator.image' 'upstreamDigest'
-assert_keys '.broker' 'version'
-assert_keys '.zookeeper' 'version'
+assert_keys '.operator.image' 'baseOs,upstreamDigest'
+assert_keys '.operator.image.baseOs' 'id,versionId'
+assert_keys '.broker' 'images,version'
+assert_keys '.broker.images' 'init,runtime'
+assert_keys '.broker.images.init' 'baseOs,digest'
+assert_keys '.broker.images.init.baseOs' 'id,versionId'
+assert_keys '.broker.images.runtime' 'baseOs,digest'
+assert_keys '.broker.images.runtime.baseOs' 'id,versionId'
+assert_keys '.zookeeper' 'image,version'
+assert_keys '.zookeeper.image' 'baseOs,digest'
+assert_keys '.zookeeper.image.baseOs' 'id,versionId'
 assert_equal 'schemaVersion' "$(yq -r '.schemaVersion // ""' "$release_file")" 'releases.artemis.apache.org/v1'
 
 version_pattern='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
@@ -86,6 +94,17 @@ operator_manifest_sha256=$(yq -r '.operator.manifest.sha256 // ""' "$release_fil
 operator_upstream_digest=$(yq -r '.operator.image.upstreamDigest // ""' "$release_file")
 broker_version=$(yq -r '.broker.version // ""' "$release_file")
 zookeeper_version=$(yq -r '.zookeeper.version // ""' "$release_file")
+broker_init_digest=$(yq -r '.broker.images.init.digest // ""' "$release_file")
+broker_runtime_digest=$(yq -r '.broker.images.runtime.digest // ""' "$release_file")
+zookeeper_release_digest=$(yq -r '.zookeeper.image.digest // ""' "$release_file")
+operator_os_id=$(yq -r '.operator.image.baseOs.id // ""' "$release_file")
+operator_os_version=$(yq -r '.operator.image.baseOs.versionId // ""' "$release_file")
+broker_init_os_id=$(yq -r '.broker.images.init.baseOs.id // ""' "$release_file")
+broker_init_os_version=$(yq -r '.broker.images.init.baseOs.versionId // ""' "$release_file")
+broker_runtime_os_id=$(yq -r '.broker.images.runtime.baseOs.id // ""' "$release_file")
+broker_runtime_os_version=$(yq -r '.broker.images.runtime.baseOs.versionId // ""' "$release_file")
+zookeeper_os_id=$(yq -r '.zookeeper.image.baseOs.id // ""' "$release_file")
+zookeeper_os_version=$(yq -r '.zookeeper.image.baseOs.versionId // ""' "$release_file")
 operator_image_tag=$operator_version
 broker_image_tag="artemis.$broker_version"
 zookeeper_image_tag=$zookeeper_version
@@ -96,6 +115,21 @@ for entry in \
   "broker.version:$broker_version" \
   "zookeeper.version:$zookeeper_version"; do
   assert_pattern "${entry%%:*}" "${entry#*:}" "$version_pattern"
+done
+assert_pattern 'broker.images.init.digest' "$broker_init_digest" "$digest_pattern"
+assert_pattern 'broker.images.runtime.digest' "$broker_runtime_digest" "$digest_pattern"
+assert_pattern 'zookeeper.image.digest' "$zookeeper_release_digest" "$digest_pattern"
+os_value_pattern='^[A-Za-z0-9][A-Za-z0-9._+-]*$'
+for entry in \
+  "operator.image.baseOs.id:$operator_os_id" \
+  "operator.image.baseOs.versionId:$operator_os_version" \
+  "broker.images.init.baseOs.id:$broker_init_os_id" \
+  "broker.images.init.baseOs.versionId:$broker_init_os_version" \
+  "broker.images.runtime.baseOs.id:$broker_runtime_os_id" \
+  "broker.images.runtime.baseOs.versionId:$broker_runtime_os_version" \
+  "zookeeper.image.baseOs.id:$zookeeper_os_id" \
+  "zookeeper.image.baseOs.versionId:$zookeeper_os_version"; do
+  assert_pattern "${entry%%:*}" "${entry#*:}" "$os_value_pattern"
 done
 assert_equal 'operator chart name' "$operator_chart_name" 'arkmq-org-broker-operator'
 assert_equal 'operator chart version' "$operator_chart_version" "$operator_version"
@@ -135,16 +169,18 @@ for environment in test nonprod prod; do
     "$(yq -r '.labels[0].pairs.env' "$overlay/kustomization.yaml")" "$environment"
   assert_equal "$environment operator image" \
     "$(yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .image' "$image_patch")" \
-    "$expected_ecr_repository/arkmq-operator:$operator_image_tag"
+    "$expected_ecr_repository/arkmq-operator:$operator_image_tag@$operator_upstream_digest"
   for image_kind in Init Kubernetes; do
     env_name="RELATED_IMAGE_ActiveMQ_Artemis_Broker_${image_kind}_$broker_compact"
     repository_suffix=activemq-artemis-broker-init
+    expected_image_digest=$broker_init_digest
     if [[ "$image_kind" == Kubernetes ]]; then
       repository_suffix=activemq-artemis-broker-kubernetes
+      expected_image_digest=$broker_runtime_digest
     fi
     assert_equal "$environment operator $env_name" \
       "$(ENV_NAME="$env_name" yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == strenv(ENV_NAME)) | .value' "$image_patch")" \
-      "$expected_ecr_repository/$repository_suffix:$broker_image_tag"
+      "$expected_ecr_repository/$repository_suffix:$broker_image_tag@$expected_image_digest"
   done
   application="$release_render_dir/composition-$environment.yaml"
   if ! "${composition_render_command[@]}" "$repo_root/argocd/bootstrap/$environment" > "$application"; then
@@ -188,12 +224,49 @@ if [[ -n "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
   done
 fi
 
-# These charts are generated consumers too. prepare-upgrade.sh rewrites the
-# broker and ZooKeeper fields and the operator Kustomize release inputs.
+# These deployable modules are generated consumers too. prepare-upgrade.sh
+# rewrites the broker chart and the operator/ZooKeeper Kustomize release inputs.
 assert_equal 'Artemis chart broker version' \
   "$(yq -r '.broker.version' "$repo_root/charts/artemis-ha/values.yaml")" "$broker_version"
-assert_equal 'ZooKeeper chart image tag' \
-  "$(yq -r '.image.tag' "$repo_root/charts/zookeeper/values.yaml")" "$zookeeper_image_tag"
+zookeeper_base="$repo_root/kustomize/zookeeper/base"
+zookeeper_image=$(yq -r \
+  '.spec.template.spec.containers[] | select(.name == "zookeeper") | .image' \
+  "$zookeeper_base/statefulset.yaml")
+zookeeper_tagged_image=${zookeeper_image%@*}
+zookeeper_rendered_tag=${zookeeper_tagged_image##*:}
+zookeeper_digest=${zookeeper_image##*@}
+assert_equal 'ZooKeeper Kustomize image tag' "$zookeeper_rendered_tag" "$zookeeper_image_tag"
+assert_pattern 'ZooKeeper Kustomize image digest' "$zookeeper_digest" "$digest_pattern"
+assert_equal 'ZooKeeper release image digest' "$zookeeper_digest" "$zookeeper_release_digest"
+assert_equal 'ZooKeeper Kustomize version label' \
+  "$(yq -r '.labels[0].pairs."app.kubernetes.io/version"' "$zookeeper_base/kustomization.yaml")" \
+  "$zookeeper_image_tag"
+assert_equal 'ZooKeeper Pod version label' \
+  "$(yq -r '.spec.template.metadata.labels."app.kubernetes.io/version"' "$zookeeper_base/statefulset.yaml")" \
+  "$zookeeper_image_tag"
+# The former Helm-rendered PVC template is immutable. These historical values
+# deliberately stay pinned while current release labels and pod images advance.
+assert_equal 'ZooKeeper PVC legacy chart label' \
+  "$(yq -r '.spec.volumeClaimTemplates[0].metadata.labels."helm.sh/chart"' "$zookeeper_base/statefulset.yaml")" \
+  'zookeeper-0.1.0'
+assert_equal 'ZooKeeper PVC legacy manager label' \
+  "$(yq -r '.spec.volumeClaimTemplates[0].metadata.labels."app.kubernetes.io/managed-by"' "$zookeeper_base/statefulset.yaml")" \
+  'Helm'
+assert_equal 'ZooKeeper PVC legacy version label' \
+  "$(yq -r '.spec.volumeClaimTemplates[0].metadata.labels."app.kubernetes.io/version"' "$zookeeper_base/statefulset.yaml")" \
+  '3.9.5'
+for environment in test nonprod prod; do
+  overlay="$repo_root/kustomize/zookeeper/overlays/$environment/kustomization.yaml"
+  expected_ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
+  if [[ "$environment" == prod ]]; then
+    expected_ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
+  fi
+  assert_equal "$environment ZooKeeper name prefix" \
+    "$(yq -r '.namePrefix' "$overlay")" "$environment-"
+  assert_equal "$environment ZooKeeper image repository" \
+    "$(yq -r '.images[] | select(.name == "example.invalid/ecr-mirror/zookeeper") | .newName' "$overlay")" \
+    "$expected_ecr_repository/zookeeper"
+done
 
 if ((errors)); then
   printf 'release validation: FAIL (%d errors)\n' "$errors" >&2

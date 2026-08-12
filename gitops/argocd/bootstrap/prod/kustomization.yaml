@@ -21,11 +21,11 @@ replacements:
         fieldPaths: [spec.source.path]
         options: {delimiter: '/', index: 4}
       - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
-        fieldPaths: [metadata.name, spec.source.helm.releaseName]
+        fieldPaths: [metadata.name]
         options: {delimiter: '-', index: 0}
       - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
-        fieldPaths: [spec.source.helm.valueFiles.0]
-        options: {delimiter: '/', index: 3}
+        fieldPaths: [spec.source.path]
+        options: {delimiter: '/', index: 4}
       - select: {kind: ApplicationSet}
         fieldPaths: [metadata.name]
         options: {delimiter: '-', index: 0}
@@ -53,7 +53,3 @@ replacements:
         fieldPaths: [spec.destinations.0.namespace]
       - select: {kind: Application}
         fieldPaths: [spec.destination.namespace]
-  - source: {kind: AppProject, name: messaging-platform, fieldPath: 'metadata.annotations.composition\.artemis\.apache\.org/zookeeper-image-repository'}
-    targets:
-      - select: {kind: Application, labelSelector: composition.artemis.apache.org/component=zookeeper}
-        fieldPaths: [spec.source.helm.parameters.0.value]

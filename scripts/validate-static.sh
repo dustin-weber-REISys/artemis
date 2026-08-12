@@ -48,6 +48,13 @@ gitops/kustomize/arkmq-operator/base/deployment-identity.patch.yaml
 gitops/kustomize/arkmq-operator/overlays/test/kustomization.yaml
 gitops/kustomize/arkmq-operator/overlays/nonprod/kustomization.yaml
 gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml
+gitops/kustomize/zookeeper/base/kustomization.yaml
+gitops/kustomize/zookeeper/base/statefulset.yaml
+gitops/kustomize/zookeeper/base/networkpolicy.yaml
+gitops/kustomize/zookeeper/overlays/test/kustomization.yaml
+gitops/kustomize/zookeeper/overlays/nonprod/kustomization.yaml
+gitops/kustomize/zookeeper/overlays/prod/kustomization.yaml
+gitops/kustomize/zookeeper/tests/test.sh
 gitops/argocd/bootstrap/base/kustomization.yaml
 gitops/argocd/bootstrap/base/project.yaml
 gitops/argocd/bootstrap/base/operator-application.yaml
@@ -110,6 +117,23 @@ if command -v yq >/dev/null 2>&1; then
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/nonprod/private-images.patch.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/kustomization.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/overlays/prod/private-images.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/serviceaccount.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/services.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/statefulset.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/networkpolicy.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/pdb.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/servicemonitor.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/base/prometheusrule.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/test/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/test/statefulset.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/test/integrations.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/nonprod/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/nonprod/statefulset.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/nonprod/integrations.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/prod/kustomization.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/prod/statefulset.patch.yaml" \
+    "$repo_root/gitops/kustomize/zookeeper/overlays/prod/integrations.patch.yaml" \
     "$repo_root/gitops/argocd/bootstrap/base/kustomization.yaml" \
     "$repo_root/gitops/argocd/bootstrap/base/project.yaml" \
     "$repo_root/gitops/argocd/bootstrap/base/operator-application.yaml" \
@@ -144,9 +168,9 @@ if command -v yq >/dev/null 2>&1; then
   }
 
   assert_yaml_pattern 'ZooKeeper release image digest' \
-    '.image.digest // ""' \
-    "$repo_root/gitops/charts/zookeeper/values.yaml" \
-    '^sha256:[0-9a-f]{64}$'
+    '.spec.template.spec.containers[] | select(.name == "zookeeper") | .image // ""' \
+    "$repo_root/gitops/kustomize/zookeeper/base/statefulset.yaml" \
+    '@sha256:[0-9a-f]{64}$'
 
   assert_yaml_pattern 'ArkMQ Kustomize chart OCI repository' \
     '.helmCharts[0].repo // ""' \

@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shared-zookeeper-zookeeper
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: zookeeper
+      ports:
+        - port: 2181
+          protocol: TCP
+        - port: 2888
+          protocol: TCP
+        - port: 3888
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              messaging.example.io/cluster: PLACEHOLDER_PROD_EKS_CLUSTER
+          podSelector:
+            matchExpressions:
+              - key: ActiveMQArtemis
+                operator: Exists
+      ports:
+        - port: 2181
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: PLACEHOLDER_PROD_MONITORING_NAMESPACE
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: monitoring
+      ports:
+        - port: 7000
+          protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shared-zookeeper-zookeeper
+  labels:
+    release: PLACEHOLDER_PROD_PROMETHEUS_RELEASE
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shared-zookeeper-zookeeper
+  labels:
+    release: PLACEHOLDER_PROD_PROMETHEUS_RELEASE

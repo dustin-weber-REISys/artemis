@@ -13,7 +13,7 @@ A named, approved set of optional broker capabilities and operating policy share
 _Avoid_: Team override, Helm values
 
 **Platform Release**:
-The centrally selected, mutually compatible versions of the Artemis broker, ArkMQ operator, ZooKeeper, and Kubernetes platform assumptions.
+The centrally selected, mutually compatible versions of the Artemis broker, ArkMQ operator, ZooKeeper, Kubernetes control plane, and operating systems inside the promoted container images.
 _Avoid_: Per-cell version, environment version
 
 **Release Promotion**:

@@ -1,0 +1,47 @@
+# ZooKeeper Kustomize deployment
+
+This base renders the shared, persistent three-voter ZooKeeper ensemble used
+for Artemis activation coordination. The base owns the quorum, persistence,
+security context, disruption budget, quorum-safe host and zone placement,
+network policy, and monitoring contract. The `test`, `nonprod`, and `prod`
+overlays own capacity, storage, approved node access, and integration values;
+they cannot weaken the three-zone quorum contract.
+
+Resource names intentionally match the former Helm renders. In particular,
+the StatefulSet, its ordinal PVC names, the headless Service, and the client
+Service retain their existing identities. The generated ConfigMap has a
+content hash so configuration changes update the Pod template and trigger a
+controlled StatefulSet rollout.
+
+The PVC template also retains the former Helm chart, release, version, and
+manager labels. Kubernetes treats the complete claim template as immutable, so
+those historical labels intentionally do not follow later ZooKeeper upgrades.
+Current release identity is recorded on the StatefulSet and Pod template.
+
+The retired chart's optional ZooKeeper TLS and JAAS inputs were disabled in all
+three environments and are not part of this Kustomize module. Enabling either
+requires a separate security design with external secret materialization,
+rotation, network-policy, and acceptance-test changes; do not add ad hoc Secret
+mounts to an environment overlay.
+
+The init container derives the StatefulSet and headless Service names from the
+Pod hostname, writes the three peer records into the shared runtime
+configuration, and waits for every stable peer DNS record. A pod that remains
+in `Init:0/1` indicates that a peer has not received an IP, the headless Service
+has not published its endpoint, or DNS egress is unavailable. Check Pod
+scheduling and PVC events, the headless Service's EndpointSlices, and CoreDNS
+before changing peer discovery.
+
+The hard host anti-affinity and zone spread are quorum safeguards. If the
+eligible nodes are tainted, add only the exact node-pool toleration in the
+environment StatefulSet patch. Do not relax `DoNotSchedule`, host
+anti-affinity, or the three-voter count merely to make pods schedule.
+
+The selected EBS StorageClass must use `WaitForFirstConsumer`. The StatefulSet
+retains ordinal PVCs across deletion and scale-down, and a replacement voter
+must remain Ready for 30 seconds before the rollout continues. During node
+maintenance, keep capacity available in every zone containing a bound volume,
+use eviction-based drain, and disrupt only one voter at a time.
+
+Run `./tests/test.sh` for deterministic rendering, contract assertions, and
+Kubernetes resource validation.

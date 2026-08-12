@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shared-zookeeper-zookeeper
+spec:
+  template:
+    spec:
+      tolerations:
+        - key: eid-platform/node-lifecycle
+          operator: Equal
+          value: ondemand
+          effect: NoSchedule
+      initContainers:
+        - name: configure-and-wait-for-peer-dns
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      containers:
+        - name: zookeeper
+          env:
+            - name: JVMFLAGS
+              value: -Xms256m -Xmx512m
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 500m
+              memory: 1Gi

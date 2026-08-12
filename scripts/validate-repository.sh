@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=14
+check_count=16
 run_check() {
   local label=$1
   local exit_code
@@ -78,6 +78,8 @@ run_check() {
 
 run_check 'Central release contract' \
   "$repo_root/gitops/scripts/validate-release.sh"
+run_check 'Platform Release upgrade workflow' \
+  "$repo_root/gitops/tests/releases/test-prepare-upgrade.sh"
 run_check 'Static invariants' \
   "$script_dir/validate-static.sh" \
   --report "$report_dir/static-validation.json"
@@ -98,6 +100,8 @@ run_check 'Argo CD ECR credential refresh regressions' \
 run_check 'Helm charts and overlays' \
   "$repo_root/gitops/scripts/validate-charts.sh" \
   --report "$report_dir/chart-validation.json"
+run_check 'ZooKeeper Kustomize overlays' \
+  "$repo_root/gitops/kustomize/zookeeper/tests/test.sh"
 run_check 'ArkMQ operator Kustomize overlays' \
   "$repo_root/gitops/kustomize/arkmq-operator/tests/test.sh"
 run_check 'ArkMQ operator schema' \

@@ -140,9 +140,12 @@ for environment in test nonprod prod; do
     exit 1
   fi
 
-  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:$operator_image_tag" ]]; then
-    printf '%s operator Deployment must resolve the private ECR image by its centrally selected %s tag\n' \
-      "$environment" "$operator_image_tag" >&2
+  operator_digest=$(yq -r '.operator.image.upstreamDigest' "$release_file")
+  broker_init_digest=$(yq -r '.broker.images.init.digest' "$release_file")
+  broker_runtime_digest=$(yq -r '.broker.images.runtime.digest' "$release_file")
+  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:$operator_image_tag@$operator_digest" ]]; then
+    printf '%s operator Deployment must resolve the private ECR image by its centrally selected tag and digest\n' \
+      "$environment" >&2
     exit 1
   fi
 
@@ -168,13 +171,13 @@ for environment in test nonprod prod; do
   broker_image=$(ENV_NAME="$broker_env" yq -r \
     'select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME)) | .value' \
     "$operator_rendered")
-  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init:artemis.$broker_version" ]]; then
-    printf '%s operator init image does not resolve version %s to the private mirror tag\n' \
+  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init:artemis.$broker_version@$broker_init_digest" ]]; then
+    printf '%s operator init image does not resolve version %s to the private mirror digest\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi
-  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes:artemis.$broker_version" ]]; then
-    printf '%s operator broker image does not resolve version %s to the private mirror tag\n' \
+  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes:artemis.$broker_version@$broker_runtime_digest" ]]; then
+    printf '%s operator broker image does not resolve version %s to the private mirror digest\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi

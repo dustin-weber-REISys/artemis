@@ -1,0 +1,212 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shared-zookeeper-zookeeper
+spec:
+  serviceName: shared-zookeeper-zookeeper-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  minReadySeconds: 30
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zookeeper
+  template:
+    metadata:
+      labels:
+        app: artemis
+        contact: PLACEHOLDER_ARTEMIS_CONTACT
+        fismaid: PLACEHOLDER_ARTEMIS_FISMAID
+        app.kubernetes.io/name: zookeeper
+        app.kubernetes.io/version: 3.9.5
+        app.kubernetes.io/managed-by: kustomize
+        app.kubernetes.io/part-of: shared-messaging
+    spec:
+      serviceAccountName: shared-zookeeper-zookeeper
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: zookeeper
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: 3
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: zookeeper
+      initContainers:
+        - name: configure-and-wait-for-peer-dns
+          image: example.invalid/ecr-mirror/zookeeper:3.9.5@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              statefulset="${HOSTNAME%-*}"
+              headless="${statefulset}-headless"
+              cp /config-source/zoo.cfg /generated-conf/zoo.cfg
+              for ordinal in 0 1 2; do
+                peer="${statefulset}-${ordinal}.${headless}.${POD_NAMESPACE}.svc.cluster.local"
+                printf 'server.%s=%s:2888:3888\n' "$((ordinal + 1))" "$peer" >> /generated-conf/zoo.cfg
+                until getent hosts "$peer" >/dev/null; do
+                  printf 'waiting for ZooKeeper peer DNS: %s\n' "$peer"
+                  sleep 2
+                done
+              done
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config-source
+              mountPath: /config-source
+              readOnly: true
+            - name: config
+              mountPath: /generated-conf
+      containers:
+        - name: zookeeper
+          image: example.invalid/ecr-mirror/zookeeper:3.9.5@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              ordinal="${HOSTNAME##*-}"
+              mkdir -p /data/data /data/datalog
+              printf '%s\n' "$((ordinal + 1))" > /data/data/myid
+              exec zkServer.sh start-foreground
+          ports:
+            - name: client
+              containerPort: 2181
+              protocol: TCP
+            - name: quorum
+              containerPort: 2888
+              protocol: TCP
+            - name: leader-election
+              containerPort: 3888
+              protocol: TCP
+            - name: metrics
+              containerPort: 7000
+              protocol: TCP
+          env:
+            - name: JVMFLAGS
+              value: -Xms512m -Xmx512m
+            - name: ZOO_LOG_DIR
+              value: /tmp/zookeeper
+            - name: ZOO_4LW_COMMANDS
+              value: ruok,mntr,stat,srvr
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - zkServer.sh status
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - zkServer.sh status
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/bash
+                  - -ec
+                  - zkServer.sh stop || true
+          volumeMounts:
+            - name: config
+              mountPath: /conf/zoo.cfg
+              subPath: zoo.cfg
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp/zookeeper
+      volumes:
+        - name: config-source
+          configMap:
+            name: shared-zookeeper-zookeeper-config
+            defaultMode: 0444
+        - name: config
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          # This metadata is immutable after StatefulSet creation. Preserve the
+          # exact labels rendered by the retired zookeeper 0.1.0 Helm chart;
+          # current release identity belongs on the StatefulSet and Pod instead.
+          helm.sh/chart: zookeeper-0.1.0
+          app: artemis
+          contact: PLACEHOLDER_ARTEMIS_CONTACT
+          fismaid: PLACEHOLDER_ARTEMIS_FISMAID
+          app.kubernetes.io/name: zookeeper
+          app.kubernetes.io/version: 3.9.5
+          app.kubernetes.io/managed-by: Helm
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: PLACEHOLDER_GP3_STORAGE_CLASS
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: 20Gi

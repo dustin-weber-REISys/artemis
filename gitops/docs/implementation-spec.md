@@ -34,9 +34,9 @@ changeable implementation facts belong in executable files:
 | Local-cluster composition, child Applications, Workload Cells, namespaces, and coordination identities | Rendered [`argocd/bootstrap`](../argocd/bootstrap) adapters and [`argocd/topology`](../argocd/topology) catalogs |
 | Argo CD repository credentials and root Application | Per-cluster EKS Terraform inputs |
 | `messaging-platform` AppProject policy | Shared [`argocd/bootstrap/base`](../argocd/bootstrap/base) rendered through the matching cluster adapter |
-| Current component and image versions | Chart values, schemas, and environment overlays under [`charts`](../charts) and [`environments`](../environments) |
+| Current platform, component, and image versions | [`releases/current.yaml`](../releases/current.yaml), the Artemis chart, and Kustomize deployment bases/overlays |
 | Supported Artemis operands | [`charts/artemis-ha/values.schema.json`](../charts/artemis-ha/values.schema.json) |
-| Rendered broker and ZooKeeper behavior | Chart templates under [`charts`](../charts) |
+| Rendered broker and ZooKeeper behavior | [`charts/artemis-ha`](../charts/artemis-ha) and [`kustomize/zookeeper`](../kustomize/zookeeper) |
 | Validation workflow | [`Makefile`](../Makefile) and [`scripts`](../scripts) |
 | Acceptance scenarios and thresholds | [`tests/e2e/acceptance-plan.yaml`](../tests/e2e/acceptance-plan.yaml) and [`performance/profiles/sustained-load-profiles.yaml`](../../performance/profiles/sustained-load-profiles.yaml) |
 | Classic compatibility inventory | [`tests/compatibility/classic-6.2.6-inventory.yaml`](../tests/compatibility/classic-6.2.6-inventory.yaml) |
@@ -55,7 +55,11 @@ review.
   during broker migration. Client-library or protocol modernization is a
   separate, reversible change.
 - **Immutable supply chain.** Mirror, scan, sign, and pin upstream artifacts.
-  Production does not pull unapproved public or mutable references.
+  Production does not pull unapproved public or mutable references. The
+  Platform Release records `ID` and `VERSION_ID` from `/etc/os-release` for
+  every promoted operator, broker-init, broker-runtime, and ZooKeeper digest so
+  base-image maintenance is reviewed even when the application version is
+  unchanged.
 - **GitOps ownership.** Argo CD is the normal writer of deployment state;
   runtime operators reconcile only the resources they own.
 - **No secrets in Git.** Git stores secret references and non-secret policy,
@@ -197,9 +201,11 @@ must provide and test an approved bridge, such as a platform secret-sync
 controller or operator-supported mounted authentication configuration.
 
 The bridge must support rotation without secret values entering Git, rendered
-manifests, Argo CD parameters, commands, or logs. If ZooKeeper authentication
-or TLS is enabled, its Kubernetes Secret inputs must likewise be materialized
-through an approved external process.
+manifests, Argo CD parameters, commands, or logs. ZooKeeper authentication and
+TLS are currently deferred: the previous chart exposed disabled Secret-reference
+inputs, but the Kustomize module does not claim that interface. Enabling either
+requires an approved design whose Kubernetes Secret inputs are materialized by
+an external process and whose rotation and negative paths are acceptance-tested.
 
 ### Observability and recovery
 

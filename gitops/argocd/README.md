@@ -23,7 +23,7 @@ Each stable root path is a thin Kustomize adapter over
 
 The adapter patch owns only cluster identity and integration placeholders. The
 shared base owns the fixed `argocd` and `artemis-platform` namespaces,
-composition policy, sync safety, derived names, and chart inputs. Workload Cell
+composition policy, sync safety, derived names, and deployment inputs. Workload Cell
 namespaces are fixed as `artemis-<traffic>-<logical-environment>`, where
 `internal` is abbreviated to `int`, `external` to `ext`, and functionality such
 as `batch` is named directly. [`profiles`](profiles) provides reusable

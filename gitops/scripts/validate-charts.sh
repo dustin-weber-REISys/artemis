@@ -117,21 +117,10 @@ while IFS= read -r chart_file; do
     for environment in test nonprod prod; do
       overlay="$repo_root/environments/$environment/$overlay_stem-values.yaml"
       [[ -f "$overlay" ]] || continue
-      ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
-      if [[ "$environment" == prod ]]; then
-        ecr_repository=PLACEHOLDER_PROD_ECR_REPOSITORY
-      fi
       rendered="$temp_dir/$chart_name-$environment.yaml"
-      if [[ "$overlay_stem" == zookeeper ]]; then
-        validate_chart_values \
-          "$chart_dir" "$chart_name ($environment)" "$rendered" \
-          --set-string "image.repository=$ecr_repository/zookeeper" \
-          --values "$overlay"
-      else
-        validate_chart_values \
-          "$chart_dir" "$chart_name ($environment)" "$rendered" \
-          --values "$overlay"
-      fi
+      validate_chart_values \
+        "$chart_dir" "$chart_name ($environment)" "$rendered" \
+        --values "$overlay"
     done
   fi
 done < <(find "$chart_root" -path '*/vendor/*' -prune -o -name Chart.yaml -print | sort)

@@ -12,14 +12,7 @@ spec:
   source:
     repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
     targetRevision: main
-    path: gitops/charts/zookeeper
-    helm:
-      releaseName: cluster-shared-zookeeper
-      valueFiles:
-        - ../../environments/cluster/zookeeper-values.yaml
-      parameters:
-        - name: image.repository
-          value: PLACEHOLDER_NONPROD_ECR_REPOSITORY/zookeeper
+    path: gitops/kustomize/zookeeper/overlays/cluster
   destination:
     server: https://kubernetes.default.svc
     namespace: artemis-platform

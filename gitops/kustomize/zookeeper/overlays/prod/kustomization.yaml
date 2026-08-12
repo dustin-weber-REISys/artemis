@@ -1,0 +1,72 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: prod-
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/instance: prod-shared-zookeeper
+    includeSelectors: false
+    includeTemplates: true
+  - pairs:
+      env: prod
+    includeSelectors: false
+    includeTemplates: true
+
+images:
+  - name: example.invalid/ecr-mirror/zookeeper
+    newName: PLACEHOLDER_PROD_ECR_REPOSITORY/zookeeper
+
+patches:
+  - path: statefulset.patch.yaml
+  - path: integrations.patch.yaml
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: shared-zookeeper-zookeeper
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: PLACEHOLDER_PROD_GP3_STORAGE_CLASS
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PrometheusRule
+      name: shared-zookeeper-zookeeper
+    patch: |-
+      - op: replace
+        path: /spec/groups/0/name
+        value: zookeeper-prod-shared-zookeeper-zookeeper
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: shared-zookeeper-zookeeper-config
+      fieldPath: metadata.labels.app\.kubernetes\.io/instance
+    targets:
+      - select: {kind: StatefulSet, name: shared-zookeeper-zookeeper}
+        fieldPaths:
+          - spec.selector.matchLabels.app\.kubernetes\.io/instance
+          - spec.template.metadata.labels.app\.kubernetes\.io/instance
+          - spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution.0.labelSelector.matchLabels.app\.kubernetes\.io/instance
+          - spec.template.spec.topologySpreadConstraints.0.labelSelector.matchLabels.app\.kubernetes\.io/instance
+        options: {create: true}
+      - select: {kind: Service}
+        fieldPaths: [spec.selector.app\.kubernetes\.io/instance]
+        options: {create: true}
+      - select: {kind: NetworkPolicy, name: shared-zookeeper-zookeeper}
+        fieldPaths:
+          - spec.podSelector.matchLabels.app\.kubernetes\.io/instance
+          - spec.ingress.0.from.0.podSelector.matchLabels.app\.kubernetes\.io/instance
+          - spec.egress.0.to.0.podSelector.matchLabels.app\.kubernetes\.io/instance
+        options: {create: true}
+      - select: {kind: PodDisruptionBudget, name: shared-zookeeper-zookeeper}
+        fieldPaths: [spec.selector.matchLabels.app\.kubernetes\.io/instance]
+        options: {create: true}
+      - select: {kind: ServiceMonitor, name: shared-zookeeper-zookeeper}
+        fieldPaths: [spec.selector.matchLabels.app\.kubernetes\.io/instance]
+        options: {create: true}

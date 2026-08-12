@@ -16,7 +16,10 @@ for command_name in rg yq; do
 done
 
 operator_version=$(yq -r '.operator.version' "$release_file")
+operator_digest=$(yq -r '.operator.image.upstreamDigest' "$release_file")
 broker_version=$(yq -r '.broker.version' "$release_file")
+broker_init_digest=$(yq -r '.broker.images.init.digest' "$release_file")
+broker_runtime_digest=$(yq -r '.broker.images.runtime.digest' "$release_file")
 broker_image_tag="artemis.$broker_version"
 broker_compact=${broker_version//./}
 
@@ -73,18 +76,18 @@ for environment in test nonprod prod; do
     ] | length) == 0
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" OPERATOR_VERSION="$operator_version" BROKER_COMPACT="$broker_compact" BROKER_IMAGE_TAG="$broker_image_tag" yq -e '
+  ENVIRONMENT="$environment" ECR_REPOSITORY="$ecr_repository" OPERATOR_VERSION="$operator_version" OPERATOR_DIGEST="$operator_digest" BROKER_COMPACT="$broker_compact" BROKER_IMAGE_TAG="$broker_image_tag" INIT_DIGEST="$broker_init_digest" RUNTIME_DIGEST="$broker_runtime_digest" yq -e '
     select(.kind == "Deployment")
     | (.metadata.name == "activemq-artemis-controller-manager-v2")
       and (.spec.replicas == 2)
       and (.spec.template.spec.containers[0].args | contains(["--leader-elect"]))
-      and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:" + strenv(OPERATOR_VERSION)))
+      and (.spec.template.spec.containers[0].image == (strenv(ECR_REPOSITORY) + "/arkmq-operator:" + strenv(OPERATOR_VERSION) + "@" + strenv(OPERATOR_DIGEST)))
       and ([.spec.template.spec.containers[0].env[] |
         select(.name == ("RELATED_IMAGE_ActiveMQ_Artemis_Broker_Init_" + strenv(BROKER_COMPACT)) and
-          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-init:" + strenv(BROKER_IMAGE_TAG)))] | length == 1)
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-init:" + strenv(BROKER_IMAGE_TAG) + "@" + strenv(INIT_DIGEST)))] | length == 1)
       and ([.spec.template.spec.containers[0].env[] |
         select(.name == ("RELATED_IMAGE_ActiveMQ_Artemis_Broker_Kubernetes_" + strenv(BROKER_COMPACT)) and
-          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:" + strenv(BROKER_IMAGE_TAG)))] | length == 1)
+          .value == (strenv(ECR_REPOSITORY) + "/activemq-artemis-broker-kubernetes:" + strenv(BROKER_IMAGE_TAG) + "@" + strenv(RUNTIME_DIGEST)))] | length == 1)
       and (.spec.template.spec.topologySpreadConstraints | length == 2)
       and (.spec.template.spec.topologySpreadConstraints[0].topologyKey == "kubernetes.io/hostname")
       and (.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == "ScheduleAnyway")

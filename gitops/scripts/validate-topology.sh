@@ -215,7 +215,7 @@ for environment in test nonprod prod; do
       select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
       | .metadata.annotations | keys | sort | join(",")
     ' "$rendered")" \
-    'argocd.argoproj.io/sync-wave,composition.artemis.apache.org/catalog-path,composition.artemis.apache.org/environment,composition.artemis.apache.org/git-revision,composition.artemis.apache.org/platform-namespace,composition.artemis.apache.org/repository,composition.artemis.apache.org/zookeeper-image-repository'
+    'argocd.argoproj.io/sync-wave,composition.artemis.apache.org/catalog-path,composition.artemis.apache.org/environment,composition.artemis.apache.org/git-revision,composition.artemis.apache.org/platform-namespace,composition.artemis.apache.org/repository'
   assert_equal "cluster $environment operator sync wave" \
     "$(render_scalar "$rendered" Application "$operator" '.metadata.annotations."argocd.argoproj.io/sync-wave"')" -20
   assert_equal "cluster $environment ZooKeeper sync wave" \
@@ -266,11 +266,14 @@ for environment in test nonprod prod; do
   assert_equal "cluster $environment operator path" \
     "$(render_scalar "$rendered" Application "$operator" '.spec.source.path')" \
     "gitops/kustomize/arkmq-operator/overlays/$environment"
-  assert_equal "cluster $environment ZooKeeper release identity" \
-    "$(render_scalar "$rendered" Application "$zookeeper" '.spec.source.helm.releaseName')" "$zookeeper"
-  assert_equal "cluster $environment ZooKeeper values path" \
-    "$(render_scalar "$rendered" Application "$zookeeper" '.spec.source.helm.valueFiles[0]')" \
-    "../../environments/$environment/zookeeper-values.yaml"
+  assert_equal "cluster $environment ZooKeeper Kustomize path" \
+    "$(render_scalar "$rendered" Application "$zookeeper" '.spec.source.path')" \
+    "gitops/kustomize/zookeeper/overlays/$environment"
+  assert_equal "cluster $environment ZooKeeper Helm source count" \
+    "$(ENVIRONMENT="$environment" yq ea -r '
+      select(.kind == "Application" and .metadata.name == strenv(ENVIRONMENT) + "-shared-zookeeper")
+      | [.spec.source.helm] | map(select(. != null)) | length
+    ' "$rendered")" 0
   assert_equal "cluster $environment workloads catalog path" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.generators[0].matrix.generators[0].git.files[0].path')" \
     "gitops/argocd/topology/$environment.yaml"

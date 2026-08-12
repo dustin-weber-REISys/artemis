@@ -1,18 +1,21 @@
 # Environment composition
 
-The ZooKeeper chart itself enforces the shared three-member quorum, persistent
-volumes, disruption budget, zone and host scheduling, network policy, and
-metrics defaults. The `test`, `nonprod`, and `prod` overlays contain only
-cluster integration references. Workload Cell identity and sizing live in
+The ZooKeeper Kustomize base enforces the shared three-member quorum,
+persistent volumes, disruption budget, zone and host scheduling, network
+policy, and metrics defaults. Its `test`, `nonprod`, and `prod` overlays under
+[`kustomize/zookeeper`](../kustomize/zookeeper) own ZooKeeper sizing and
+cluster integration references. This directory now contains only Artemis
+chart values. Workload Cell identity and sizing live in
 [`argocd/topology`](../argocd/topology).
 
 Image locations and release pins do not belong in environment overlays.
 The Argo CD bootstraps use one nonprod and one prod ECR base placeholder; test
-and nonprod share the nonprod location. Repository-owned chart defaults and
+and nonprod share the nonprod location. Repository-owned deployment bases and
 the pinned ArkMQ operator release define the version-to-image mapping. The
-[operator Kustomize base and overlays](../kustomize/arkmq-operator) pin the
-operator behavior and final private image references. Each cluster promotes
-those pins by selecting an approved revision.
+[operator](../kustomize/arkmq-operator) and
+[ZooKeeper](../kustomize/zookeeper) Kustomize overlays pin their final private
+image references. Each cluster promotes those pins by selecting an approved
+revision.
 
 The test and nonprod Artemis overlays reuse the existing legacy Hawtio client
 and realm in preprod Keycloak. The prod overlay reuses the existing legacy

@@ -1,13 +1,12 @@
-# Artemis GitOps and Helm
+# Artemis GitOps
 
 This area is the deployable EKS baseline. It owns:
 
 - [`argocd`](argocd): one shared cluster-composition base, three thin adapters,
   cluster-local Workload Cell catalogs, and reusable Workload Cell Profiles;
-- [`charts`](charts): the repository-owned Artemis HA and shared ZooKeeper
-  charts;
-- [`kustomize`](kustomize): the ArkMQ operator base and environment overlays
-  applied to the unmodified upstream Helm chart;
+- [`charts`](charts): the repository-owned Artemis HA chart;
+- [`kustomize`](kustomize): the shared ZooKeeper manifests and the ArkMQ
+  operator overlays applied to the unmodified upstream Helm chart;
 - [`environments`](environments): test, non-production, and production runtime
   values without image locations or release pins;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
@@ -16,10 +15,11 @@ This area is the deployable EKS baseline. It owns:
 
 ## Deterministic validation
 
-`make validate-charts` defaults to offline mode. It performs Helm linting,
-rendering, chart assertions, and policy checks without allowing kubeconform to
-download schemas. The JSON report records Kubernetes schema validation as
-`NOT_RUN`; a successful offline run does not claim that schemas were checked.
+`make validate-charts` and `make validate-zookeeper-kustomize` default to
+offline mode. They render their respective deployment modules and run focused
+contract checks without allowing kubeconform to download schemas. The chart
+JSON report records Kubernetes schema validation as `NOT_RUN`; a successful
+offline run does not claim that schemas were checked.
 
 Run the network-backed phase explicitly on a connected workstation:
 
@@ -27,7 +27,9 @@ Run the network-backed phase explicitly on a connected workstation:
 ARTEMIS_SCHEMA_MODE=network make validate-charts
 ```
 
-The target Kubernetes version comes from [`releases/current.yaml`](releases/current.yaml).
+The target Kubernetes version and the `/etc/os-release` identity of every
+promoted operator, broker, init, and ZooKeeper image come from
+[`releases/current.yaml`](releases/current.yaml).
 Network mode fails when schema downloads fail. Custom-resource schema checks
 remain in `make validate-operator-schema`, which also distinguishes its offline
 contract checks from its explicit network phase.
@@ -51,8 +53,9 @@ Applications. All child destinations use the local cluster server
 `https://kubernetes.default.svc`.
 
 Argo CD paths are repository-relative and therefore include the `gitops/`
-prefix. Helm values files remain relative to their chart directories, and the
-operator Applications point to their Kustomize overlay directories.
+prefix. Helm values files remain relative to the Artemis chart, and the
+operator and ZooKeeper Applications point to their Kustomize overlay
+directories.
 
 From the repository root:
 
@@ -61,6 +64,7 @@ make validate-scenarios
 make validate-topology
 make test-topology
 make validate-charts
+make validate-zookeeper-kustomize
 make validate-operator-schema
 ```
 

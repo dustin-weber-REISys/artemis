@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shared-zookeeper-zookeeper
+  labels:
+    release: PLACEHOLDER_PROMETHEUS_RELEASE
+spec:
+  groups:
+    - name: zookeeper-shared-zookeeper-zookeeper
+      rules:
+        - alert: ZooKeeperQuorumUnavailable
+          expr: |
+            sum by (namespace) (zookeeper_server_state{namespace="artemis-platform"}) < 2
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: ZooKeeper quorum is unavailable
+            description: The shared ZooKeeper ensemble has fewer than two available members.
+        - alert: ZooKeeperNoLeader
+          expr: |
+            sum by (namespace) (zookeeper_server_state{namespace="artemis-platform", state="leader"}) < 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: ZooKeeper has no elected leader
+            description: ZooKeeper cannot coordinate broker activation without a leader.
