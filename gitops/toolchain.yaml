@@ -1,0 +1,14 @@
+schemaVersion: toolchain.artemis.apache.org/v1
+
+# Release validation and the Argo CD repo-server must use this exact rendering
+# toolchain. Upgrade these versions as one reviewed change and attach a full
+# ArkMQ render diff because Helm/Kustomize output is part of desired state.
+render:
+  kustomizeVersion: v5.8.1
+  helmVersion: v4.2.3
+  yqVersion: v4.53.3
+
+argocd:
+  kustomizeBuildOptions:
+    - --enable-helm
+  chartSource: pinned-public-oci

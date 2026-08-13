@@ -91,7 +91,8 @@ Operator upgrades use the unmodified upstream chart and no vendor rebase:
 ./gitops/scripts/prepare-upgrade.sh \
   --component operator \
   --version VERSION \
-  --chart-artifact /path/to/chart.tgz \
+  --baseline-chart-artifact /path/to/current-chart.tgz \
+  --chart-artifact /path/to/candidate-chart.tgz \
   --chart-oci-digest sha256:... \
   --manifest-sha256 HEX \
   --image-digest sha256:... \
@@ -99,9 +100,13 @@ Operator upgrades use the unmodified upstream chart and no vendor rebase:
   --image-os-version VERSION_ID
 ```
 
-Review the exact diff, then rerun the same command with `--write`. The command
-stages and validates all generated consumers before copying them into the
-checkout. It does not download, mirror, commit, sync Argo CD, or deploy.
+Review the exact configuration diff and the canonical full-render diff written
+under `reports/`, then rerun the same command with `--write`. The render diff
+contains every test, nonprod, and prod resource with deterministic resource and
+mapping order so CRD, RBAC, selector, name, and related-image changes remain
+visible. The command stages and validates all generated consumers before
+copying them into the checkout. It does not download, mirror, commit, sync
+Argo CD, or deploy.
 
 The current operator chart is required for broker changes so validation can
 prove its related-image inventory supports the requested broker version. A
@@ -113,8 +118,8 @@ remain unchanged because the complete claim template is immutable.
 
 1. Record source versions, immutable digests, `/etc/os-release` identity, SBOM,
    license inventory, scan result, and the applicable compatibility matrix.
-2. Run the canonical repository validation from the root
-   [`README`](../../README.md#validate).
+2. Run `ARKMQ_UPSTREAM_CHART=/path/to/approved-chart.tgz make release-gate`
+   with the renderer versions pinned in [`toolchain.yaml`](../../toolchain.yaml).
 3. Promote the approved Git revision to test and
    run the required compatibility, durability, failure, credential-rotation,
    management-authorization, and load scenarios from

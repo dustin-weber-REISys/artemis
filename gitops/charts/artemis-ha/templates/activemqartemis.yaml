@@ -61,8 +61,48 @@
 {{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.expiryQueuePrefix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.queuePrefix) }}
 {{- $brokerProperties = append $brokerProperties (printf "addressSettings.%s.expiryQueueSuffix=%s" .Values.brokerProperties.addressSettings.match .Values.brokerProperties.addressSettings.expiry.queueSuffix) }}
 {{- end }}
+{{- $seenAddresses := dict }}
+{{- $seenQueues := dict }}
+{{- range $destination := .Values.destinations }}
+{{- if hasKey $seenAddresses $destination.address }}
+{{- fail (printf "destinations contains duplicate address %q" $destination.address) }}
+{{- end }}
+{{- $_ := set $seenAddresses $destination.address true }}
+{{- $addressKey := printf "\"%s\"" $destination.address }}
+{{- $brokerProperties = append $brokerProperties (printf "addressConfigurations.%s.routingTypes=%s" $addressKey (join "," $destination.routingTypes)) }}
+{{- range $queue := $destination.queues }}
+{{- if hasKey $seenQueues $queue.name }}
+{{- fail (printf "destinations contains duplicate queue %q" $queue.name) }}
+{{- end }}
+{{- if not (has $queue.routingType $destination.routingTypes) }}
+{{- fail (printf "queue %q routingType %s is not enabled on address %q" $queue.name $queue.routingType $destination.address) }}
+{{- end }}
+{{- $_ := set $seenQueues $queue.name true }}
+{{- $queueKey := printf "\"%s\"" $queue.name }}
+{{- $queuePrefix := printf "addressConfigurations.%s.queueConfigs.%s" $addressKey $queueKey }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.address=%s" $queuePrefix $destination.address) }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.routingType=%s" $queuePrefix $queue.routingType) }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.durable=%t" $queuePrefix $queue.durable) }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.maxConsumers=%d" $queuePrefix (int $queue.maxConsumers)) }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.purgeOnNoConsumers=%t" $queuePrefix $queue.purgeOnNoConsumers) }}
+{{- end }}
+{{- end }}
+{{- range $rule := .Values.authorization.rules }}
+{{- $escapedMatch := replace ":" "\\:" $rule.match }}
+{{- range $operation, $roles := $rule.permissions }}
+{{- range $role := $roles }}
+{{- $brokerProperties = append $brokerProperties (printf "securityRoles.\"%s\".%s.%s=true" $escapedMatch $role $operation) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- range $acceptorName, $acceptor := .Values.acceptors }}
 {{- if $acceptor.enabled }}
+{{- if and $acceptor.sslEnabled (empty $acceptor.sslSecret) }}
+{{- fail (printf "acceptors.%s.sslSecret is required when TLS is enabled" $acceptorName) }}
+{{- end }}
+{{- if and (not $acceptor.sslEnabled) (or $acceptor.needClientAuth (not (empty $acceptor.sslSecret))) }}
+{{- fail (printf "acceptors.%s needClientAuth/sslSecret require sslEnabled=true" $acceptorName) }}
+{{- end }}
 {{- range $key, $value := $acceptor.extraParams }}
 {{- $brokerProperties = append $brokerProperties (printf "acceptorConfigurations.%s.extraParams.%s=%s" $acceptorName $key $value) }}
 {{- end }}
@@ -71,8 +111,8 @@
 {{- range .Values.brokerProperties.extra }}
 {{- $extraKey := regexFind "^[^=]+" . | lower }}
 {{- $normalizedExtraKey := regexReplaceAll "[-_.[:space:]]" $extraKey "" }}
-{{- if regexMatch "^(hapolicyconfiguration|journalsynctransactional$|journalsyncnontransactional$|journaldatasync$|largemessagesync$|persistenceenabled$|journaltype$|clusterconfigurations|brokerconnections|idcachesize$|persistidcache$)" $normalizedExtraKey }}
-{{- fail (printf "brokerProperties.extra cannot override protected HA or durability property %q" $extraKey) }}
+{{- if regexMatch "^(hapolicyconfiguration|journalsynctransactional$|journalsyncnontransactional$|journaldatasync$|largemessagesync$|persistenceenabled$|journaltype$|clusterconfigurations|brokerconnections|addressconfigurations|securityroles|idcachesize$|persistidcache$)" $normalizedExtraKey }}
+{{- fail (printf "brokerProperties.extra cannot override protected HA, durability, destination, or authorization property %q" $extraKey) }}
 {{- end }}
 {{- $brokerProperties = append $brokerProperties . }}
 {{- end }}
@@ -82,6 +122,9 @@
 {{- end }}
 {{- if empty .Values.zookeeper.connectString }}
 {{- fail "zookeeper.connectString is required and must identify the external ensemble" }}
+{{- end }}
+{{- if and (not (empty .Values.authentication.jaasSecretName)) (not (hasSuffix "-jaas-config" .Values.authentication.jaasSecretName)) }}
+{{- fail "authentication.jaasSecretName must end in -jaas-config" }}
 {{- end }}
 apiVersion: broker.amq.io/v1beta1
 kind: ActiveMQArtemis
@@ -157,10 +200,16 @@ spec:
       - name: {{ .name }}
         mountPath: {{ .mountPath }}
       {{- end }}
-    {{- if .Values.keycloak.enabled }}
+    {{- if or .Values.keycloak.enabled (not (empty .Values.authentication.jaasSecretName)) }}
     extraMounts:
+      {{- if .Values.keycloak.enabled }}
       configMaps:
         - {{ $fullname }}-hawtio-oidc
+      {{- end }}
+      {{- if not (empty .Values.authentication.jaasSecretName) }}
+      secrets:
+        - {{ .Values.authentication.jaasSecretName | quote }}
+      {{- end }}
     {{- end }}
     startupProbe:
       tcpSocket:
@@ -221,6 +270,10 @@ spec:
       port: {{ $acceptor.port }}
       protocols: {{ $acceptor.protocols | quote }}
       sslEnabled: {{ $acceptor.sslEnabled }}
+      {{- if $acceptor.sslEnabled }}
+      needClientAuth: {{ $acceptor.needClientAuth }}
+      sslSecret: {{ $acceptor.sslSecret | quote }}
+      {{- end }}
       connectionsAllowed: {{ $acceptor.connectionsAllowed }}
     {{- end }}
     {{- end }}

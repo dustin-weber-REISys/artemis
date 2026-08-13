@@ -39,6 +39,9 @@ chart and owns the shared platform policy; environment overlays own only their
 label and private image references. On a connected workstation, or with an
 approved downloaded chart, run
 `make validate-operator-kustomize ARKMQ_UPSTREAM_CHART=/path/to/chart.tgz`.
+Release CI must run `make release-gate` with that variable so rendering cannot
+silently become `NOT_RUN`. Exact release renderer versions are pinned in
+[`toolchain.yaml`](toolchain.yaml).
 
 The
 [`observed production workload baseline`](docs/production-workload-baseline.md)

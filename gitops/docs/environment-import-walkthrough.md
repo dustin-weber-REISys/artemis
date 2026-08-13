@@ -199,6 +199,12 @@ copied property inventory. At minimum, resolve:
   dead-letter, expiry, paging, and auto-creation policy; and
 - monitoring discovery labels, metric availability, and alert routing.
 
+For a Classic external broker, follow the
+[`external security migration guide`](classic-external-security-migration.md)
+to split the legacy keystore, truststore, DN users, groups, authorization
+entries, and queue list into the operator SSL Secret, mounted JAAS Secret,
+typed authorization rules, and destination catalog.
+
 Do not add a separate automatic-failback override. Runtime acceptance must
 show the recovered peer rejoining passive before any controlled role reversal.
 Do not enable optional filesystem, TLS, or authentication modes without

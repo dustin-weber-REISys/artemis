@@ -9,6 +9,7 @@ autocreate_rendered="$temp_dir/autocreate.yaml"
 expiry_rendered="$temp_dir/expiry.yaml"
 ports_rendered="$temp_dir/ports.yaml"
 vault_rendered="$temp_dir/vault.yaml"
+external_rendered="$temp_dir/external.yaml"
 prod_rendered="$temp_dir/prod.yaml"
 nonprod_rendered="$temp_dir/nonprod.yaml"
 test_rendered="$temp_dir/test.yaml"
@@ -42,6 +43,32 @@ if helm template invalid "$chart_dir" "${helm_args[@]}" \
   echo "expected an empty broker administrator username to fail" >&2
   exit 1
 fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set 'acceptors.openwire.sslEnabled=true' >/dev/null 2>&1; then
+  echo "expected a TLS acceptor without sslSecret to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set 'acceptors.openwire.needClientAuth=true' >/dev/null 2>&1; then
+  echo "expected client certificate authentication without TLS to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'authentication.jaasSecretName=invalid-secret-name' >/dev/null 2>&1; then
+  echo "expected a JAAS Secret name without the operator suffix to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'destinations[0].address=INVALID.ROUTING' \
+  --set-string 'destinations[0].routingTypes[0]=ANYCAST' \
+  --set-string 'destinations[0].queues[0].name=INVALID.ROUTING' \
+  --set-string 'destinations[0].queues[0].routingType=MULTICAST' \
+  --set 'destinations[0].queues[0].durable=true' \
+  --set 'destinations[0].queues[0].maxConsumers=-1' \
+  --set 'destinations[0].queues[0].purgeOnNoConsumers=false' >/dev/null 2>&1; then
+  echo "expected a queue routing type absent from its address to fail" >&2
+  exit 1
+fi
 
 removed_values=(
   'operator.version=2.2.0'
@@ -70,6 +97,8 @@ for protected_override in \
   'journalSyncTransactional=false' \
   'journal-sync-non-transactional=false' \
   'persistIDCache=false' \
+  'addressConfigurations.UNREVIEWED.routingTypes=ANYCAST' \
+  'securityRoles.#.unreviewed.send=true' \
   'HAPolicyConfiguration.coordinationId=unsafe'; do
   if helm template invalid "$chart_dir" "${helm_args[@]}" \
     --set-string "brokerProperties.extra[0]=$protected_override" >/dev/null 2>&1; then
@@ -260,6 +289,21 @@ if rg -q 'name: artemis-ports-artemis-ha-openwire' "$ports_rendered"; then
   echo "disabled OpenWire acceptor still rendered a client Service" >&2
   exit 1
 fi
+
+helm template artemis-external "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  -f "$chart_dir/tests/fixtures/external-mtls-values.yaml" \
+  > "$external_rendered"
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .port' "$external_rendered")" == "61617" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .sslEnabled' "$external_rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .needClientAuth' "$external_rendered")" == "true" ]]
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .sslSecret' "$external_rendered")" == "partner-broker-tls" ]]
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.extraMounts.secrets[0]' "$external_rendered")" == "partner-clients-jaas-config" ]]
+rg -Fq 'addressConfigurations."PARTNER.REQUEST".queueConfigs."PARTNER.REQUEST".durable=true' "$external_rendered"
+rg -Fq 'addressConfigurations."PARTNER.RESPONSE".queueConfigs."PARTNER.RESPONSE".maxConsumers=20' "$external_rendered"
+rg -Fq 'securityRoles."PARTNER.REQUEST".partner-client.send=true' "$external_rendered"
+rg -Fq 'securityRoles."PARTNER.RESPONSE\:\:PARTNER.RESPONSE".partner-client.consume=true' "$external_rendered"
+rg -Fq 'securityRoles."PARTNER.#".messaging-admin.createDurableQueue=true' "$external_rendered"
 
 helm template artemis-autocreate "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \

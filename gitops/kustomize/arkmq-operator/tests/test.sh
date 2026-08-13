@@ -24,6 +24,10 @@ broker_image_tag="artemis.$broker_version"
 broker_compact=${broker_version//./}
 
 if [[ -z "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
+  if [[ "${ARTEMIS_RELEASE_GATE:-false}" == true ]]; then
+    printf '%s\n' 'ArkMQ operator rendered tests require ARKMQ_UPSTREAM_CHART in the release gate' >&2
+    exit 2
+  fi
   printf '%s\n' 'ArkMQ operator rendered tests: NOT_RUN (set ARKMQ_UPSTREAM_CHART to the approved upstream .tgz)'
   exit 0
 fi
@@ -118,6 +122,16 @@ for environment in test nonprod prod; do
       and (.spec.selector.matchLabels["control-plane"] == "controller-manager")
       and (.spec.selector.matchLabels.name == "activemq-artemis-operator")
       and (.spec.selector.matchLabels | length == 2)
+  ' "$rendered" >/dev/null
+
+  yq eval-all -e '
+    [.] | ([.[] | select(.kind == "CustomResourceDefinition")] | length) > 0
+  ' "$rendered" >/dev/null
+  yq eval-all -e '
+    [.] | ([.[] | select(
+      .kind == "CustomResourceDefinition" and
+      .metadata.annotations."argocd.argoproj.io/sync-options" != "Prune=false,Delete=false"
+    )] | length) == 0
   ' "$rendered" >/dev/null
 
   yq -e '

@@ -21,6 +21,11 @@ Argo CD must enable Helm inflation for Kustomize with
 `kustomize.buildOptions: --enable-helm` (or the equivalent version-specific
 setting).
 
+Every rendered CRD receives `Prune=false,Delete=false`. The controller can
+upgrade its definitions, but removing an Application or a chart resource does
+not delete APIs and all of their custom resources. CRD retirement is a
+separate reviewed operation.
+
 ## Render and validate
 
 On a connected workstation, render directly from the public OCI chart:
@@ -44,5 +49,8 @@ gitops/scripts/render-arkmq-operator.sh \
 ```
 
 The renderer stages a disposable copy so Helm chart downloads never modify the
-checkout. Chart upgrades change the pinned version and provenance, then render
-all three overlays to prove the object-level customizations still apply.
+checkout. Release CI supplies the checksum-verified artifact and runs
+`make release-gate`; missing input is a failure there. Chart upgrades change
+the pinned version and provenance, then render all three overlays to prove the
+object-level customizations still apply. Release rendering uses the exact
+versions recorded in [`toolchain.yaml`](../../toolchain.yaml).

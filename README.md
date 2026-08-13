@@ -45,6 +45,14 @@ ARKMQ_UPSTREAM_CHART=/path/to/arkmq-org-broker-operator.tgz \
   make validate-operator-kustomize
 ```
 
+Release CI must use the artifact-backed gate rather than treating an offline
+`NOT_RUN` result as sufficient:
+
+```sh
+ARKMQ_UPSTREAM_CHART=/path/to/arkmq-org-broker-operator.tgz \
+  make release-gate
+```
+
 ### [`performance`](performance)
 
 The deterministic JMS validation client and reusable load profiles. A profile

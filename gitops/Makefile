@@ -2,13 +2,15 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= ../reports
 
-.PHONY: help versions prepare-upgrade validate-release validate test-upgrade-workflow validate-scenarios validate-topology verify-applicationset diagnose-pod-startup test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow validate-scenarios validate-topology verify-applicationset diagnose-pod-startup test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 help:
 	@printf '%s\n' \
 		'versions                 Show centrally selected platform and application versions' \
 		'prepare-upgrade          Preview one platform/component upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
 		'validate-release         Validate central versions and generated consumers' \
+		'validate-toolchain       Validate exact Kustomize, Helm, and yq renderer versions' \
+		'release-gate             Run mandatory artifact-backed GitOps release validation' \
 		'test-upgrade-workflow    Exercise Platform Release preview regressions' \
 		'validate                 Run all GitOps and Helm checks' \
 		'validate-scenarios       Validate EKS acceptance definitions' \
@@ -34,6 +36,14 @@ prepare-upgrade:
 
 validate-release:
 	./scripts/validate-release.sh
+
+validate-toolchain:
+	./scripts/validate-toolchain.sh
+
+release-gate:
+	@test -f "$(ARKMQ_UPSTREAM_CHART)" || { printf '%s\n' 'ARKMQ_UPSTREAM_CHART must name the approved chart .tgz' >&2; exit 2; }
+	$(MAKE) validate-toolchain
+	ARTEMIS_RELEASE_GATE=true ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)" $(MAKE) validate
 
 test-upgrade-workflow:
 	./tests/releases/test-prepare-upgrade.sh

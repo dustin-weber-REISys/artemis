@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release test-upgrade-workflow test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -18,6 +18,8 @@ help:
 		'  versions          Show centrally selected platform and application versions' \
 		'  prepare-upgrade   Preview one platform/component upgrade (COMPONENT, VERSION, UPGRADE_ARGS)' \
 		'  validate-release  Validate central versions and generated consumers' \
+		'  validate-toolchain Validate exact Kustomize, Helm, and yq renderer versions' \
+		'  release-gate      Run mandatory artifact-backed release validation' \
 		'  test-upgrade-workflow Exercise Platform Release preview regressions' \
 		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
@@ -116,6 +118,14 @@ prepare-upgrade:
 
 validate-release:
 	$(MAKE) -C gitops validate-release
+
+validate-toolchain:
+	$(MAKE) -C gitops validate-toolchain
+
+release-gate:
+	@test -f "$(ARKMQ_UPSTREAM_CHART)" || { printf '%s\n' 'ARKMQ_UPSTREAM_CHART must name the approved chart .tgz' >&2; exit 2; }
+	$(MAKE) validate-toolchain
+	ARTEMIS_RELEASE_GATE=true ARKMQ_UPSTREAM_CHART="$(ARKMQ_UPSTREAM_CHART)" REPORT_DIR="$(REPORT_DIR)" ./scripts/validate-repository.sh
 
 test-upgrade-workflow:
 	$(MAKE) -C gitops test-upgrade-workflow

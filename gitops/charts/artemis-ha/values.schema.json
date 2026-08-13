@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["commonLabels", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
+  "required": ["commonLabels", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "authentication", "destinations", "authorization", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
   "properties": {
     "nameOverride": {"type": "string", "maxLength": 63},
     "fullnameOverride": {"type": "string", "maxLength": 63},
@@ -71,6 +71,32 @@
       "type": "object",
       "additionalProperties": {"$ref": "#/$defs/acceptor"},
       "minProperties": 1
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jaasSecretName"],
+      "properties": {
+        "jaasSecretName": {
+          "type": "string",
+          "anyOf": [
+            {"const": ""},
+            {"pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?-jaas-config$", "maxLength": 253}
+          ]
+        }
+      }
+    },
+    "destinations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/destination"}
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules"],
+      "properties": {
+        "rules": {"type": "array", "items": {"$ref": "#/$defs/authorizationRule"}}
+      }
     },
     "console": {
       "type": "object",
@@ -184,14 +210,96 @@
     "acceptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "port", "protocols", "connectionsAllowed", "sslEnabled", "extraParams"],
+      "required": ["enabled", "port", "protocols", "connectionsAllowed", "sslEnabled", "needClientAuth", "sslSecret", "extraParams"],
       "properties": {
         "enabled": {"type": "boolean"},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "protocols": {"type": "string", "minLength": 1},
         "connectionsAllowed": {"type": "integer", "minimum": 1},
         "sslEnabled": {"type": "boolean"},
+        "needClientAuth": {"type": "boolean"},
+        "sslSecret": {
+          "type": "string",
+          "anyOf": [
+            {"const": ""},
+            {"pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", "maxLength": 253}
+          ]
+        },
         "extraParams": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "destinationName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "roleName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "roleList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/roleName"}
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "routingTypes", "queues"],
+      "properties": {
+        "address": {"$ref": "#/$defs/destinationName"},
+        "routingTypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["ANYCAST", "MULTICAST"]}
+        },
+        "queues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "routingType", "durable", "maxConsumers", "purgeOnNoConsumers"],
+            "properties": {
+              "name": {"$ref": "#/$defs/destinationName"},
+              "routingType": {"enum": ["ANYCAST", "MULTICAST"]},
+              "durable": {"type": "boolean"},
+              "maxConsumers": {"type": "integer", "minimum": -1},
+              "purgeOnNoConsumers": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "authorizationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "permissions"],
+      "properties": {
+        "match": {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[A-Za-z0-9#*][A-Za-z0-9#*._:/-]*$"},
+        "permissions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "send": {"$ref": "#/$defs/roleList"},
+            "consume": {"$ref": "#/$defs/roleList"},
+            "browse": {"$ref": "#/$defs/roleList"},
+            "manage": {"$ref": "#/$defs/roleList"},
+            "view": {"$ref": "#/$defs/roleList"},
+            "edit": {"$ref": "#/$defs/roleList"},
+            "createAddress": {"$ref": "#/$defs/roleList"},
+            "deleteAddress": {"$ref": "#/$defs/roleList"},
+            "createDurableQueue": {"$ref": "#/$defs/roleList"},
+            "deleteDurableQueue": {"$ref": "#/$defs/roleList"},
+            "createNonDurableQueue": {"$ref": "#/$defs/roleList"},
+            "deleteNonDurableQueue": {"$ref": "#/$defs/roleList"}
+          }
+        }
       }
     },
     "ingress": {

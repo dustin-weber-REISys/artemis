@@ -42,6 +42,7 @@ local/.env.example
 local/scripts/validate-compose.sh
 gitops/Makefile
 gitops/releases/current.yaml
+gitops/toolchain.yaml
 gitops/kustomize/arkmq-operator/base/kustomization.yaml
 gitops/kustomize/arkmq-operator/base/values.yaml
 gitops/kustomize/arkmq-operator/base/deployment-identity.patch.yaml
@@ -69,6 +70,8 @@ gitops/argocd/profiles/standard/values.yaml
 gitops/scripts/validate-topology.sh
 gitops/scripts/validate-rendered-schema.sh
 gitops/scripts/render-arkmq-operator.sh
+gitops/scripts/diff-arkmq-operator.sh
+gitops/scripts/validate-toolchain.sh
 gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/scripts/diagnose-pod-startup.sh
@@ -108,6 +111,7 @@ if command -v yq >/dev/null 2>&1; then
     "$repo_root/gitops/tests/chart/validation-policy.yaml" \
     "$repo_root/gitops/tests/e2e/manifests/replication-isolation-deny.yaml" \
     "$repo_root/gitops/tests/e2e/manifests/zookeeper-isolation-deny.yaml" \
+    "$repo_root/gitops/toolchain.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/base/kustomization.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/base/values.yaml" \
     "$repo_root/gitops/kustomize/arkmq-operator/base/pdb.yaml" \
@@ -176,6 +180,11 @@ if command -v yq >/dev/null 2>&1; then
     '.helmCharts[0].repo // ""' \
     "$repo_root/gitops/kustomize/arkmq-operator/base/kustomization.yaml" \
     '^oci://quay[.]io/arkmq-org/helm-charts$'
+
+  assert_yaml_pattern 'Argo CD Kustomize Helm inflation option' \
+    '.argocd.kustomizeBuildOptions[]' \
+    "$repo_root/gitops/toolchain.yaml" \
+    '^--enable-helm$'
 
   if rg -n '^[[:space:]]*(image|images|tag|digest):' "$repo_root/gitops/environments" >/dev/null; then
     printf '%s\n' 'environment values must not contain image locations or release pins' >&2

@@ -80,7 +80,8 @@ creates the environment-local `messaging-platform` project before the operator,
 ZooKeeper, and generated Artemis Applications reference it. Git and private
 image-registry credentials remain platform-owned and must exist before the
 root sync. Repo-server also needs an approved network path to the pinned public
-chart, or the Kustomize base must reference an approved immutable OCI mirror.
+chart. Private ECR chart mirroring remains deferred until repo-server
+credential delivery is resolved and verified.
 
 ### Root revision injection contract
 

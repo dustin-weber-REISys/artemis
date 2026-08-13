@@ -154,8 +154,9 @@ remain enabled only until runtime inventory and compatibility evidence approve
 their removal. The current listener set and ports are defined by chart values.
 No messaging listener is internet-facing by default.
 
-Permanent application addresses and queues are declarative in promoted
-environments. A client typo must not create a permanent destination. Dead-letter
+Permanent application addresses and queues are declared through the chart's
+typed `destinations` catalog in promoted environments. A client typo must not
+create a permanent destination. Dead-letter
 resources may be created and retained by Artemis according to the chart's
 address policy so per-source failure evidence remains available. Exact routing,
 expiry, redelivery, paging, and auto-creation behavior is authoritative in the
@@ -186,7 +187,11 @@ Keycloak owns human identity and group-to-role assignment. Hawtio authenticates
 the browser session, while Artemis management RBAC must authorize the actual
 JMX/Jolokia operation. UI visibility is not an authorization control.
 
-The chart exposes Keycloak role mapping and a management-RBAC switch, but the
+Messaging-client JAAS configuration is supplied only through an externally
+materialized `*-jaas-config` Secret reference. The typed `authorization.rules`
+interface renders address and queue role permissions without admitting users,
+passwords, certificate subjects, or group membership into Git. The chart
+exposes Keycloak role mapping and a management-RBAC switch, but the
 complete principal-class mapping, scoped management grants, and removal of any
 competing `management.xml` authorization mechanism must be implemented and
 tested before production. Both Hawtio and direct Jolokia negative tests are

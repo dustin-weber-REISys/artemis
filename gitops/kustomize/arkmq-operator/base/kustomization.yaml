@@ -25,6 +25,17 @@ labels:
     includeTemplates: true
 
 patches:
+  # CRDs are upgraded deliberately with the controller but are never pruned or
+  # deleted merely because an Application or chart revision stops emitting
+  # them. Removal requires a separate, reviewed retirement operation.
+  - target:
+      group: apiextensions.k8s.io
+      version: v1
+      kind: CustomResourceDefinition
+    patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-options
+        value: Prune=false,Delete=false
   - target:
       group: apps
       version: v1

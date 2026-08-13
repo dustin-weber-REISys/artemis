@@ -10,6 +10,7 @@ image_digest=''
 init_image_digest=''
 runtime_image_digest=''
 chart_artifact=''
+baseline_chart_artifact=''
 chart_oci_digest=''
 manifest_sha256=''
 image_os_id=''
@@ -18,6 +19,7 @@ init_image_os_id=''
 init_image_os_version=''
 runtime_image_os_id=''
 runtime_image_os_version=''
+render_diff=''
 
 usage() {
   cat <<'USAGE'
@@ -32,7 +34,8 @@ Usage:
     --image-digest sha256:HEX --image-os-id ID \
     --image-os-version VERSION_ID [--write]
   prepare-upgrade.sh --component operator --version VERSION \
-    --chart-artifact CHART.tgz --chart-oci-digest sha256:HEX \
+    --baseline-chart-artifact CURRENT-CHART.tgz \
+    --chart-artifact CANDIDATE-CHART.tgz --chart-oci-digest sha256:HEX \
     --manifest-sha256 HEX --image-digest sha256:HEX \
     --image-os-id ID --image-os-version VERSION_ID [--write]
 
@@ -44,6 +47,8 @@ exact digest-qualified image after mirroring. Record fresh SBOM and scan evidenc
 for that same digest; do not infer OS identity from an image tag or Dockerfile.
 Operator upgrades consume the unmodified upstream chart. The chart package,
 OCI digest, manifest checksum, and operator image digest are required inputs.
+Operator and broker previews write a canonical full render diff for all three
+environments under reports/ by default; override it with --render-diff FILE.
 USAGE
 }
 
@@ -61,8 +66,10 @@ while (($#)); do
     --runtime-image-os-id) runtime_image_os_id=$2; shift 2 ;;
     --runtime-image-os-version) runtime_image_os_version=$2; shift 2 ;;
     --chart-artifact) chart_artifact=$2; shift 2 ;;
+    --baseline-chart-artifact) baseline_chart_artifact=$2; shift 2 ;;
     --chart-oci-digest) chart_oci_digest=$2; shift 2 ;;
     --manifest-sha256) manifest_sha256=$2; shift 2 ;;
+    --render-diff) render_diff=$2; shift 2 ;;
     --write) write=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -105,6 +112,7 @@ if [[ "$component" == zookeeper ]]; then
   require_os_value --image-os-version "$image_os_version"
 elif [[ "$component" == operator ]]; then
   [[ -f "$chart_artifact" ]] || { printf '%s\n' 'operator upgrades require --chart-artifact CHART.tgz' >&2; exit 2; }
+  [[ -f "$baseline_chart_artifact" ]] || { printf '%s\n' 'operator upgrades require --baseline-chart-artifact CURRENT-CHART.tgz' >&2; exit 2; }
   [[ "$chart_oci_digest" =~ $digest_pattern ]] || { printf '%s\n' 'operator upgrades require --chart-oci-digest sha256:HEX' >&2; exit 2; }
   [[ "$manifest_sha256" =~ $hex_pattern ]] || { printf '%s\n' 'operator upgrades require --manifest-sha256 HEX' >&2; exit 2; }
   [[ "$image_digest" =~ $digest_pattern ]] || { printf '%s\n' 'operator upgrades require --image-digest sha256:HEX' >&2; exit 2; }
@@ -123,8 +131,12 @@ elif [[ "$component" == broker ]]; then
   require_os_value --runtime-image-os-id "$runtime_image_os_id"
   require_os_value --runtime-image-os-version "$runtime_image_os_version"
 fi
-if [[ "$component" != operator && "$component" != broker && ( -n "$chart_artifact" || -n "$chart_oci_digest" || -n "$manifest_sha256" ) ]]; then
+if [[ "$component" != operator && "$component" != broker && ( -n "$chart_artifact" || -n "$baseline_chart_artifact" || -n "$chart_oci_digest" || -n "$manifest_sha256" ) ]]; then
   printf '%s\n' 'chart inputs are only valid for operator or broker upgrades' >&2
+  exit 2
+fi
+if [[ "$component" != operator && -n "$baseline_chart_artifact" ]]; then
+  printf '%s\n' '--baseline-chart-artifact is valid only for operator upgrades' >&2
   exit 2
 fi
 if [[ "$component" != operator && "$component" != zookeeper && -n "$image_digest" ]]; then
@@ -304,7 +316,9 @@ kustomize/zookeeper/base/statefulset.yaml"
     replace_literal "$release" \
       "/releases/download/v$old_operator_version/" \
       "/releases/download/v$version/"
-    replace_literal "$release" "$old_chart_digest" "$chart_oci_digest"
+    replace_literal "$release" \
+      "    ociDigest: $old_chart_digest" \
+      "    ociDigest: $chart_oci_digest"
     replace_literal "$release" "$old_chart_artifact_sha256" "$chart_artifact_sha256"
     replace_literal "$release" "$old_manifest_sha256" "$manifest_sha256"
     replace_literal "$release" \
@@ -339,6 +353,22 @@ if [[ "$component" == operator || "$component" == broker ]]; then
   ARKMQ_UPSTREAM_CHART="$chart_artifact" "$stage/scripts/validate-release.sh"
 else
   "$stage/scripts/validate-release.sh"
+fi
+
+if [[ "$component" == operator || "$component" == broker ]]; then
+  if [[ -z "$render_diff" ]]; then
+    render_diff="$repo_root/../reports/arkmq-operator-$component-$version-render.diff"
+  fi
+  baseline_artifact=$chart_artifact
+  if [[ "$component" == operator ]]; then
+    baseline_artifact=$baseline_chart_artifact
+  fi
+  "$stage/scripts/diff-arkmq-operator.sh" \
+    --baseline-gitops "$repo_root" \
+    --candidate-gitops "$stage" \
+    --baseline-artifact "$baseline_artifact" \
+    --candidate-artifact "$chart_artifact" \
+    --output "$render_diff"
 fi
 
 printf 'upgrade plan: %s %s (%s)\n' "$component" "$version" "$([[ "$write" == true ]] && printf write || printf dry-run)"

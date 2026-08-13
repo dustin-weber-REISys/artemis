@@ -82,6 +82,11 @@ fi
 
 operator_rendered_count=0
 
+if [[ "${ARTEMIS_RELEASE_GATE:-false}" == true && -z "${ARKMQ_UPSTREAM_CHART:-}" ]]; then
+  printf '%s\n' 'release-gate operator validation requires ARKMQ_UPSTREAM_CHART' >&2
+  exit 2
+fi
+
 for environment in test nonprod prod; do
   ecr_repository=PLACEHOLDER_NONPROD_ECR_REPOSITORY
   if [[ "$environment" == prod ]]; then
@@ -192,4 +197,7 @@ if [[ "$operator_rendered_count" -eq 3 ]]; then
   printf 'operator contract validation: PASS (ArkMQ %s, 3 Kustomize overlays)\n' "$operator_version"
 else
   printf '%s\n' 'operator rendered contract validation: NOT_RUN (set ARKMQ_UPSTREAM_CHART or use --network)'
+  if [[ "${ARTEMIS_RELEASE_GATE:-false}" == true ]]; then
+    exit 1
+  fi
 fi

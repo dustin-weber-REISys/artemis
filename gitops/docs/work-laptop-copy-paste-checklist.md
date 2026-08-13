@@ -11,7 +11,8 @@ editing. Preserve resolved work values and never paste them back into GitHub.
       `kustomize.buildOptions: --enable-helm`, or the equivalent
       version-specific setting.
 - [ ] Confirm repo-server can pull the pinned public ArkMQ OCI chart.
-- [ ] Confirm the approved Argo CD Kustomize version supports Helm OCI sources.
+- [ ] Confirm Argo CD uses the Kustomize and Helm versions pinned in
+      `gitops/toolchain.yaml` and supports Helm OCI sources.
 
 ## Create the Kustomize deployment
 
@@ -27,6 +28,9 @@ Copy these directories and files from GitHub using the **Raw** view:
 - [ ] `gitops/kustomize/arkmq-operator/README.md`
 - [ ] `gitops/kustomize/arkmq-operator/tests/test.sh`
 - [ ] `gitops/scripts/render-arkmq-operator.sh`
+- [ ] `gitops/scripts/diff-arkmq-operator.sh`
+- [ ] `gitops/scripts/validate-toolchain.sh`
+- [ ] `gitops/toolchain.yaml`
 
 Preserve the fixed `artemis-platform` namespace, contact/FISMA labels, and
 nonprod or production ECR bases when creating these files on the work laptop.
@@ -85,6 +89,7 @@ export ARKMQ_UPSTREAM_CHART=/tmp/arkmq-org-broker-operator-2.2.0.tgz
 make versions
 make validate-release
 make validate-operator-kustomize
+make release-gate
 ARTEMIS_SCHEMA_MODE=offline make validate
 git diff --check
 git status --short

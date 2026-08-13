@@ -24,6 +24,16 @@ rendered into the broker custom resource and gets a matching active-only
 allowed ports are derived from that same enabled-acceptor set. Disabling an
 acceptor therefore removes it from all three surfaces.
 
+A TLS acceptor references one externally materialized operator SSL Secret with
+`sslSecret`. That Secret owns both the server keystore and client truststore;
+their paths, passwords, private keys, and certificate contents never appear in
+chart values. The chart rejects TLS without an SSL Secret and rejects
+`needClientAuth` unless TLS is enabled. Client certificate or password identity
+is supplied through `authentication.jaasSecretName`, which must use the
+operator's `-jaas-config` suffix. See the
+[Classic external-security migration guide](../../docs/classic-external-security-migration.md)
+for the required Secret shapes and role mapping.
+
 The operator-managed broker cluster connector is separate from client
 listeners and uses its fixed internal port `61616`. Peer ingress and egress
 policy allow only that internal port. Console Services, management and
@@ -84,6 +94,25 @@ Vault injection defaults off. The optional annotations only request a
 pod-local credential file; they do not make it the broker's effective
 administrative identity. Enable `vault.enabled` only after the environment
 provides and tests the approved Vault-to-Artemis bridge.
+
+## Client identity, authorization, and destination catalog
+
+`authentication.jaasSecretName` stores only a Secret reference. The externally
+materialized Secret contains `login.config` and its user/DN/role property files.
+Its JAAS realm must retain the image's generated PropertiesLoginModule so the
+operator and readiness probe can continue to authenticate.
+
+`authorization.rules` is the reviewed, non-secret permission interface. It
+renders role grants through `securityRoles` broker properties. Users, passwords,
+certificate DNs, and group membership are not accepted by this interface.
+`destinations` is the permanent address and queue catalog and renders
+`addressConfigurations` broker properties. Direct `securityRoles` and
+`addressConfigurations` entries in `brokerProperties.extra` are rejected so
+these controls cannot be bypassed by an untyped override.
+
+The maintained mTLS example in
+[`tests/fixtures/external-mtls-values.yaml`](tests/fixtures/external-mtls-values.yaml)
+is also rendered by the focused chart test.
 
 ## Storage
 

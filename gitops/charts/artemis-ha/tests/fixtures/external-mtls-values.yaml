@@ -1,0 +1,62 @@
+acceptors:
+  partner-openwire:
+    enabled: true
+    port: 61617
+    protocols: OPENWIRE
+    connectionsAllowed: 5000
+    sslEnabled: true
+    needClientAuth: true
+    sslSecret: partner-broker-tls
+    extraParams: {}
+
+authentication:
+  jaasSecretName: partner-clients-jaas-config
+
+destinations:
+  - address: PARTNER.REQUEST
+    routingTypes:
+      - ANYCAST
+    queues:
+      - name: PARTNER.REQUEST
+        routingType: ANYCAST
+        durable: true
+        maxConsumers: -1
+        purgeOnNoConsumers: false
+  - address: PARTNER.RESPONSE
+    routingTypes:
+      - ANYCAST
+    queues:
+      - name: PARTNER.RESPONSE
+        routingType: ANYCAST
+        durable: true
+        maxConsumers: 20
+        purgeOnNoConsumers: false
+
+authorization:
+  rules:
+    - match: PARTNER.REQUEST
+      permissions:
+        send:
+          - partner-client
+        browse:
+          - messaging-admin
+        consume:
+          - messaging-admin
+    - match: PARTNER.RESPONSE::PARTNER.RESPONSE
+      permissions:
+        consume:
+          - partner-client
+        browse:
+          - partner-client
+        send:
+          - messaging-admin
+    - match: PARTNER.#
+      permissions:
+        createAddress:
+          - messaging-admin
+        deleteAddress:
+          - messaging-admin
+        createDurableQueue:
+          - messaging-admin
+        deleteDurableQueue:
+          - messaging-admin
