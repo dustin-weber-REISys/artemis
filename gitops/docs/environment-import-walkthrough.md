@@ -29,7 +29,7 @@ contact identifier instead; keep a human-readable email in an annotation or
 the enterprise ownership system when one is also required.
 
 Replace `PLACEHOLDER_ARTEMIS_ADMIN_USERNAME` once with the approved shared,
-non-secret broker administrator name, such as `elis-admin`. That value is
+non-secret broker administrator name, such as `admin`. That value is
 rendered as `spec.adminUser` for every test, nonprod, and prod broker. Do not
 add `spec.adminPassword` or a password value to Git; the operator generates a
 different password in each deployment's credential Secret.

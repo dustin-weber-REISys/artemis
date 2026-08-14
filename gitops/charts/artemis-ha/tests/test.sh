@@ -34,7 +34,7 @@ if helm template invalid "$chart_dir" \
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
-  --set-string 'commonLabels.contact=ELISSkynet@uscis.dhs.gov' >/dev/null 2>&1; then
+  --set-string 'commonLabels.contact=test@uscis.dhs.gov' >/dev/null 2>&1; then
   echo "expected an email address used as a label value to fail" >&2
   exit 1
 fi
@@ -256,9 +256,9 @@ done
 custom_admin_rendered="$temp_dir/custom-admin.yaml"
 helm template artemis-custom-admin "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
-  --set-string 'broker.adminUser=elis-admin' \
+  --set-string 'broker.adminUser=admin' \
   > "$custom_admin_rendered"
-[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$custom_admin_rendered")" == "elis-admin" ]]
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$custom_admin_rendered")" == "admin" ]]
 for environment in prod nonprod test; do
   environment_rendered="$temp_dir/$environment.yaml"
   yq -e "select(.kind == \"ActiveMQArtemis\") |

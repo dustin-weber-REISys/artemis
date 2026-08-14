@@ -4,7 +4,7 @@
 - Observation window: Dashboard views covering July 28-30, 2026
 - Source: Manually transcribed screenshots from the current production
   ActiveMQ dashboard
-- Scope: ELIS production behavior relevant to the Artemis transition
+- Scope:  production behavior relevant to the Artemis transition
 
 ## Why this baseline matters
 
