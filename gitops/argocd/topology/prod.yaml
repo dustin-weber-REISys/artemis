@@ -1,113 +1,57 @@
-schemaVersion: topology.artemis.apache.org/v2
+schemaVersion: topology.artemis.apache.org/v3
 environment: prod
 clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
 platformNamespace: artemis-platform
 
 # PE, PP, DM, and PR each receive one internal active/passive pair. PP and PR
-# also receive a separate external pair. Disabled PP/PR batch entries reserve
-# the future workload-isolation pattern without deploying it.
-workloadCells:
-  - workloadCellName: prod-pe
-    workloadNamespace: artemis-int-pe
-    coordinationId: prod-pe-pair01
-    logicalEnvironment: PE
-    trafficClass: internal
-    managementHost: artemis-pe-internal.example.invalid
-    storageSize: 100Gi
+# also receive a separate external pair. The environment overlay owns runtime
+# sizing, feature selection, and enablement only.
+workloadCellOverrides:
+  prod-pe:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pp
-    workloadNamespace: artemis-int-pp
-    coordinationId: prod-pp-pair01
-    logicalEnvironment: PP
-    trafficClass: internal
-    managementHost: artemis-pp-internal.example.invalid
-    storageSize: 500Gi
+  prod-pp:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pp-external
-    workloadNamespace: artemis-ext-pp
-    coordinationId: prod-pp-ext01
-    logicalEnvironment: PP
-    trafficClass: external
-    managementHost: artemis-pp-external.example.invalid
-    storageSize: 500Gi
+  prod-pp-external:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pp-batch
-    workloadNamespace: artemis-batch-pp
-    coordinationId: prod-pp-batch01
-    logicalEnvironment: PP
-    trafficClass: batch
-    managementHost: artemis-pp-batch.example.invalid
-    storageSize: 500Gi
+  prod-pp-batch:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-dm
-    workloadNamespace: artemis-int-dm
-    coordinationId: prod-dm-pair01
-    logicalEnvironment: DM
-    trafficClass: internal
-    managementHost: artemis-dm-internal.example.invalid
-    storageSize: 100Gi
+  prod-dm:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pr
-    workloadNamespace: artemis-int-pr
-    coordinationId: prod-pr-pair01
-    logicalEnvironment: PR
-    trafficClass: internal
-    managementHost: artemis-pr-internal.example.invalid
-    storageSize: 500Gi
+  prod-pr:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pr-external
-    workloadNamespace: artemis-ext-pr
-    coordinationId: prod-pr-ext01
-    logicalEnvironment: PR
-    trafficClass: external
-    managementHost: artemis-pr-external.example.invalid
-    storageSize: 500Gi
+  prod-pr-external:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"
-  - workloadCellName: prod-pr-batch
-    workloadNamespace: artemis-batch-pr
-    coordinationId: prod-pr-batch01
-    logicalEnvironment: PR
-    trafficClass: batch
-    managementHost: artemis-pr-batch.example.invalid
-    storageSize: 500Gi
+  prod-pr-batch:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {diskGuardrail: conservative}
     enabled: "false"

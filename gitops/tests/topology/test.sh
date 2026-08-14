@@ -5,11 +5,13 @@ test_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "$test_dir/../.." && pwd)
 validator="$repo_root/scripts/validate-topology.sh"
 topology_dir="$repo_root/argocd/topology"
+effective_topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
 workload_dir="$repo_root/workloads"
-baseline_policy="$repo_root/argocd/baseline-policy.yaml"
+baseline="$repo_root/argocd/workload-cell-baseline.yaml"
+composer="$repo_root/scripts/compose-topology.sh"
 
 for command_name in yq kubectl helm; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -23,14 +25,27 @@ trap 'rm -rf "$temp_dir"' EXIT
 
 run_validator() {
   local topology=$1 bootstrap=$2 profiles=$3 environments=$4 workloads=$5 output=$6
+  local selected_baseline=${7:-$baseline} effective=${8:-$effective_topology_dir}
   "$validator" \
     --topology-dir "$topology" \
+    --topology-dir "$effective" \
     --bootstrap-dir "$bootstrap" \
     --profile-dir "$profiles" \
     --environment-dir "$environments" \
     --workload-dir "$workloads" \
-    --baseline-policy "$baseline_policy" \
+    --baseline "$selected_baseline" \
     --report "$temp_dir/report.json" >"$output" 2>&1
+}
+
+compose_all() {
+  local selected_baseline=$1 topology=$2 effective=$3 environment
+  mkdir -p "$effective"
+  for environment in test nonprod prod; do
+    "$composer" \
+      --baseline "$selected_baseline" \
+      --topology "$topology/$environment.yaml" \
+      --output "$effective/$environment.yaml"
+  done
 }
 
 base_output="$temp_dir/base.out"
@@ -43,6 +58,22 @@ assert_catalog_rejected() {
   yq -i "$expression" "$candidate/$environment.yaml"
   if run_validator "$candidate" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$output"; then
     printf 'validator accepted invalid Workload Cell catalog case: %s\n' "$case_name" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
+    exit 1
+  }
+}
+
+assert_baseline_rejected() {
+  local case_name=$1 expression=$2 expected=$3
+  local candidate="$temp_dir/$case_name-baseline.yaml" output="$temp_dir/$case_name.out"
+  cp "$baseline" "$candidate"
+  yq -i "$expression" "$candidate"
+  if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$output" "$candidate"; then
+    printf 'validator accepted invalid Workload Cell baseline case: %s\n' "$case_name" >&2
     exit 1
   fi
   grep -Fq "$expected" "$output" || {
@@ -116,57 +147,61 @@ assert_workload_rejected() {
   }
 }
 
-assert_catalog_rejected duplicate-namespace test \
-  '.workloadCells[1].workloadNamespace = .workloadCells[0].workloadNamespace' \
+assert_baseline_rejected duplicate-namespace \
+  '.clusters.test.workloadCells."test-sky2".workloadNamespace = .clusters.test.workloadCells."test-sky".workloadNamespace' \
   'cluster test Workload Cell field workloadNamespace violates uniqueness rule'
 
-assert_catalog_rejected duplicate-coordination prod \
-  '.workloadCells[1].coordinationId = .workloadCells[0].coordinationId' \
+assert_baseline_rejected duplicate-coordination \
+  '.clusters.prod.workloadCells."prod-pp".coordinationId = .clusters.prod.workloadCells."prod-pe".coordinationId' \
   'cluster prod Workload Cell field coordinationId violates uniqueness rule'
 
-assert_catalog_rejected unknown-profile test \
-  '.workloadCells[0].profile = "unapproved"' \
+assert_baseline_rejected unknown-profile \
+  '.clusters.test.workloadCells."test-sky".profile = "unapproved"' \
   'cluster test Workload Cell test-sky field profile violates rule: unknown Profile: unapproved'
 
 assert_catalog_rejected unsupported-feature test \
-  '.workloadCells[0].features.rawHelm = true' \
+  '.workloadCellOverrides."test-sky".features.rawHelm = true' \
   'field features.rawHelm violates rule: Profile standard does not permit this override'
 
 assert_catalog_rejected invalid-feature-type test \
-  '.workloadCells[0].features.expiryResources = "yes"' \
+  '.workloadCellOverrides."test-sky".features.expiryResources = "yes"' \
   'field features.expiryResources violates rule: must be a boolean'
 
 assert_catalog_rejected invalid-feature-enum prod \
-  '.workloadCells[0].features.diskGuardrail = "unsafe"' \
+  '.workloadCellOverrides."prod-pe".features.diskGuardrail = "unsafe"' \
   'field features.diskGuardrail violates rule: value unsafe is not allowed by Profile standard'
 
 assert_catalog_rejected arbitrary-helm-parameters test \
-  '.workloadCells[0].helmParameters = [{"name":"ha.allowFailback","value":"true"}]' \
-  'field keys violates rule: allowed keys are'
+  '.workloadCellOverrides."test-sky".helmParameters = [{"name":"ha.allowFailback","value":"true"}]' \
+  'field topologyKeys violates rule: allowed environment keys are'
 
 assert_catalog_rejected per-cell-version test \
-  '.workloadCells[0].version = "9.9.9"' \
-  'field keys violates rule: allowed keys are'
+  '.workloadCellOverrides."test-sky".version = "9.9.9"' \
+  'field topologyKeys violates rule: allowed environment keys are'
 
-assert_catalog_rejected invalid-namespace test \
-  '.workloadCells[0].workloadNamespace = "default"' \
+assert_baseline_rejected invalid-namespace \
+  '.clusters.test.workloadCells."test-sky".workloadNamespace = "default"' \
   'field workloadNamespace violates rule: must equal artemis-int-sky'
 
 assert_catalog_rejected changed-platform-namespace test \
   '.platformNamespace = "artemis-other"' \
-  'cluster test catalog platform namespace: expected artemis-platform, got artemis-other'
+  'cluster test topology platform namespace: expected artemis-platform, got artemis-other'
 
 assert_catalog_rejected implicit-enabled test \
-  '.workloadCells[0].enabled = true' \
+  '.workloadCellOverrides."test-sky".enabled = true' \
   'field enabled violates rule: must be a string'
 
-assert_catalog_rejected removed-baseline-cell nonprod \
-  'del(.workloadCells[3])' \
-  'cluster nonprod Workload Cell nonprod-pt field workloadCellName violates rule: required baseline Workload Cell is missing'
+assert_catalog_rejected missing-baseline-override nonprod \
+  'del(.workloadCellOverrides."nonprod-pt")' \
+  'baseline cells missing topology overrides: nonprod-pt'
 
-assert_catalog_rejected changed-baseline-identity prod \
-  '.workloadCells[0].managementHost = "artemis-new.example.invalid"' \
-  'cluster prod Workload Cell prod-pe field managementHost violates rule: baseline requires artemis-pe-internal.example.invalid'
+assert_catalog_rejected stable-field-in-topology prod \
+  '.workloadCellOverrides."prod-pe".managementHost = "artemis-new.example.invalid"' \
+  'field topologyKeys violates rule: allowed environment keys are'
+
+assert_baseline_rejected dynamic-field-in-baseline \
+  '.clusters.test.workloadCells."test-sky".enabled = "true"' \
+  'field baselineKeys violates rule: allowed stable keys are'
 
 assert_bootstrap_rejected weakened-deletion-policy \
   'base/artemis-workloads-applicationset.yaml' \
@@ -214,40 +249,62 @@ fi
 grep -Fq 'cluster test Workload Cell test-sky field workloadValues violates rule: missing required values file' \
   "$temp_dir/missing-workload.out"
 
-# Catalog growth is routine: a valid new Workload Cell is accepted without a
-# validator implementation change, but it must begin disabled.
+# Catalog growth adds stable identity to the baseline and environment state to
+# the topology overlay without duplicating fields.
+growth_baseline="$temp_dir/growth-baseline.yaml"
 growth_topology="$temp_dir/growth-topology"
+growth_effective="$temp_dir/growth-effective"
 growth_workloads="$temp_dir/growth-workloads"
+cp "$baseline" "$growth_baseline"
 cp -R "$topology_dir" "$growth_topology"
 cp -R "$workload_dir" "$growth_workloads"
 mkdir -p "$growth_workloads/test/test-extra"
-printf '{}\n' > "$growth_workloads/test/test-extra/artemis-values.yaml"
+cp "$workload_dir/test/test-sky2/artemis-values.yaml" "$growth_workloads/test/test-extra/artemis-values.yaml"
 yq -i '
-  .workloadCells += [(.workloadCells[1]
-    | .workloadCellName = "test-extra"
-    | .workloadNamespace = "artemis-int-extra"
-    | .coordinationId = "test-extra-01"
-    | .logicalEnvironment = "EXTRA"
-    | .managementHost = "artemis-test-extra.example.invalid"
-    | .enabled = "false")]
+  .clusters.test.workloadCells."test-extra" = {
+    "workloadNamespace": "artemis-int-extra",
+    "coordinationId": "test-extra-01",
+    "logicalEnvironment": "EXTRA",
+    "trafficClass": "internal",
+    "managementHost": "artemis-test-extra.example.invalid",
+    "storageSize": "20Gi",
+    "profile": "standard"
+  }
+' "$growth_baseline"
+yq -i '
+  .workloadCellOverrides."test-extra" = {
+    "resources": {
+      "requests": {"cpu": "500m", "memory": "2Gi"},
+      "limits": {"cpu": "1", "memory": "3Gi"}
+    },
+    "features": {},
+    "enabled": "false"
+  }
 ' "$growth_topology/test.yaml"
-run_validator "$growth_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$growth_workloads" "$temp_dir/growth.out"
+compose_all "$growth_baseline" "$growth_topology" "$growth_effective"
+run_validator "$growth_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$growth_workloads" "$temp_dir/growth.out" "$growth_baseline" "$growth_effective"
 
-enabled_growth="$temp_dir/enabled-growth-topology"
-cp -R "$growth_topology" "$enabled_growth"
-yq -i '.workloadCells[-1].enabled = "true"' "$enabled_growth/test.yaml"
-if run_validator "$enabled_growth" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$growth_workloads" "$temp_dir/enabled-growth.out"; then
-  printf '%s\n' 'validator accepted a new Workload Cell that did not begin disabled' >&2
+# An operational enablement changes only the topology overlay. A stale
+# committed effective catalog is rejected until it is regenerated.
+enabled_topology="$temp_dir/enabled-topology"
+enabled_effective="$temp_dir/enabled-effective"
+cp -R "$topology_dir" "$enabled_topology"
+yq -i '.workloadCellOverrides."nonprod-trn".enabled = "true"' "$enabled_topology/nonprod.yaml"
+if run_validator "$enabled_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/stale-effective.out"; then
+  printf '%s\n' 'validator accepted a stale generated effective topology' >&2
   exit 1
 fi
-grep -Fq 'cluster test Workload Cell test-extra field enabled violates rule: a new Workload Cell must begin disabled' \
-  "$temp_dir/enabled-growth.out"
+grep -Fq 'cluster nonprod generated effective topology is stale' "$temp_dir/stale-effective.out"
+compose_all "$baseline" "$enabled_topology" "$enabled_effective"
+run_validator "$enabled_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/enabled.out" "$baseline" "$enabled_effective"
 
 # Both approved typed feature choices render through the shared template.
 feature_topology="$temp_dir/feature-topology"
+feature_effective="$temp_dir/feature-effective"
 cp -R "$topology_dir" "$feature_topology"
-yq -i '.workloadCells[0].features.expiryResources = true' "$feature_topology/test.yaml"
-run_validator "$feature_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/feature.out"
+yq -i '.workloadCellOverrides."test-sky".features.expiryResources = true' "$feature_topology/test.yaml"
+compose_all "$baseline" "$feature_topology" "$feature_effective"
+run_validator "$feature_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/feature.out" "$baseline" "$feature_effective"
 
 # A single temporary root revision is injected once and reaches every child.
 revision_bootstrap="$temp_dir/revision-bootstrap"

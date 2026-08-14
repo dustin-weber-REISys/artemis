@@ -2,8 +2,9 @@
 
 This area is the deployable EKS baseline. It owns:
 
-- [`argocd`](argocd): one shared cluster-composition base, three thin adapters,
-  cluster-local Workload Cell catalogs, and reusable Workload Cell Profiles;
+- [`argocd`](argocd): one shared cluster-composition base, a stable Workload
+  Cell baseline, three environment topology overlays, generated effective
+  catalogs, and reusable Workload Cell Profiles;
 - [`charts`](charts): the repository-owned Artemis HA chart;
 - [`kustomize`](kustomize): the shared ZooKeeper manifests and the ArkMQ
   operator overlays applied to the unmodified upstream Helm chart;
@@ -64,6 +65,7 @@ From the repository root:
 
 ```sh
 make validate-scenarios
+make -C gitops render-topology
 make validate-topology
 make test-topology
 make validate-charts

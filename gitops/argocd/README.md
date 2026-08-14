@@ -19,7 +19,16 @@ Each stable root path is a thin Kustomize adapter over
 - one ordinary `Application` for the cluster's ArkMQ operator;
 - one ordinary `Application` for the cluster's shared ZooKeeper ensemble; and
 - one `ApplicationSet` that generates only that cluster's Workload Cell
-  Applications from the matching catalog under [`topology`](topology).
+  Applications from the matching catalog under
+  [`topology`](topology).
+
+[`workload-cell-baseline.yaml`](workload-cell-baseline.yaml) owns stable cell
+identity, traffic classification, management hostname, storage size, and
+Profile selection. Files under [`topology`](topology) own only cluster identity,
+resource sizing, typed feature choices, and enablement. Run
+`make -C gitops render-topology` after changing either input. The topology
+composer materializes the generated effective catalogs consumed by Argo CD;
+validation rejects missing, unknown, or stale compositions.
 
 The adapter patch owns only cluster identity and integration placeholders. The
 shared base owns the fixed `argocd` and `artemis-platform` namespaces,
@@ -133,13 +142,15 @@ must still be health-gated:
 3. sync ZooKeeper, then verify placement, persistent volumes, quorum, policy,
    and metrics;
 4. preview the workload ApplicationSet;
-5. change `enabled` to `"true"` for one test Workload Cell, allow it to
-   reconcile, and complete acceptance; and
+5. change `enabled` to `"true"` for one test Workload Cell in its topology
+   overlay, run `make -C gitops render-topology`, allow it to reconcile, and
+   complete acceptance; and
 6. enable the remaining Workload Cells one at a time before promoting the same
    artifacts.
 
-New Workload Cells must be added to the cluster-local catalog with an explicit
-`enabled: "false"` and a matching workload values file. The workload
+New Workload Cells must add stable fields to the baseline, add resource,
+feature, and enablement fields to the matching topology overlay, regenerate
+the effective catalogs, and provide a matching workload values file. The workload
 ApplicationSet uses
 `applicationsSync: create-update` and preserves resources on ApplicationSet
 deletion, so an accidental catalog edit cannot automatically delete an

@@ -1,34 +1,20 @@
-schemaVersion: topology.artemis.apache.org/v2
+schemaVersion: topology.artemis.apache.org/v3
 environment: test
 clusterName: PLACEHOLDER_TEST_EKS_CLUSTER
 platformNamespace: artemis-platform
 
-# This catalog is consumed only by the ApplicationSet running in the test
-# cluster's local Argo CD instance.
-workloadCells:
-  - workloadCellName: test-sky
-    workloadNamespace: artemis-int-sky
-    coordinationId: test-sky-01
-    logicalEnvironment: SKY
-    trafficClass: internal
-    managementHost: artemis-test-sky.example.invalid
-    storageSize: 20Gi
+# Environment-specific deployment state. Stable Workload Cell identity and
+# normal sizing live in ../workload-cell-baseline.yaml.
+workloadCellOverrides:
+  test-sky:
     resources:
       requests: {cpu: 500m, memory: 2Gi}
       limits: {cpu: "1", memory: 3Gi}
-    profile: standard
     features: {}
     enabled: "true"
-  - workloadCellName: test-sky2
-    workloadNamespace: artemis-int-sky2
-    coordinationId: test-sky2-01
-    logicalEnvironment: SKY2
-    trafficClass: internal
-    managementHost: artemis-test-sky2.example.invalid
-    storageSize: 20Gi
+  test-sky2:
     resources:
       requests: {cpu: 500m, memory: 2Gi}
       limits: {cpu: "1", memory: 3Gi}
-    profile: standard
     features: {}
     enabled: "false"

@@ -1,0 +1,120 @@
+schemaVersion: baseline.artemis.apache.org/v2
+clusters:
+  test:
+    workloadCells:
+      test-sky:
+        workloadNamespace: artemis-int-sky
+        coordinationId: test-sky-01
+        logicalEnvironment: SKY
+        trafficClass: internal
+        managementHost: artemis-test-sky.example.invalid
+        storageSize: 20Gi
+        profile: standard
+      test-sky2:
+        workloadNamespace: artemis-int-sky2
+        coordinationId: test-sky2-01
+        logicalEnvironment: SKY2
+        trafficClass: internal
+        managementHost: artemis-test-sky2.example.invalid
+        storageSize: 20Gi
+        profile: standard
+  nonprod:
+    workloadCells:
+      nonprod-smktest-eut:
+        workloadNamespace: artemis-int-smktest-eut
+        coordinationId: np-eut-pair01
+        logicalEnvironment: SMKTEST-EUT
+        trafficClass: internal
+        managementHost: artemis-nonprod-smktest-eut.example.invalid
+        storageSize: 50Gi
+        profile: standard
+      nonprod-trn:
+        workloadNamespace: artemis-int-trn
+        coordinationId: np-trn-pair01
+        logicalEnvironment: TRN
+        trafficClass: internal
+        managementHost: artemis-nonprod-trn.example.invalid
+        storageSize: 50Gi
+        profile: standard
+      nonprod-trn2:
+        workloadNamespace: artemis-int-trn2
+        coordinationId: np-trn2-pair01
+        logicalEnvironment: TRN2
+        trafficClass: internal
+        managementHost: artemis-nonprod-trn2.example.invalid
+        storageSize: 50Gi
+        profile: standard
+      nonprod-pt:
+        workloadNamespace: artemis-int-pt
+        coordinationId: np-pt-pair01
+        logicalEnvironment: PT
+        trafficClass: internal
+        managementHost: artemis-nonprod-pt.example.invalid
+        storageSize: 50Gi
+        profile: standard
+  prod:
+    workloadCells:
+      prod-pe:
+        workloadNamespace: artemis-int-pe
+        coordinationId: prod-pe-pair01
+        logicalEnvironment: PE
+        trafficClass: internal
+        managementHost: artemis-pe-internal.example.invalid
+        storageSize: 100Gi
+        profile: standard
+      prod-pp:
+        workloadNamespace: artemis-int-pp
+        coordinationId: prod-pp-pair01
+        logicalEnvironment: PP
+        trafficClass: internal
+        managementHost: artemis-pp-internal.example.invalid
+        storageSize: 500Gi
+        profile: standard
+      prod-pp-external:
+        workloadNamespace: artemis-ext-pp
+        coordinationId: prod-pp-ext01
+        logicalEnvironment: PP
+        trafficClass: external
+        managementHost: artemis-pp-external.example.invalid
+        storageSize: 500Gi
+        profile: standard
+      prod-pp-batch:
+        workloadNamespace: artemis-batch-pp
+        coordinationId: prod-pp-batch01
+        logicalEnvironment: PP
+        trafficClass: batch
+        managementHost: artemis-pp-batch.example.invalid
+        storageSize: 500Gi
+        profile: standard
+      prod-dm:
+        workloadNamespace: artemis-int-dm
+        coordinationId: prod-dm-pair01
+        logicalEnvironment: DM
+        trafficClass: internal
+        managementHost: artemis-dm-internal.example.invalid
+        storageSize: 100Gi
+        profile: standard
+      prod-pr:
+        workloadNamespace: artemis-int-pr
+        coordinationId: prod-pr-pair01
+        logicalEnvironment: PR
+        trafficClass: internal
+        managementHost: artemis-pr-internal.example.invalid
+        storageSize: 500Gi
+        profile: standard
+      prod-pr-external:
+        workloadNamespace: artemis-ext-pr
+        coordinationId: prod-pr-ext01
+        logicalEnvironment: PR
+        trafficClass: external
+        managementHost: artemis-pr-external.example.invalid
+        storageSize: 500Gi
+        profile: standard
+      prod-pr-batch:
+        workloadNamespace: artemis-batch-pr
+        coordinationId: prod-pr-batch01
+        logicalEnvironment: PR
+        trafficClass: batch
+        managementHost: artemis-pr-batch.example.invalid
+        storageSize: 500Gi
+        profile: standard

@@ -10,7 +10,8 @@ Use maps keyed by stable, review-friendly IDs for `acceptors`, `destinations`,
 and `authorization.rules`. Helm deep-merges those maps across value layers.
 Keep cluster integrations in `environments`, reusable capability defaults in a
 Profile, and pair-owned messaging policy here. The chart schema rejects unknown
-fields and the topology validator requires exactly one file per catalog entry.
+fields and the topology validator requires exactly one file per composed
+catalog entry.
 
 Never store users, passwords, password hashes, private keys, certificate
 subjects, certificate contents, token-bearing URLs, or rendered Secrets here.

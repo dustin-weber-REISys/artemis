@@ -1,60 +1,32 @@
-schemaVersion: topology.artemis.apache.org/v2
+schemaVersion: topology.artemis.apache.org/v3
 environment: nonprod
 clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
 platformNamespace: artemis-platform
 
-# The Artemis tenancy inventory is independent of the cluster's Kong or
-# microservice namespace inventory. Confirm every Workload Cell before bootstrap.
-workloadCells:
-  - workloadCellName: nonprod-smktest-eut
-    workloadNamespace: artemis-int-smktest-eut
-    coordinationId: np-eut-pair01
-    logicalEnvironment: SMKTEST-EUT
-    trafficClass: internal
-    managementHost: artemis-nonprod-smktest-eut.example.invalid
-    storageSize: 50Gi
+# Environment-specific deployment state. Stable Workload Cell identity and
+# normal sizing live in ../workload-cell-baseline.yaml.
+workloadCellOverrides:
+  nonprod-smktest-eut:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {}
     enabled: "false"
-  - workloadCellName: nonprod-trn
-    workloadNamespace: artemis-int-trn
-    coordinationId: np-trn-pair01
-    logicalEnvironment: TRN
-    trafficClass: internal
-    managementHost: artemis-nonprod-trn.example.invalid
-    storageSize: 50Gi
+  nonprod-trn:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {}
     enabled: "false"
-  - workloadCellName: nonprod-trn2
-    workloadNamespace: artemis-int-trn2
-    coordinationId: np-trn2-pair01
-    logicalEnvironment: TRN2
-    trafficClass: internal
-    managementHost: artemis-nonprod-trn2.example.invalid
-    storageSize: 50Gi
+  nonprod-trn2:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {}
     enabled: "false"
-  - workloadCellName: nonprod-pt
-    workloadNamespace: artemis-int-pt
-    coordinationId: np-pt-pair01
-    logicalEnvironment: PT
-    trafficClass: internal
-    managementHost: artemis-nonprod-pt.example.invalid
-    storageSize: 50Gi
+  nonprod-pt:
     resources:
       requests: {cpu: "1", memory: 4Gi}
       limits: {cpu: "2", memory: 6Gi}
-    profile: standard
     features: {}
     enabled: "false"

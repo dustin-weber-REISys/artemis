@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-11
+- Updated: 2026-08-14
 - Decision owners: Platform Engineering
 
 ## Context
@@ -27,12 +28,18 @@ the operator, ZooKeeper, ApplicationSet generator, and generated Workload Cell
 source. A temporary branch is therefore selected once per cluster during
 Release Promotion; `main` remains valid for every cluster.
 
-Each cluster retains one independent `workloadCells` catalog. Mechanical
-Application, broker, group, Curator-path, ZooKeeper-endpoint, and redirect-URI
-identities are derived by the shared ApplicationSet template. Existing names
-remain unchanged. A separate baseline policy protects established Workload
-Cells and their important traits while permitting additional valid, initially
-disabled entries without validator changes.
+The Workload Cell baseline owns stable identity and normal configuration:
+namespace, coordination ID, logical environment, traffic class, management
+hostname, storage size, and Profile. Each cluster topology overlay owns only
+cluster identity, resource sizing, typed feature choices, and enablement. A
+deterministic composer merges those disjoint inputs into the effective
+`workloadCells` catalog consumed by the shared ApplicationSet. Validation
+regenerates that catalog and rejects missing overrides, unknown cells,
+ownership violations, or a stale committed result.
+
+Mechanical Application, broker, group, Curator-path, ZooKeeper-endpoint, and
+redirect-URI identities are derived by the shared ApplicationSet template.
+Existing names remain unchanged.
 
 The AppProject explicitly permits the platform namespace and uses
 `artemis-*` for Workload Cell destinations. This is broader than enumerating
@@ -47,9 +54,12 @@ coordination, durability, topology, or deletion-safety settings. Environment
 values are restricted to cluster integrations, and validation rejects owner
 collisions.
 
-No custom catalog generator or expanded Application YAML is committed. Argo
-uses its Git-files and list generators, while local validation renders the
-same Kustomize adapter and checks externally observable composition behavior.
+Generated effective catalog YAML is committed because Argo's Git-files
+generator cannot execute the repository composer. It is a deployment artifact,
+not an authoring interface. Argo uses its Git-files and list generators against
+that artifact, while local validation composes it again, checks byte-for-byte
+drift, renders the same Kustomize adapter, and verifies externally observable
+composition behavior. No expanded Application YAML is committed.
 
 ## Consequences
 
@@ -57,8 +67,10 @@ same Kustomize adapter and checks externally observable composition behavior.
   stable root paths.
 - A root revision cannot drift among child Git sources when the injection
   contract is followed.
-- Adding a Workload Cell is a cluster-local catalog edit; new cells begin
-  disabled and do not expand cluster-wide resources.
+- Stable Workload Cell changes are localized in the shared baseline; runtime
+  sizing, features, and enablement are localized in one environment overlay.
+- Adding a Workload Cell requires one baseline entry, one matching environment
+  override, a generated effective catalog update, and its workload values file.
 - The `artemis-*` destination grant relies on namespace naming governance as a
   security boundary and must not be widened to an unrestricted wildcard.
 - Static rendering verifies desired composition and ordering intent only. It

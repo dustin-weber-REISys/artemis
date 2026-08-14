@@ -4,22 +4,25 @@ set -euo pipefail
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 topology_dir="$repo_root/argocd/topology"
+effective_topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
 workload_dir="$repo_root/workloads"
 chart_dir="$repo_root/charts/artemis-ha"
-baseline_policy="$repo_root/argocd/baseline-policy.yaml"
+baseline="$repo_root/argocd/workload-cell-baseline.yaml"
+composer="$repo_root/scripts/compose-topology.sh"
 report="$repo_root/reports/topology-validation.json"
 
 while (($#)); do
   case "$1" in
     --topology-dir) topology_dir=$2; shift 2 ;;
+    --topology-dir) effective_topology_dir=$2; shift 2 ;;
     --bootstrap-dir) bootstrap_dir=$2; shift 2 ;;
     --profile-dir) profile_dir=$2; shift 2 ;;
     --environment-dir) environment_dir=$2; shift 2 ;;
     --workload-dir) workload_dir=$2; shift 2 ;;
-    --baseline-policy) baseline_policy=$2; shift 2 ;;
+    --baseline) baseline=$2; shift 2 ;;
     --report) report=$2; shift 2 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
@@ -137,10 +140,15 @@ validate_profile() {
   done
 }
 
-[[ -f "$baseline_policy" ]] || record_error "baseline policy not found: $baseline_policy"
-if [[ -f "$baseline_policy" ]]; then
-  assert_equal 'baseline policy schemaVersion' \
-    "$(yq -r '.schemaVersion // ""' "$baseline_policy")" baseline.artemis.apache.org/v1
+[[ -x "$composer" ]] || record_error "topology composer not found or executable: $composer"
+[[ -f "$baseline" ]] || record_error "Workload Cell baseline not found: $baseline"
+if [[ -f "$baseline" ]]; then
+  assert_equal 'Workload Cell baseline schemaVersion' \
+    "$(yq -r '.schemaVersion // ""' "$baseline")" baseline.artemis.apache.org/v2
+  assert_equal 'Workload Cell baseline root keys' \
+    "$(yq -r 'keys | sort | join(",")' "$baseline")" 'clusters,schemaVersion'
+  assert_equal 'Workload Cell baseline clusters' \
+    "$(yq -r '.clusters | keys | sort | join(",")' "$baseline")" 'nonprod,prod,test'
 fi
 
 # Validate each Profile once before any cluster references it.
@@ -156,12 +164,66 @@ fi
 [[ -n "${known_profiles// }" ]] || record_error 'no Workload Cell Profiles are defined'
 
 for environment in test nonprod prod; do
-  topology="$topology_dir/$environment.yaml"
+  topology_overlay="$topology_dir/$environment.yaml"
+  checked_topology="$effective_topology_dir/$environment.yaml"
+  topology="$render_dir/$environment-effective.yaml"
   adapter="$bootstrap_dir/$environment"
   rendered="$render_dir/$environment.yaml"
   rendered_again="$render_dir/$environment-again.yaml"
 
-  [[ -f "$topology" ]] || { record_error "cluster $environment catalog not found: $topology"; continue; }
+  [[ -f "$topology_overlay" ]] || { record_error "cluster $environment topology overlay not found: $topology_overlay"; continue; }
+  assert_equal "cluster $environment topology schemaVersion" \
+    "$(yq -r '.schemaVersion // ""' "$topology_overlay")" topology.artemis.apache.org/v3
+  assert_equal "cluster $environment topology root keys" \
+    "$(yq -r 'keys | sort | join(",")' "$topology_overlay")" \
+    'clusterName,environment,platformNamespace,schemaVersion,workloadCellOverrides'
+  assert_equal "cluster $environment topology environment" \
+    "$(yq -r '.environment // ""' "$topology_overlay")" "$environment"
+  assert_equal "cluster $environment topology platform namespace" \
+    "$(yq -r '.platformNamespace // ""' "$topology_overlay")" artemis-platform
+  for root_field in clusterName platformNamespace workloadCellOverrides; do
+    ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology_overlay" >/dev/null || \
+      record_error "cluster $environment topology field $root_field is required"
+  done
+
+  if [[ -f "$baseline" ]]; then
+    assert_equal "cluster $environment Workload Cell baseline keys" \
+      "$(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)] | keys | sort | join(",")' "$baseline")" \
+      'workloadCells'
+    baseline_cells_type=$(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)].workloadCells | tag' "$baseline")
+    [[ "$baseline_cells_type" == '!!map' ]] || \
+      record_error "cluster $environment Workload Cell baseline must be a mapping keyed by workloadCellName"
+    while IFS= read -r cell; do
+      [[ -n "$cell" ]] || continue
+      stable_keys='coordinationId logicalEnvironment managementHost profile storageSize trafficClass workloadNamespace'
+      actual_keys=$(ENVIRONMENT="$environment" CELL="$cell" yq -r \
+        '.clusters[env(ENVIRONMENT)].workloadCells[env(CELL)] | keys | sort | join(" ")' "$baseline")
+      [[ "$actual_keys" == "$stable_keys" ]] || \
+        cell_error "$environment" "$cell" baselineKeys "allowed stable keys are: $stable_keys; got: $actual_keys"
+    done < <(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)].workloadCells | keys | .[]' "$baseline" 2>/dev/null || true)
+  fi
+
+  overrides_type=$(yq -r '.workloadCellOverrides | tag' "$topology_overlay")
+  [[ "$overrides_type" == '!!map' ]] || \
+    record_error "cluster $environment topology Workload Cell overrides must be a mapping keyed by workloadCellName"
+  while IFS= read -r cell; do
+    [[ -n "$cell" ]] || continue
+    override_keys='enabled features resources'
+    actual_keys=$(CELL="$cell" yq -r \
+      '.workloadCellOverrides[env(CELL)] | keys | sort | join(" ")' "$topology_overlay")
+    [[ "$actual_keys" == "$override_keys" ]] || \
+      cell_error "$environment" "$cell" topologyKeys "allowed environment keys are: $override_keys; got: $actual_keys"
+  done < <(yq -r '.workloadCellOverrides | keys | .[]' "$topology_overlay" 2>/dev/null || true)
+
+  if [[ ! -x "$composer" ]] || ! "$composer" --baseline "$baseline" --topology "$topology_overlay" --output "$topology"; then
+    record_error "cluster $environment effective topology failed to compose"
+    continue
+  fi
+  if [[ ! -f "$checked_topology" ]]; then
+    record_error "cluster $environment generated effective topology is missing: $checked_topology"
+  elif ! cmp -s "$topology" "$checked_topology"; then
+    record_error "cluster $environment generated effective topology is stale; run make -C gitops render-topology"
+  fi
   [[ -f "$adapter/kustomization.yaml" ]] || {
     record_error "cluster $environment Kustomize adapter not found: $adapter/kustomization.yaml"
     continue
@@ -177,21 +239,21 @@ for environment in test nonprod prod; do
   cmp -s "$rendered" "$rendered_again" || record_error "cluster $environment composition is not deterministic"
   cluster_count=$((cluster_count + 1))
 
-  assert_equal "cluster $environment catalog schemaVersion" \
-    "$(yq -r '.schemaVersion // ""' "$topology")" topology.artemis.apache.org/v2
-  assert_equal "cluster $environment catalog root keys" \
+  assert_equal "cluster $environment effective catalog schemaVersion" \
+    "$(yq -r '.schemaVersion // ""' "$topology")" topology.artemis.apache.org/v1
+  assert_equal "cluster $environment effective catalog root keys" \
     "$(yq -r 'keys | sort | join(",")' "$topology")" \
     'clusterName,environment,platformNamespace,schemaVersion,workloadCells'
-  assert_equal "cluster $environment catalog environment" \
+  assert_equal "cluster $environment effective catalog environment" \
     "$(yq -r '.environment // ""' "$topology")" "$environment"
-  assert_equal "cluster $environment catalog platform namespace" \
+  assert_equal "cluster $environment effective catalog platform namespace" \
     "$(yq -r '.platformNamespace // ""' "$topology")" artemis-platform
   for root_field in clusterName platformNamespace workloadCells; do
     ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology" >/dev/null || \
-      record_error "cluster $environment catalog field $root_field is required"
+      record_error "cluster $environment effective catalog field $root_field is required"
   done
   if yq -e 'has("brokerPairs")' "$topology" >/dev/null 2>&1; then
-    record_error "cluster $environment catalog uses retired brokerPairs terminology; use workloadCells"
+    record_error "cluster $environment effective catalog uses retired brokerPairs terminology; use workloadCells"
   fi
 
   document_count=$(yq ea -r '[.] | length' "$rendered")
@@ -428,14 +490,6 @@ for environment in test nonprod prod; do
       fi
     fi
 
-    if [[ -f "$baseline_policy" ]]; then
-      baseline_matches=$(ENVIRONMENT="$environment" CELL="$cell" yq -r \
-        '[.clusters[env(ENVIRONMENT)].requiredWorkloadCells[] | select(.workloadCellName == strenv(CELL))] | length' \
-        "$baseline_policy")
-      if [[ "$baseline_matches" == 0 && "$enabled" != false ]]; then
-        cell_error "$environment" "$cell" enabled 'a new Workload Cell must begin disabled'
-      fi
-    fi
   done
 
   for unique_field in workloadCellName workloadNamespace coordinationId managementHost; do
@@ -444,23 +498,6 @@ for environment in test nonprod prod; do
     ' "$topology")
     [[ "$duplicate_count" == 0 ]] || record_error "cluster $environment Workload Cell field $unique_field violates uniqueness rule ($duplicate_count duplicate groups)"
   done
-
-  if [[ -f "$baseline_policy" ]]; then
-    baseline_count=$(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)].requiredWorkloadCells | length' "$baseline_policy")
-    for ((baseline_index=0; baseline_index<baseline_count; baseline_index++)); do
-      baseline_cell=$(ENVIRONMENT="$environment" INDEX="$baseline_index" yq -r '.clusters[env(ENVIRONMENT)].requiredWorkloadCells[env(INDEX)].workloadCellName' "$baseline_policy")
-      matches=$(CELL="$baseline_cell" yq -r '[.workloadCells[] | select(.workloadCellName == strenv(CELL))] | length' "$topology")
-      if [[ "$matches" != 1 ]]; then
-        cell_error "$environment" "$baseline_cell" workloadCellName 'required baseline Workload Cell is missing'
-        continue
-      fi
-      for field in workloadNamespace coordinationId logicalEnvironment trafficClass managementHost storageSize profile enabled; do
-        expected=$(ENVIRONMENT="$environment" INDEX="$baseline_index" FIELD="$field" yq -r '.clusters[env(ENVIRONMENT)].requiredWorkloadCells[env(INDEX)][env(FIELD)]' "$baseline_policy")
-        actual=$(CELL="$baseline_cell" FIELD="$field" yq -r '.workloadCells[] | select(.workloadCellName == strenv(CELL)) | .[strenv(FIELD)]' "$topology")
-        [[ "$actual" == "$expected" ]] || cell_error "$environment" "$baseline_cell" "$field" "baseline requires $expected; got $actual"
-      done
-    done
-  fi
 
   # Environment values own cluster integrations and genuinely cluster-wide
   # messaging baselines; neither may collide with Profile-owned capabilities.

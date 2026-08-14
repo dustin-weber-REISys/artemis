@@ -54,7 +54,7 @@ for command_name in kubectl yq; do
 done
 
 topology="$gitops_root/argocd/topology/$environment.yaml"
-[[ -f "$topology" ]] || { printf 'topology file not found: %s\n' "$topology" >&2; exit 2; }
+[[ -f "$topology" ]] || { printf 'effective topology file not found: %s\n' "$topology" >&2; exit 2; }
 platform_namespace=$(yq -r '.platformNamespace // ""' "$topology")
 [[ -n "$platform_namespace" ]] || { printf 'platformNamespace is missing from %s\n' "$topology" >&2; exit 2; }
 
