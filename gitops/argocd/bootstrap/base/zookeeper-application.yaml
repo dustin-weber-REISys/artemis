@@ -15,7 +15,16 @@ spec:
     path: gitops/kustomize/zookeeper/overlays/cluster
   destination:
     server: https://kubernetes.default.svc
-    namespace: artemis-platform
+    namespace: artemis-platform 
+  # Helm revisions before commonLabels were propagated to PVC templates and
+  # later revisions produced different immutable StatefulSet claim metadata.
+  # Preserve whichever template is already live during the Kustomize migration;
+  # a new StatefulSet still receives the complete template from Kustomize.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
   syncPolicy:
     automated:
       prune: true
@@ -24,6 +33,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
