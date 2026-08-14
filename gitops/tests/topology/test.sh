@@ -4,8 +4,8 @@ set -euo pipefail
 test_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "$test_dir/../.." && pwd)
 validator="$repo_root/scripts/validate-topology.sh"
-topology_dir="$repo_root/argocd/topology"
-effective_topology_dir="$repo_root/argocd/topology"
+topology_dir="$repo_root/argocd/catalogs"
+effective_topology_dir="$repo_root/argocd/catalogs"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"

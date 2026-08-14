@@ -30,7 +30,7 @@ storage, security, probe, policy, and monitoring behavior is authoritative in
 [`kustomize/zookeeper`](../kustomize/zookeeper); generated service names and
 workload connections are authoritative in
 [`argocd/bootstrap`](../argocd/bootstrap) and
-[`argocd/topology`](../argocd/topology).
+[`argocd/topology`](../argocd/catalogs).
 
 The operator, ZooKeeper, and broker layers must be bootstrapped in dependency
 order with health gates. Sync-wave annotations communicate intent but do not,

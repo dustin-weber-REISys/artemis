@@ -96,7 +96,7 @@ run_check 'Generated workload topology' \
   "$repo_root/gitops/scripts/validate-topology.sh" \
   --report "$report_dir/topology-validation.json"
 run_check 'Topology regression tests' \
-  "$repo_root/gitops/tests/topology/test.sh"
+  "$repo_root/gitops/tests/catalogs/test.sh"
 run_check 'Argo CD ECR credential refresh regressions' \
   "$repo_root/gitops/tests/argocd/test-ecr-credential-refresh.sh"
 run_check 'Helm charts and overlays' \

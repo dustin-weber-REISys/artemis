@@ -76,7 +76,7 @@ gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/scripts/diagnose-pod-startup.sh
 gitops/scripts/import-chef-activemq.py
-gitops/tests/topology/test.sh
+gitops/tests/catalogs/test.sh
 gitops/tests/chef-import/test.sh
 gitops/tests/chef-import/fixtures/environment.json
 gitops/tests/chef-import/fixtures/policy.json

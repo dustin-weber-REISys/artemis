@@ -39,7 +39,7 @@ The rendered local-cluster adapters are authoritative in
 authoritative in
 [`argocd/workload-cell-baseline.yaml`](../argocd/workload-cell-baseline.yaml),
 and environment-specific resource, feature, and enablement choices are
-authoritative in [`argocd/topology`](../argocd/topology). Generated catalogs
+authoritative in [`argocd/topology`](../argocd/catalogs). Generated catalogs
 under `argocd/topology` are consumed by Argo CD and must be refreshed
 with `make -C gitops render-topology`. Chart defaults and constraints are
 authoritative in [`charts`](../charts), and promotion overlays are in
@@ -134,7 +134,7 @@ a new tag.
 
 Update the selected directory under
 [`argocd/bootstrap`](../argocd/bootstrap) and its matching
-[`topology`](../argocd/topology) file with the approved Argo namespace,
+[`topology`](../argocd/catalogs) file with the approved Argo namespace,
 Git source, immutable revision policy, local platform namespace, workload
 namespaces, and cluster identity. Replace the matching nonprod or prod ECR base
 placeholder in the matching operator Kustomize image patch. The repository

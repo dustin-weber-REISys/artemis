@@ -44,8 +44,8 @@ view:
 - [ ] `gitops/argocd/bootstrap/test/*`
 - [ ] `gitops/argocd/bootstrap/nonprod/*`
 - [ ] `gitops/argocd/bootstrap/prod/*`
-- [ ] `gitops/argocd/topology/*`
-- [ ] `gitops/argocd/topology/*`
+- [ ] `gitops/argocd/catalogs/*`
+- [ ] `gitops/argocd/catalogs/*`
 - [ ] `gitops/argocd/profiles/standard/*`
 - [ ] `gitops/argocd/workload-cell-baseline.yaml`
 - [ ] `gitops/releases/current.yaml`
@@ -54,7 +54,7 @@ view:
 - [ ] `gitops/scripts/validate-operator-schema.sh`
 - [ ] `gitops/scripts/validate-topology.sh`
 - [ ] `gitops/scripts/compose-topology.sh`
-- [ ] `gitops/tests/topology/test.sh`
+- [ ] `gitops/tests/catalogs/test.sh`
 - [ ] `scripts/validate-static.sh`
 - [ ] `scripts/validate-repository.sh`
 - [ ] `Makefile` and `gitops/Makefile`

@@ -4,7 +4,7 @@ metadata:
   name: messaging-platform
   annotations:
     composition.artemis.apache.org/environment: nonprod
-    composition.artemis.apache.org/catalog-path: gitops/argocd/topology/nonprod.yaml
+    composition.artemis.apache.org/catalog-path: gitops/argocd/catalogs/nonprod.yaml
     composition.artemis.apache.org/git-revision: main
     composition.artemis.apache.org/repository: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
     composition.artemis.apache.org/platform-namespace: artemis-platform

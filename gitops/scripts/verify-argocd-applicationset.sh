@@ -57,7 +57,7 @@ for command_name in kubectl yq; do
   }
 done
 
-topology="$gitops_root/argocd/topology/$environment.yaml"
+topology="$gitops_root/argocd/catalogs/$environment.yaml"
 [[ -f "$topology" ]] || { printf 'effective topology file not found: %s\n' "$topology" >&2; exit 2; }
 
 applicationset="$environment-artemis-workloads"

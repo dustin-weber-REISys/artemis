@@ -33,8 +33,8 @@ changeable implementation facts belong in executable files:
 | --- | --- |
 | Local-cluster composition and child Applications | Rendered [`argocd/bootstrap`](../argocd/bootstrap) adapters |
 | Stable Workload Cell identity, traffic class, hostname, storage, and Profile | [`argocd/workload-cell-baseline.yaml`](../argocd/workload-cell-baseline.yaml) |
-| Cluster identity, Workload Cell resources, features, and enablement | Environment overlays under [`argocd/topology`](../argocd/topology) |
-| Catalog consumed by Argo CD | Generated, drift-checked files under [`argocd/topology`](../argocd/topology) |
+| Cluster identity, Workload Cell resources, features, and enablement | Environment overlays under [`argocd/topology`](../argocd/catalogs) |
+| Catalog consumed by Argo CD | Generated, drift-checked files under [`argocd/topology`](../argocd/catalogs) |
 | Argo CD repository credentials and root Application | Per-cluster EKS Terraform inputs |
 | `messaging-platform` AppProject policy | Shared [`argocd/bootstrap/base`](../argocd/bootstrap/base) rendered through the matching cluster adapter |
 | Current platform, component, and image versions | [`releases/current.yaml`](../releases/current.yaml), the Artemis chart, and Kustomize deployment bases/overlays |

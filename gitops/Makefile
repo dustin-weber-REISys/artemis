@@ -60,8 +60,8 @@ render-topology:
 	@for environment in test nonprod prod; do \
 		./scripts/compose-topology.sh \
 			--baseline argocd/workload-cell-baseline.yaml \
-			--topology "argocd/topology/$$environment.yaml" \
-			--output "argocd/topology/$$environment.yaml"; \
+			--topology "argocd/catalogs/$$environment.yaml" \
+			--output "argocd/catalogs/$$environment.yaml"; \
 	done
 
 validate-topology:
@@ -80,7 +80,7 @@ test-verify-applicationset:
 	./tests/argocd/test-verify-applicationset.sh
 
 test-topology:
-	./tests/topology/test.sh
+	./tests/catalogs/test.sh
 
 test-argocd-ecr-credentials:
 	./tests/argocd/test-ecr-credential-refresh.sh

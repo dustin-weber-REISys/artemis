@@ -3,8 +3,8 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-topology_dir="$repo_root/argocd/topology"
-effective_topology_dir="$repo_root/argocd/topology"
+topology_dir="$repo_root/argocd/catalogs"
+effective_topology_dir="$repo_root/argocd/catalogs"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
@@ -345,7 +345,7 @@ for environment in test nonprod prod; do
     ' "$rendered")" 0
   assert_equal "cluster $environment workloads catalog path" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.generators[0].matrix.generators[0].git.files[0].path')" \
-    "gitops/argocd/topology/$environment.yaml"
+    "gitops/argocd/catalogs/$environment.yaml"
   assert_equal "cluster $environment workloads catalog expansion" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.generators[0].matrix.generators[1].list.elementsYaml')" \
     '{{ .workloadCells | toJson }}'
