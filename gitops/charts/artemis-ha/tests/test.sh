@@ -44,13 +44,28 @@ if helm template invalid "$chart_dir" "${helm_args[@]}" \
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
-  --set 'acceptors.openwire.sslEnabled=true' >/dev/null 2>&1; then
+  --set 'acceptors.artemis.sslEnabled=true' >/dev/null 2>&1; then
   echo "expected a TLS acceptor without sslSecret to fail" >&2
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
-  --set 'acceptors.openwire.needClientAuth=true' >/dev/null 2>&1; then
+  --set 'acceptors.artemis.needClientAuth=true' >/dev/null 2>&1; then
   echo "expected client certificate authentication without TLS to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set 'acceptors.artemis.protocols=OPENWIRE' >/dev/null 2>&1; then
+  echo "expected removal of CORE from the operator peer acceptor to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set 'acceptors.amqp.port=61616' >/dev/null 2>&1; then
+  echo "expected duplicate enabled acceptor ports to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set 'acceptors.amqp.supportAdvisory=true' >/dev/null 2>&1; then
+  echo "expected OpenWire advisories on a non-OpenWire acceptor to fail" >&2
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
@@ -59,13 +74,13 @@ if helm template invalid "$chart_dir" "${helm_args[@]}" \
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
-  --set-string 'destinations[0].address=INVALID.ROUTING' \
-  --set-string 'destinations[0].routingTypes[0]=ANYCAST' \
-  --set-string 'destinations[0].queues[0].name=INVALID.ROUTING' \
-  --set-string 'destinations[0].queues[0].routingType=MULTICAST' \
-  --set 'destinations[0].queues[0].durable=true' \
-  --set 'destinations[0].queues[0].maxConsumers=-1' \
-  --set 'destinations[0].queues[0].purgeOnNoConsumers=false' >/dev/null 2>&1; then
+  --set-string 'destinations.invalid.address=INVALID.ROUTING' \
+  --set-string 'destinations.invalid.routingTypes[0]=ANYCAST' \
+  --set-string 'destinations.invalid.queues[0].name=INVALID.ROUTING' \
+  --set-string 'destinations.invalid.queues[0].routingType=MULTICAST' \
+  --set 'destinations.invalid.queues[0].durable=true' \
+  --set 'destinations.invalid.queues[0].maxConsumers=-1' \
+  --set 'destinations.invalid.queues[0].purgeOnNoConsumers=false' >/dev/null 2>&1; then
   echo "expected a queue routing type absent from its address to fail" >&2
   exit 1
 fi
@@ -183,7 +198,7 @@ rg -q -- '-Dhawtio\.oidcConfig=/amq/extra/configmaps/artemis-artemis-ha-hawtio-o
 rg -q 'code_challenge_method = S256' "$rendered"
 rg -q 'provider = https://keycloak.example.invalid/realms/example' "$rendered"
 rg -q 'readOnlyRootFilesystem: true' "$rendered"
-rg -q 'name: artemis-artemis-ha-openwire' "$rendered"
+rg -q 'name: artemis-artemis-ha-artemis' "$rendered"
 rg -q 'name: artemis-artemis-ha-amqp' "$rendered"
 rg -q 'name: artemis-artemis-ha-stomp' "$rendered"
 rg -q 'name: artemis-artemis-ha-mqtt' "$rendered"
@@ -271,7 +286,7 @@ done
 helm template artemis-ports "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
   --set 'acceptors.amqp.port=25672' \
-  --set 'acceptors.openwire.enabled=false' \
+  --set 'acceptors.stomp.enabled=false' \
   --set 'networkPolicy.clientSources[0].namespaceSelector.matchLabels.test=client' \
   --set 'networkPolicy.clientSources[0].podSelector.matchLabels.test=client' \
   > "$ports_rendered"
@@ -283,10 +298,10 @@ client_ports=$(
     sort -n |
     paste -sd, -
 )
-[[ "$client_ports" == "1883,25672,61613,61614" ]]
+[[ "$client_ports" == "1883,61614,61616,25672" ]]
 [[ "$(yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") | .spec.ingress[] | select(.from[0].podSelector.matchLabels.application == "artemis-ports-artemis-ha-app") | .ports[].port' "$ports_rendered")" == "61616" ]]
-if rg -q 'name: artemis-ports-artemis-ha-openwire' "$ports_rendered"; then
-  echo "disabled OpenWire acceptor still rendered a client Service" >&2
+if rg -q 'name: artemis-ports-artemis-ha-stomp' "$ports_rendered"; then
+  echo "disabled STOMP acceptor still rendered a client Service" >&2
   exit 1
 fi
 
@@ -298,12 +313,17 @@ helm template artemis-external "$chart_dir" --namespace example-messaging \
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .sslEnabled' "$external_rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .needClientAuth' "$external_rendered")" == "true" ]]
 [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .sslSecret' "$external_rendered")" == "partner-broker-tls" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .supportAdvisory' "$external_rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-stomp") | .port' "$external_rendered")" == "61612" ]]
 [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.extraMounts.secrets[0]' "$external_rendered")" == "partner-clients-jaas-config" ]]
 rg -Fq 'addressConfigurations."PARTNER.REQUEST".queueConfigs."PARTNER.REQUEST".durable=true' "$external_rendered"
 rg -Fq 'addressConfigurations."PARTNER.RESPONSE".queueConfigs."PARTNER.RESPONSE".maxConsumers=20' "$external_rendered"
 rg -Fq 'securityRoles."PARTNER.REQUEST".partner-client.send=true' "$external_rendered"
 rg -Fq 'securityRoles."PARTNER.RESPONSE\:\:PARTNER.RESPONSE".partner-client.consume=true' "$external_rendered"
+rg -Fq 'securityRoles."ActiveMQ.Advisory.#".partner-client.consume=true' "$external_rendered"
+rg -Fq 'securityRoles."mops.#".messaging-viewer.view=true' "$external_rendered"
 rg -Fq 'securityRoles."PARTNER.#".messaging-admin.createDurableQueue=true' "$external_rendered"
+rg -Fq 'acceptorConfigurations.partner-openwire.extraParams.openWireDestinationCacheSize=1024' "$external_rendered"
 
 helm template artemis-autocreate "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \

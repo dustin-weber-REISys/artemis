@@ -6,7 +6,10 @@ policy, and metrics defaults. Its `test`, `nonprod`, and `prod` overlays under
 [`kustomize/zookeeper`](../kustomize/zookeeper) own ZooKeeper sizing and
 cluster integration references. This directory now contains only Artemis
 chart values. Workload Cell identity and sizing live in
-[`argocd/topology`](../argocd/topology).
+[`argocd/topology`](../argocd/topology), while pair-owned messaging policy lives
+under [`workloads`](../workloads). Environment-wide listener, destination, and
+authorization map entries may be placed here when they genuinely apply to
+every cell; later Workload Cell maps deep-merge pair-specific additions.
 
 Image locations and release pins do not belong in environment overlays.
 The Argo CD bootstraps use one nonprod and one prod ECR base placeholder; test

@@ -28,7 +28,10 @@ namespaces are fixed as `artemis-<traffic>-<logical-environment>`, where
 `internal` is abbreviated to `int`, `external` to `ext`, and functionality such
 as `batch` is named directly. [`profiles`](profiles) provides reusable
 capability policy; a Workload Cell selects exactly one Profile and can set only
-that Profile's typed feature choices. The centrally selected Platform Release
+that Profile's typed feature choices. Each cell also has one schema-validated,
+ownership-restricted file under [`workloads`](../workloads) for pair-owned
+listeners, Secret references, destinations, authorization, and client sources.
+The centrally selected Platform Release
 remains outside every adapter, Profile, and Workload Cell.
 
 All destinations use `https://kubernetes.default.svc`. No Argo CD instance
@@ -137,7 +140,8 @@ must still be health-gated:
    artifacts.
 
 New Workload Cells must be added to the cluster-local catalog with an explicit
-`enabled: "false"`. The workload ApplicationSet uses
+`enabled: "false"` and a matching workload values file. The workload
+ApplicationSet uses
 `applicationsSync: create-update` and preserves resources on ApplicationSet
 deletion, so an accidental catalog edit cannot automatically delete an
 existing generated Application or its live resources. Retirement is a

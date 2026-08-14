@@ -70,6 +70,7 @@
     "acceptors": {
       "type": "object",
       "additionalProperties": {"$ref": "#/$defs/acceptor"},
+      "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,31}$"},
       "minProperties": 1
     },
     "authentication": {
@@ -87,15 +88,20 @@
       }
     },
     "destinations": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/destination"}
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,62}$"},
+      "additionalProperties": {"$ref": "#/$defs/destination"}
     },
     "authorization": {
       "type": "object",
       "additionalProperties": false,
       "required": ["rules"],
       "properties": {
-        "rules": {"type": "array", "items": {"$ref": "#/$defs/authorizationRule"}}
+        "rules": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,62}$"},
+          "additionalProperties": {"$ref": "#/$defs/authorizationRule"}
+        }
       }
     },
     "console": {
@@ -210,15 +216,25 @@
     "acceptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "port", "protocols", "connectionsAllowed", "sslEnabled", "needClientAuth", "sslSecret", "extraParams"],
+      "required": ["enabled", "port", "protocols", "connectionsAllowed", "bindToAllInterfaces", "supportAdvisory", "suppressInternalManagementObjects", "sslEnabled", "needClientAuth", "sslSecret", "trustSecret", "extraParams"],
       "properties": {
         "enabled": {"type": "boolean"},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-        "protocols": {"type": "string", "minLength": 1},
+        "protocols": {"type": "string", "pattern": "^(CORE|OPENWIRE|AMQP|STOMP|MQTT)(,(CORE|OPENWIRE|AMQP|STOMP|MQTT))*$"},
         "connectionsAllowed": {"type": "integer", "minimum": 1},
+        "bindToAllInterfaces": {"type": "boolean", "const": true},
+        "supportAdvisory": {"type": "boolean"},
+        "suppressInternalManagementObjects": {"type": "boolean"},
         "sslEnabled": {"type": "boolean"},
         "needClientAuth": {"type": "boolean"},
         "sslSecret": {
+          "type": "string",
+          "anyOf": [
+            {"const": ""},
+            {"pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", "maxLength": 253}
+          ]
+        },
+        "trustSecret": {
           "type": "string",
           "anyOf": [
             {"const": ""},

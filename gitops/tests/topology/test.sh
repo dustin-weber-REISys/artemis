@@ -8,6 +8,7 @@ topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
+workload_dir="$repo_root/workloads"
 baseline_policy="$repo_root/argocd/baseline-policy.yaml"
 
 for command_name in yq kubectl helm; do
@@ -21,25 +22,26 @@ temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/artemis-composition-tests.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
 
 run_validator() {
-  local topology=$1 bootstrap=$2 profiles=$3 environments=$4 output=$5
+  local topology=$1 bootstrap=$2 profiles=$3 environments=$4 workloads=$5 output=$6
   "$validator" \
     --topology-dir "$topology" \
     --bootstrap-dir "$bootstrap" \
     --profile-dir "$profiles" \
     --environment-dir "$environments" \
+    --workload-dir "$workloads" \
     --baseline-policy "$baseline_policy" \
     --report "$temp_dir/report.json" >"$output" 2>&1
 }
 
 base_output="$temp_dir/base.out"
-run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$base_output"
+run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$base_output"
 
 assert_catalog_rejected() {
   local case_name=$1 environment=$2 expression=$3 expected=$4
   local candidate="$temp_dir/$case_name-topology" output="$temp_dir/$case_name.out"
   cp -R "$topology_dir" "$candidate"
   yq -i "$expression" "$candidate/$environment.yaml"
-  if run_validator "$candidate" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$output"; then
+  if run_validator "$candidate" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$output"; then
     printf 'validator accepted invalid Workload Cell catalog case: %s\n' "$case_name" >&2
     exit 1
   fi
@@ -55,7 +57,7 @@ assert_bootstrap_rejected() {
   local candidate="$temp_dir/$case_name-bootstrap" output="$temp_dir/$case_name.out"
   cp -R "$bootstrap_dir" "$candidate"
   yq -i "$expression" "$candidate/$file"
-  if run_validator "$topology_dir" "$candidate" "$profile_dir" "$environment_dir" "$output"; then
+  if run_validator "$topology_dir" "$candidate" "$profile_dir" "$environment_dir" "$workload_dir" "$output"; then
     printf 'validator accepted invalid rendered composition case: %s\n' "$case_name" >&2
     exit 1
   fi
@@ -71,7 +73,7 @@ assert_profile_rejected() {
   local candidate="$temp_dir/$case_name-profiles" output="$temp_dir/$case_name.out"
   cp -R "$profile_dir" "$candidate"
   yq -i "$expression" "$candidate/$file"
-  if run_validator "$topology_dir" "$bootstrap_dir" "$candidate" "$environment_dir" "$output"; then
+  if run_validator "$topology_dir" "$bootstrap_dir" "$candidate" "$environment_dir" "$workload_dir" "$output"; then
     printf 'validator accepted invalid Profile case: %s\n' "$case_name" >&2
     exit 1
   fi
@@ -87,8 +89,24 @@ assert_environment_rejected() {
   local candidate="$temp_dir/$case_name-environments" output="$temp_dir/$case_name.out"
   cp -R "$environment_dir" "$candidate"
   yq -i "$expression" "$candidate/$environment/artemis-values.yaml"
-  if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$candidate" "$output"; then
+  if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$candidate" "$workload_dir" "$output"; then
     printf 'validator accepted invalid environment ownership case: %s\n' "$case_name" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$output" || {
+    printf 'validator did not report expected diagnostic for %s: %s\n' "$case_name" "$expected" >&2
+    sed -n '1,100p' "$output" >&2
+    exit 1
+  }
+}
+
+assert_workload_rejected() {
+  local case_name=$1 file=$2 expression=$3 expected=$4
+  local candidate="$temp_dir/$case_name-workloads" output="$temp_dir/$case_name.out"
+  cp -R "$workload_dir" "$candidate"
+  yq -i "$expression" "$candidate/$file"
+  if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$candidate" "$output"; then
+    printf 'validator accepted invalid Workload Cell values case: %s\n' "$case_name" >&2
     exit 1
   fi
   grep -Fq "$expected" "$output" || {
@@ -182,10 +200,28 @@ assert_environment_rejected profile-environment-collision prod \
   '.brokerProperties.maxDiskUsage = 70' \
   'cluster prod environment field brokerProperties.maxDiskUsage violates cluster-integration ownership'
 
+assert_workload_rejected protected-workload-version test/test-sky/artemis-values.yaml \
+  '.broker.version = "9.9.9"' \
+  'field workloadValues.broker.version violates rule: must be a pair-owned listener'
+
+missing_workloads="$temp_dir/missing-workloads"
+cp -R "$workload_dir" "$missing_workloads"
+rm "$missing_workloads/test/test-sky/artemis-values.yaml"
+if run_validator "$topology_dir" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$missing_workloads" "$temp_dir/missing-workload.out"; then
+  printf '%s\n' 'validator accepted a missing Workload Cell values file' >&2
+  exit 1
+fi
+grep -Fq 'cluster test Workload Cell test-sky field workloadValues violates rule: missing required values file' \
+  "$temp_dir/missing-workload.out"
+
 # Catalog growth is routine: a valid new Workload Cell is accepted without a
 # validator implementation change, but it must begin disabled.
 growth_topology="$temp_dir/growth-topology"
+growth_workloads="$temp_dir/growth-workloads"
 cp -R "$topology_dir" "$growth_topology"
+cp -R "$workload_dir" "$growth_workloads"
+mkdir -p "$growth_workloads/test/test-extra"
+printf '{}\n' > "$growth_workloads/test/test-extra/artemis-values.yaml"
 yq -i '
   .workloadCells += [(.workloadCells[1]
     | .workloadCellName = "test-extra"
@@ -195,12 +231,12 @@ yq -i '
     | .managementHost = "artemis-test-extra.example.invalid"
     | .enabled = "false")]
 ' "$growth_topology/test.yaml"
-run_validator "$growth_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/growth.out"
+run_validator "$growth_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$growth_workloads" "$temp_dir/growth.out"
 
 enabled_growth="$temp_dir/enabled-growth-topology"
 cp -R "$growth_topology" "$enabled_growth"
 yq -i '.workloadCells[-1].enabled = "true"' "$enabled_growth/test.yaml"
-if run_validator "$enabled_growth" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/enabled-growth.out"; then
+if run_validator "$enabled_growth" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$growth_workloads" "$temp_dir/enabled-growth.out"; then
   printf '%s\n' 'validator accepted a new Workload Cell that did not begin disabled' >&2
   exit 1
 fi
@@ -211,14 +247,14 @@ grep -Fq 'cluster test Workload Cell test-extra field enabled violates rule: a n
 feature_topology="$temp_dir/feature-topology"
 cp -R "$topology_dir" "$feature_topology"
 yq -i '.workloadCells[0].features.expiryResources = true' "$feature_topology/test.yaml"
-run_validator "$feature_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$temp_dir/feature.out"
+run_validator "$feature_topology" "$bootstrap_dir" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/feature.out"
 
 # A single temporary root revision is injected once and reaches every child.
 revision_bootstrap="$temp_dir/revision-bootstrap"
 cp -R "$bootstrap_dir" "$revision_bootstrap"
 yq -i '.metadata.annotations."composition.artemis.apache.org/git-revision" = "upgrade/platform-release"' \
   "$revision_bootstrap/test/cluster.patch.yaml"
-run_validator "$topology_dir" "$revision_bootstrap" "$profile_dir" "$environment_dir" "$temp_dir/revision.out"
+run_validator "$topology_dir" "$revision_bootstrap" "$profile_dir" "$environment_dir" "$workload_dir" "$temp_dir/revision.out"
 kubectl kustomize "$revision_bootstrap/test" > "$temp_dir/revision-rendered.yaml"
 revision_values=$(yq ea -r '
   select(.kind == "Application") | .spec.source.targetRevision,
@@ -236,6 +272,7 @@ helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
   --namespace artemis-int-sky \
   -f "$profile_dir/standard/values.yaml" \
   -f "$environment_dir/test/artemis-values.yaml" \
+  -f "$workload_dir/test/test-sky/artemis-values.yaml" \
   --set ha.coordinationId=test-sky-01 \
   --set ha.groupName=test-sky-group \
   --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181 \

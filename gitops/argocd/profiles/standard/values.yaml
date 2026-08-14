@@ -2,7 +2,7 @@
 # HA, durability, coordination, identity, and cluster integration values are
 # intentionally outside the Profile interface.
 acceptors:
-  openwire:
+  artemis:
     enabled: true
   amqp:
     enabled: true

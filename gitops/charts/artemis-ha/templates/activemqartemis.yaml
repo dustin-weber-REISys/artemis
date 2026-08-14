@@ -95,13 +95,26 @@
 {{- end }}
 {{- end }}
 {{- end }}
+{{- $peerAcceptor := index .Values.acceptors "artemis" }}
+{{- if or (empty $peerAcceptor) (not $peerAcceptor.enabled) (ne (int $peerAcceptor.port) 61616) (not (has "CORE" (splitList "," $peerAcceptor.protocols))) }}
+{{- fail "acceptors.artemis must remain enabled on port 61616 and include the CORE protocol for operator-managed peer traffic" }}
+{{- end }}
+{{- $seenAcceptorPorts := dict }}
 {{- range $acceptorName, $acceptor := .Values.acceptors }}
 {{- if $acceptor.enabled }}
+{{- $portKey := printf "%d" (int $acceptor.port) }}
+{{- if hasKey $seenAcceptorPorts $portKey }}
+{{- fail (printf "enabled acceptors %s and %s cannot share port %s" (index $seenAcceptorPorts $portKey) $acceptorName $portKey) }}
+{{- end }}
+{{- $_ := set $seenAcceptorPorts $portKey $acceptorName }}
 {{- if and $acceptor.sslEnabled (empty $acceptor.sslSecret) }}
 {{- fail (printf "acceptors.%s.sslSecret is required when TLS is enabled" $acceptorName) }}
 {{- end }}
-{{- if and (not $acceptor.sslEnabled) (or $acceptor.needClientAuth (not (empty $acceptor.sslSecret))) }}
-{{- fail (printf "acceptors.%s needClientAuth/sslSecret require sslEnabled=true" $acceptorName) }}
+{{- if and (not $acceptor.sslEnabled) (or $acceptor.needClientAuth (not (empty $acceptor.sslSecret)) (not (empty $acceptor.trustSecret))) }}
+{{- fail (printf "acceptors.%s needClientAuth/sslSecret/trustSecret require sslEnabled=true" $acceptorName) }}
+{{- end }}
+{{- if and $acceptor.supportAdvisory (not (has "OPENWIRE" (splitList "," $acceptor.protocols))) }}
+{{- fail (printf "acceptors.%s supportAdvisory requires the OPENWIRE protocol" $acceptorName) }}
 {{- end }}
 {{- range $key, $value := $acceptor.extraParams }}
 {{- $brokerProperties = append $brokerProperties (printf "acceptorConfigurations.%s.extraParams.%s=%s" $acceptorName $key $value) }}
@@ -269,10 +282,16 @@ spec:
     - name: {{ $name }}
       port: {{ $acceptor.port }}
       protocols: {{ $acceptor.protocols | quote }}
+      bindToAllInterfaces: {{ $acceptor.bindToAllInterfaces }}
+      supportAdvisory: {{ $acceptor.supportAdvisory }}
+      suppressInternalManagementObjects: {{ $acceptor.suppressInternalManagementObjects }}
       sslEnabled: {{ $acceptor.sslEnabled }}
       {{- if $acceptor.sslEnabled }}
       needClientAuth: {{ $acceptor.needClientAuth }}
       sslSecret: {{ $acceptor.sslSecret | quote }}
+      {{- if not (empty $acceptor.trustSecret) }}
+      trustSecret: {{ $acceptor.trustSecret | quote }}
+      {{- end }}
       {{- end }}
       connectionsAllowed: {{ $acceptor.connectionsAllowed }}
     {{- end }}

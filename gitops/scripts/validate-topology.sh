@@ -7,6 +7,8 @@ topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
+workload_dir="$repo_root/workloads"
+chart_dir="$repo_root/charts/artemis-ha"
 baseline_policy="$repo_root/argocd/baseline-policy.yaml"
 report="$repo_root/reports/topology-validation.json"
 
@@ -16,6 +18,7 @@ while (($#)); do
     --bootstrap-dir) bootstrap_dir=$2; shift 2 ;;
     --profile-dir) profile_dir=$2; shift 2 ;;
     --environment-dir) environment_dir=$2; shift 2 ;;
+    --workload-dir) workload_dir=$2; shift 2 ;;
     --baseline-policy) baseline_policy=$2; shift 2 ;;
     --report) report=$2; shift 2 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
@@ -24,6 +27,10 @@ done
 
 command -v yq >/dev/null 2>&1 || {
   printf '%s\n' 'yq is required (the repository baseline uses yq 4.53.3)' >&2
+  exit 2
+}
+command -v helm >/dev/null 2>&1 || {
+  printf '%s\n' 'helm is required for effective Workload Cell values validation' >&2
   exit 2
 }
 if command -v kustomize >/dev/null 2>&1; then
@@ -294,6 +301,9 @@ for environment in test nonprod prod; do
   assert_equal "cluster $environment environment integration values path" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.template.spec.source.helm.valueFiles[1]')" \
     '../../environments/{{.environment}}/artemis-values.yaml'
+  assert_equal "cluster $environment Workload Cell values path" \
+    "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.template.spec.source.helm.valueFiles[2]')" \
+    '../../workloads/{{.environment}}/{{.workloadCellName}}/artemis-values.yaml'
   assert_equal "cluster $environment Workload Cell group identity template" \
     "$(parameter_value "$rendered" "$workloads" ha.groupName)" '{{.workloadCellName}}-group'
   assert_equal "cluster $environment Workload Cell Curator namespace template" \
@@ -395,6 +405,29 @@ for environment in test nonprod prod; do
       done < <(INDEX="$index" yq -r '.workloadCells[env(INDEX)].features | keys | .[]' "$topology" 2>/dev/null || true)
     fi
 
+    workload_values="$workload_dir/$environment/$cell/artemis-values.yaml"
+    if [[ ! -f "$workload_values" ]]; then
+      cell_error "$environment" "$cell" workloadValues "missing required values file: $workload_values"
+    else
+      while IFS= read -r leaf; do
+        [[ -n "$leaf" ]] || continue
+        [[ "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. || "$leaf" =~ ^networkPolicy\.clientSources\. ]] || \
+          cell_error "$environment" "$cell" "workloadValues.$leaf" 'must be a pair-owned listener, identity Secret reference, destination, authorization rule, or client source'
+      done < <(yq -r '.. | select(tag != "!!map" and tag != "!!seq") | path | join(".")' "$workload_values")
+
+      if [[ -f "$profile_dir/$profile/values.yaml" && -f "$environment_dir/$environment/artemis-values.yaml" ]]; then
+        if ! helm lint "$chart_dir" \
+          -f "$profile_dir/$profile/values.yaml" \
+          -f "$environment_dir/$environment/artemis-values.yaml" \
+          -f "$workload_values" \
+          --set-string "ha.coordinationId=$coordination" \
+          --set-string "zookeeper.connectString=$environment-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181" \
+          >/dev/null 2>&1; then
+          cell_error "$environment" "$cell" workloadValues 'effective Profile/environment/workload values fail chart schema or render validation'
+        fi
+      fi
+    fi
+
     if [[ -f "$baseline_policy" ]]; then
       baseline_matches=$(ENVIRONMENT="$environment" CELL="$cell" yq -r \
         '[.clusters[env(ENVIRONMENT)].requiredWorkloadCells[] | select(.workloadCellName == strenv(CELL))] | length' \
@@ -429,12 +462,12 @@ for environment in test nonprod prod; do
     done
   fi
 
-  # Environment values are cluster integrations only and cannot collide with
-  # Profile-owned capabilities.
+  # Environment values own cluster integrations and genuinely cluster-wide
+  # messaging baselines; neither may collide with Profile-owned capabilities.
   environment_values="$environment_dir/$environment/artemis-values.yaml"
   if [[ -f "$environment_values" ]]; then
     while IFS= read -r leaf; do
-      [[ "$leaf" =~ ^commonLabels\. || "$leaf" =~ ^broker\.(nodeSelector|tolerations|labels|annotations)\. || "$leaf" == persistence.storageClassName || "$leaf" == persistence.journalType || "$leaf" =~ ^keycloak\. || "$leaf" =~ ^vault\. || "$leaf" =~ ^console\.ingress\.(className|annotations)\. || "$leaf" =~ ^networkPolicy\.(clientSources|managementSources|monitoringSources|extraIngress|extraEgress)\. || "$leaf" =~ ^monitoring\.(serviceMonitor|prometheusRule)\.(namespace|labels) ]] || \
+      [[ "$leaf" =~ ^commonLabels\. || "$leaf" =~ ^broker\.(nodeSelector|tolerations|labels|annotations)\. || "$leaf" == persistence.storageClassName || "$leaf" == persistence.journalType || "$leaf" =~ ^keycloak\. || "$leaf" =~ ^vault\. || "$leaf" =~ ^console\.ingress\.(className|annotations)\. || "$leaf" =~ ^networkPolicy\.(clientSources|managementSources|monitoringSources|extraIngress|extraEgress)\. || "$leaf" =~ ^monitoring\.(serviceMonitor|prometheusRule)\.(namespace|labels) || "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. ]] || \
         record_error "cluster $environment environment field $leaf violates cluster-integration ownership"
       for profile in $known_profiles; do
         if yq -r '.. | select(tag != "!!map" and tag != "!!seq") | path | join(".")' "$profile_dir/$profile/values.yaml" | grep -Fxq "$leaf"; then

@@ -4,16 +4,37 @@ acceptors:
     port: 61617
     protocols: OPENWIRE
     connectionsAllowed: 5000
+    bindToAllInterfaces: true
+    supportAdvisory: true
+    suppressInternalManagementObjects: false
     sslEnabled: true
     needClientAuth: true
     sslSecret: partner-broker-tls
-    extraParams: {}
+    trustSecret: ""
+    extraParams:
+      openWireDestinationCacheSize: "1024"
+      securityDomain: partner-certificates
+  partner-stomp:
+    enabled: true
+    port: 61612
+    protocols: STOMP
+    connectionsAllowed: 100
+    bindToAllInterfaces: true
+    supportAdvisory: false
+    suppressInternalManagementObjects: true
+    sslEnabled: true
+    needClientAuth: true
+    sslSecret: partner-broker-tls
+    trustSecret: ""
+    extraParams:
+      securityDomain: partner-certificates
 
 authentication:
   jaasSecretName: partner-clients-jaas-config
 
 destinations:
-  - address: PARTNER.REQUEST
+  partner-request:
+    address: PARTNER.REQUEST
     routingTypes:
       - ANYCAST
     queues:
@@ -22,7 +43,8 @@ destinations:
         durable: true
         maxConsumers: -1
         purgeOnNoConsumers: false
-  - address: PARTNER.RESPONSE
+  partner-response:
+    address: PARTNER.RESPONSE
     routingTypes:
       - ANYCAST
     queues:
@@ -31,10 +53,16 @@ destinations:
         durable: true
         maxConsumers: 20
         purgeOnNoConsumers: false
+  partner-events:
+    address: PARTNER.EVENTS
+    routingTypes:
+      - MULTICAST
+    queues: []
 
 authorization:
   rules:
-    - match: PARTNER.REQUEST
+    partner-request:
+      match: PARTNER.REQUEST
       permissions:
         send:
           - partner-client
@@ -42,7 +70,8 @@ authorization:
           - messaging-admin
         consume:
           - messaging-admin
-    - match: PARTNER.RESPONSE::PARTNER.RESPONSE
+    partner-response-queue:
+      match: PARTNER.RESPONSE::PARTNER.RESPONSE
       permissions:
         consume:
           - partner-client
@@ -50,7 +79,23 @@ authorization:
           - partner-client
         send:
           - messaging-admin
-    - match: PARTNER.#
+    partner-advisories:
+      match: ActiveMQ.Advisory.#
+      permissions:
+        consume:
+          - partner-client
+        browse:
+          - partner-client
+    partner-management:
+      match: mops.#
+      permissions:
+        view:
+          - messaging-viewer
+          - messaging-admin
+        edit:
+          - messaging-admin
+    partner-admin:
+      match: PARTNER.#
       permissions:
         createAddress:
           - messaging-admin

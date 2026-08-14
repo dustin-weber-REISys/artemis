@@ -1,5 +1,6 @@
-# Cluster integrations for the test cluster. Workload Cell identity, sizing,
-# Profile behavior, and release versions are owned elsewhere.
+# Cluster integrations and optional cluster-wide messaging baselines for the
+# test cluster. Pair-owned policy, sizing, Profile behavior, and release
+# versions are owned elsewhere.
 commonLabels:
   env: test
 

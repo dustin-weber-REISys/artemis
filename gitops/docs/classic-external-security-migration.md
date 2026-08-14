@@ -16,6 +16,8 @@ state in Git from externally materialized key, trust, and identity data.
 | Queue/topic authorization entries | Typed rules under `authorization.rules`, rendered as `securityRoles` broker properties. |
 | Queue list | Typed entries under `destinations`, rendered as `addressConfigurations` broker properties. |
 | `DLQ.<source>` queues | The chart's catch-all address settings create and retain per-source DLQs. Do not duplicate them in `destinations` unless a migration exception requires a separately managed queue. |
+| Classic remote JMX roles and connector ports | Map viewer/admin roles to `mops.#` `view`/`edit` grants and use the existing Hawtio/Jolokia path. Remote RMI/JMX ports are intentionally not exposed. |
+| Classic JDBC message store and database locks | Intentionally replaced by the approved replicated file-journal HA design on pair-local persistent volumes. Database connection values are not migration inputs. |
 
 ## TLS and client-certificate authentication
 
@@ -26,7 +28,7 @@ in
 [`external-mtls-values.yaml`](../charts/artemis-ha/tests/fixtures/external-mtls-values.yaml).
 
 The pinned operator consumes an SSL Secret referenced by `sslSecret`. For the
-JKS form, the external materialization process supplies these data keys:
+legacy JKS form, the external materialization process supplies these data keys:
 
 - `broker.ks`: server private key and certificate chain;
 - `client.ts`: approved client CA certificates;
@@ -34,6 +36,9 @@ JKS form, the external materialization process supplies these data keys:
 - `trustStorePassword`: password for `client.ts`.
 
 The Secret name is safe to store in Git; the four values and files are not.
+For cert-manager/trust-manager PEM material, keep `sslSecret` for the server
+identity and set the optional `trustSecret` to the separately managed client CA
+bundle.
 The server certificate SANs must match the DNS name clients use. The truststore
 must contain only currently approved client issuers. Migrating the legacy alias
 list is therefore a security-team review and CA-bundle build, not a literal
@@ -114,6 +119,12 @@ with, for every destination:
 Import only the destinations owned by a given HA pair into that pair's values.
 Do not copy environment-prefixed wildcard entries into every pair without an
 ownership review.
+
+The values collections are maps keyed by review IDs, not lists. Helm therefore
+deep-merges environment-wide entries with pair-specific entries from
+`gitops/workloads/<environment>/<workloadCellName>/artemis-values.yaml`. The
+keys are for Git review only; the nested `address`, queue `name`, and rule
+`match` remain the broker-visible values.
 
 ## What remains outside this chart
 

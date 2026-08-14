@@ -18,14 +18,19 @@ and is shared by every environment that consumes the chart. Replace
 for each broker deployment and store it only in that deployment's credential
 Secret.
 
-Client listeners are configured under `acceptors`. Every enabled acceptor is
+Client listeners are configured under `acceptors`. The required `artemis`
+acceptor on port `61616` carries both `CORE` operator peer traffic and legacy
+`OPENWIRE` client traffic; the chart rejects disabling it, removing `CORE`, or
+reusing an enabled listener port. Every enabled acceptor is
 rendered into the broker custom resource and gets a matching active-only
 `ClusterIP` Service. When client NetworkPolicy sources are configured, their
 allowed ports are derived from that same enabled-acceptor set. Disabling an
 acceptor therefore removes it from all three surfaces.
 
 A TLS acceptor references one externally materialized operator SSL Secret with
-`sslSecret`. That Secret owns both the server keystore and client truststore;
+`sslSecret`. In the legacy JKS form that Secret owns both the server keystore
+and client truststore. A separately managed PEM trust bundle can instead be
+referenced with `trustSecret`;
 their paths, passwords, private keys, and certificate contents never appear in
 chart values. The chart rejects TLS without an SSL Secret and rejects
 `needClientAuth` unless TLS is enabled. Client certificate or password identity
@@ -34,9 +39,9 @@ operator's `-jaas-config` suffix. See the
 [Classic external-security migration guide](../../docs/classic-external-security-migration.md)
 for the required Secret shapes and role mapping.
 
-The operator-managed broker cluster connector is separate from client
-listeners and uses its fixed internal port `61616`. Peer ingress and egress
-policy allow only that internal port. Console Services, management and
+The operator-managed broker cluster connector uses the `CORE` protocol on the
+fixed `artemis` acceptor port `61616`; its peer NetworkPolicy rule remains
+separate from client-source rules. Console Services, management and
 monitoring policies, and all probes share the chart's fixed console-port
 helper, so they cannot be configured independently.
 
@@ -110,9 +115,24 @@ certificate DNs, and group membership are not accepted by this interface.
 `addressConfigurations` entries in `brokerProperties.extra` are rejected so
 these controls cannot be bypassed by an untyped override.
 
+Both collections are maps keyed by stable review IDs, so Profile, environment,
+and Workload Cell value layers can be deep-merged. Duplicate effective address,
+queue, and listener-port values fail rendering. The fixed per-cell file under
+`gitops/workloads/<environment>/<workloadCellName>` is the normal owner for
+pair-specific policy.
+
+OpenWire advisory support is explicit on each acceptor because the operator's
+default is not the compatibility contract. `supportAdvisory` is valid only on
+an acceptor containing `OPENWIRE`; protocol-specific options such as
+`openWireDestinationCacheSize`, inactivity behavior, and a per-acceptor JAAS
+`securityDomain` use the operator-supported `extraParams` map and require a
+broker restart.
+
 The maintained mTLS example in
 [`tests/fixtures/external-mtls-values.yaml`](tests/fixtures/external-mtls-values.yaml)
-is also rendered by the focused chart test.
+also covers a TLS STOMP listener, a multicast topic, Classic advisory access,
+management viewer/admin roles, and a large OpenWire destination cache. It is
+rendered by the focused chart test.
 
 ## Storage
 

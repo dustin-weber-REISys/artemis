@@ -82,50 +82,73 @@ security:
       mountPath: /tmp
 
 acceptors:
-  openwire:
+  # Port 61616 is also the operator-managed cluster connector endpoint. Keep
+  # CORE enabled alongside OpenWire so broker peers and Classic clients share
+  # the one Netty acceptor without a same-port collision.
+  artemis:
     enabled: true
     port: 61616
-    protocols: OPENWIRE
+    protocols: CORE,OPENWIRE
     connectionsAllowed: 10000
+    bindToAllInterfaces: true
+    supportAdvisory: true
+    suppressInternalManagementObjects: false
     sslEnabled: false
     needClientAuth: false
     sslSecret: ""
+    trustSecret: ""
     extraParams: {}
   amqp:
     enabled: true
     port: 5672
     protocols: AMQP
     connectionsAllowed: 10000
+    bindToAllInterfaces: true
+    supportAdvisory: false
+    suppressInternalManagementObjects: true
     sslEnabled: false
     needClientAuth: false
     sslSecret: ""
+    trustSecret: ""
     extraParams: {}
   stomp:
     enabled: true
     port: 61613
     protocols: STOMP
     connectionsAllowed: 10000
+    bindToAllInterfaces: true
+    supportAdvisory: false
+    suppressInternalManagementObjects: true
     sslEnabled: false
     needClientAuth: false
     sslSecret: ""
+    trustSecret: ""
     extraParams: {}
   mqtt:
     enabled: true
     port: 1883
     protocols: MQTT
     connectionsAllowed: 10000
+    bindToAllInterfaces: true
+    supportAdvisory: false
+    suppressInternalManagementObjects: true
     sslEnabled: false
     needClientAuth: false
     sslSecret: ""
+    trustSecret: ""
     extraParams: {}
   websocket:
     enabled: true
     port: 61614
     protocols: STOMP
     connectionsAllowed: 10000
+    bindToAllInterfaces: true
+    supportAdvisory: false
+    suppressInternalManagementObjects: true
     sslEnabled: false
     needClientAuth: false
     sslSecret: ""
+    trustSecret: ""
     extraParams:
       httpEnabled: "true"
 
@@ -140,8 +163,9 @@ authentication:
 # Permanent application addresses and queues are rendered as broker properties.
 # Defaults remain empty so every promoted Workload Cell must explicitly import
 # its owned destination catalog.
-destinations: []
-# - address: EXAMPLE.REQUEST
+destinations: {}
+# example-request:
+#   address: EXAMPLE.REQUEST
 #   routingTypes:
 #     - ANYCAST
 #   queues:
@@ -153,18 +177,19 @@ destinations: []
 
 # Roles originate in the configured JAAS login modules. Rules grant those roles
 # broker operations; they never define users, passwords, certificate DNs, or
-# group membership. An empty list preserves the operator/image baseline until an
+# group membership. An empty map preserves the operator/image baseline until an
 # environment imports and reviews its least-privilege rules.
 authorization:
-  rules: []
-# - match: EXAMPLE.REQUEST
-#   permissions:
-#     send:
-#       - example-producer
-#     consume:
-#       - example-consumer
-#     browse:
-#       - example-consumer
+  rules: {}
+#   example-request:
+#     match: EXAMPLE.REQUEST
+#     permissions:
+#       send:
+#         - example-producer
+#       consume:
+#         - example-consumer
+#       browse:
+#         - example-consumer
 
 console:
   ingress:

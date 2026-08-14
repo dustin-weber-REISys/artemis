@@ -40,6 +40,7 @@ changeable implementation facts belong in executable files:
 | Validation workflow | [`Makefile`](../Makefile) and [`scripts`](../scripts) |
 | Acceptance scenarios and thresholds | [`tests/e2e/acceptance-plan.yaml`](../tests/e2e/acceptance-plan.yaml) and [`performance/profiles/sustained-load-profiles.yaml`](../../performance/profiles/sustained-load-profiles.yaml) |
 | Classic compatibility inventory | [`tests/compatibility/classic-6.2.6-inventory.yaml`](../tests/compatibility/classic-6.2.6-inventory.yaml) |
+| Pair-owned listener, identity-reference, destination, authorization, and client-source policy | Schema-validated files under [`workloads`](../workloads) |
 
 If prose conflicts with one of these files, the executable source governs the
 current implementation. A change that alters the design decision or safety
@@ -148,7 +149,10 @@ recorded once in the
 
 ### Protocol and destination compatibility
 
-OpenWire is the initial migration interface for existing Classic clients. AMQP
+OpenWire is the initial migration interface for existing Classic clients. The
+required port `61616` acceptor includes both `CORE` for operator-managed peer
+traffic and `OPENWIRE` for clients, with advisory support explicit rather than
+operator-defaulted. AMQP
 is available for new integrations and later modernization. Other listeners
 remain enabled only until runtime inventory and compatibility evidence approve
 their removal. The current listener set and ports are defined by chart values.
@@ -191,11 +195,11 @@ Messaging-client JAAS configuration is supplied only through an externally
 materialized `*-jaas-config` Secret reference. The typed `authorization.rules`
 interface renders address and queue role permissions without admitting users,
 passwords, certificate subjects, or group membership into Git. The chart
-exposes Keycloak role mapping and a management-RBAC switch, but the
-complete principal-class mapping, scoped management grants, and removal of any
-competing `management.xml` authorization mechanism must be implemented and
-tested before production. Both Hawtio and direct Jolokia negative tests are
-required.
+exposes Keycloak role mapping, the operator's management-RBAC switch, and
+scoped `mops.#` `view`/`edit` grants through the same typed authorization
+interface. The exact principal-class mapping and absence of a competing
+`management.xml` authorization mechanism still require runtime verification
+before production. Both Hawtio and direct Jolokia negative tests are required.
 
 ### Secrets and Vault
 

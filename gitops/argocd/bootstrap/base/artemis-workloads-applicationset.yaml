@@ -43,6 +43,7 @@ spec:
           valueFiles:
             - ../../argocd/profiles/{{.profile}}/values.yaml
             - ../../environments/{{.environment}}/artemis-values.yaml
+            - ../../workloads/{{.environment}}/{{.workloadCellName}}/artemis-values.yaml
           parameters:
             - name: ha.coordinationId
               value: '{{.coordinationId}}'

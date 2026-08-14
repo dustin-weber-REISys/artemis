@@ -60,6 +60,26 @@ features:
     phase: focused-compatibility-test
     protocol: openwire
     result: pending-runtime-inventory
+  - id: client-certificate-authentication
+    phase: required
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: tls-stomp-listener
+    phase: focused-compatibility-test
+    protocol: stomp
+    result: pending-runtime-inventory
+  - id: wildcard-destination-authorization
+    phase: required
+    protocol: openwire
+    result: pending-runtime-inventory
+  - id: management-viewer-admin-separation
+    phase: required
+    protocol: jolokia
+    result: pending-runtime-inventory
+  - id: large-declarative-destination-catalog
+    phase: required
+    protocol: openwire
+    result: pending-runtime-inventory
   - id: temporary-destinations
     phase: focused-compatibility-test
     protocol: openwire
