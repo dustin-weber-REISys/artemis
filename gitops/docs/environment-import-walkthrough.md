@@ -14,7 +14,7 @@ credentials, or client cutover.
 Do not sync the supplied examples unchanged. Some placeholders are
 syntactically valid and can pass rendering while remaining unusable or unsafe.
 The effective rendered configuration must contain no placeholder, example
-endpoint, all-zero digest, or secret value.
+endpoint, mutable image tag, or secret value.
 
 Replace `PLACEHOLDER_ARTEMIS_CONTACT` and `PLACEHOLDER_ARTEMIS_FISMAID` with
 the enterprise ownership and system identifiers required by Gatekeeper. The
@@ -46,7 +46,7 @@ volatile values into an environment checklist.
 | Layer | Owner and handoff required before sync |
 | --- | --- |
 | AWS/EKS | Platform team supplies the local cluster, network paths, node capacity, placement labels, EBS CSI, encrypted delayed-binding storage, KMS, and restore capability. |
-| Artifact supply chain | Platform team supplies private image-registry access and evidence for exact image digests and the pinned public chart version, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
+| Artifact supply chain | Platform team supplies private image-registry access, immutable image tags, and the pinned public chart version, licenses, SBOMs, scans, signatures, provenance, and architecture support. |
 | Argo CD | GitOps team supplies one local Argo CD installation per EKS cluster, ApplicationSet support, standalone Git credentials, the Terraform-created root Application, and a controlled bootstrap mechanism. The selected repository bootstrap supplies project policy. |
 | Vault and certificates | Security/platform team supplies auth mounts, least-privilege policies and roles, CA/TLS material, workload-bound secret references, and any Secret synchronization. |
 | Keycloak and ingress | Identity/network teams supply public OIDC clients, exact redirect URIs, claims and role mappings, DNS, TLS Secrets, ingress labels, and reachable issuer/JWKS endpoints. |
@@ -114,17 +114,16 @@ platform. This repository does not mandate a vendor for those functions.
 Resolve current artifact references from chart values, environment overlays,
 and the environment-local operator Applications. For every artifact:
 
-1. copy the exact upstream artifact into the approved registry;
-2. verify the destination digest and target architecture;
-3. record source/destination digests, `/etc/os-release` `ID` and `VERSION_ID`,
-   license, SBOM, scan, signature, provenance, and approval;
+1. copy the exact upstream artifact into an immutable-tag ECR repository;
+2. assign a unique destination tag and verify the target architecture;
+3. record the tag, license, SBOM, scan, signature, provenance, and approval;
 4. verify the operator/operand relationship against the operator-supported
    matrix; and
-5. promote the same approved digest between environments without rebuilding.
+5. promote the same approved tagged build between environments without rebuilding.
 
 The Artemis image must contain the ZooKeeper Curator lock-manager behavior
-required by the HA ADR. A changed digest is a new artifact, even if its tag or
-repository name appears equivalent.
+required by the HA ADR. Every rebuild, including an OS-only rebuild, receives
+a new tag.
 
 ### 2. Integrate Argo CD
 
@@ -181,7 +180,7 @@ and client sources in the cell's required file under [`workloads`](../workloads)
 The validator rejects any other per-cell path. Raw Helm parameters and release
 versions are not catalog interfaces.
 
-Artifact tags and digests are shared release data, not environment data. The
+Artifact tags are shared release data, not environment data. The
 [operator Kustomize deployment](../kustomize/arkmq-operator) pins the upstream
 chart, operator tag, and current private broker/init references. Promote them
 together by advancing the environment's approved Git revision.
@@ -189,7 +188,7 @@ together by advancing the environment's approved Git revision.
 Review the effective schema and rendered manifest rather than following a
 copied property inventory. At minimum, resolve:
 
-- the selected ECR base repository and approved release digests;
+- the selected ECR base repository and approved release tags;
 - persistent storage and placement;
 - the installed `aws-lb-ingress` IngressClass, shared ALB group, certificate
   coverage, and any environment-specific NetworkPolicy inputs;
@@ -339,7 +338,7 @@ secret references, and alert routing may vary based on measured evidence.
 Stop promotion when any of the following remains unresolved:
 
 - effective manifests contain placeholders, examples, mutable/unapproved
-  artifacts, all-zero digests, or secret values;
+  artifacts, or secret values;
 - workload console, Keycloak, Vault, coordination, queue, or NetworkPolicy
   identity is inherited incorrectly or collides;
 - the Vault-to-Artemis authentication bridge or injector token flow is

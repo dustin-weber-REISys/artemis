@@ -20,8 +20,8 @@ def agentLabels = [
 ]
 def agentLabel = agentLabels[toRepo]
 def helmImages = [
-    nonprod: 'PLACEHOLDER_NONPROD_HELM_IMAGE@sha256:PLACEHOLDER_HELM_IMAGE_DIGEST',
-    prod: 'PLACEHOLDER_PROD_HELM_IMAGE@sha256:PLACEHOLDER_HELM_IMAGE_DIGEST'
+    nonprod: 'PLACEHOLDER_NONPROD_HELM_IMAGE:PLACEHOLDER_HELM_IMAGE_VERSION',
+    prod: 'PLACEHOLDER_PROD_HELM_IMAGE:PLACEHOLDER_HELM_IMAGE_VERSION'
 ]
 def helmImage = helmImages[toRepo]
 if (!agentLabel || !helmImage) {

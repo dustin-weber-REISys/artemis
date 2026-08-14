@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# Both image digests are deliberately supplied by the promotion pipeline.
-# A build without explicit digests fails instead of silently floating a base image.
+# Base images use version tags. Publish a new validation-client tag whenever a
+# base-image version changes.
 ARG BUILD_IMAGE=maven:3.9.16-eclipse-temurin-17
-ARG BUILD_IMAGE_DIGEST
-FROM ${BUILD_IMAGE}@${BUILD_IMAGE_DIGEST} AS build
+FROM ${BUILD_IMAGE} AS build
 
 WORKDIR /src
 COPY pom.xml .
@@ -12,8 +11,7 @@ COPY src ./src
 RUN mvn -B -ntp -DskipTests package
 
 ARG RUNTIME_IMAGE=eclipse-temurin:17-jre
-ARG RUNTIME_IMAGE_DIGEST
-FROM ${RUNTIME_IMAGE}@${RUNTIME_IMAGE_DIGEST}
+FROM ${RUNTIME_IMAGE}
 
 LABEL org.opencontainers.image.title="Artemis deterministic validation client" \
       org.opencontainers.image.description="OpenWire and AMQP durable-message validation client" \

@@ -30,7 +30,7 @@ help:
 validate: validate-release test-upgrade-workflow test-chef-import validate-scenarios validate-topology test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 versions:
-	@yq -r '"Kubernetes " + .platform.kubernetesVersion, "ArkMQ operator " + .operator.version + " (image OS " + .operator.image.baseOs.id + " " + .operator.image.baseOs.versionId + ")", "Artemis broker " + .broker.version + " (runtime image OS " + .broker.images.runtime.baseOs.id + " " + .broker.images.runtime.baseOs.versionId + ", init image OS " + .broker.images.init.baseOs.id + " " + .broker.images.init.baseOs.versionId + ")", "ZooKeeper " + .zookeeper.version + " (image OS " + .zookeeper.image.baseOs.id + " " + .zookeeper.image.baseOs.versionId + ")"' releases/current.yaml
+	@yq -r '"Kubernetes " + .platform.kubernetesVersion, "ArkMQ operator " + .operator.version + " (image " + .operator.image.tag + ")", "Artemis broker " + .broker.version + " (runtime image " + .broker.images.runtime.tag + ", init image " + .broker.images.init.tag + ")", "ZooKeeper " + .zookeeper.version + " (image " + .zookeeper.image.tag + ")"' releases/current.yaml
 
 prepare-upgrade:
 	./scripts/prepare-upgrade.sh --component "$(COMPONENT)" --version "$(VERSION)" $(UPGRADE_ARGS)

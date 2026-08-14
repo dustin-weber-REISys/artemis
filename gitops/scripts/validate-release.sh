@@ -66,18 +66,14 @@ assert_keys '.operator' 'chart,image,manifest,version'
 assert_keys '.operator.chart' 'artifactSha256,name,ociDigest,repository,version'
 assert_keys '.operator.manifest' 'sha256,url'
 assert_keys '.' 'broker,operator,platform,schemaVersion,zookeeper'
-assert_keys '.operator.image' 'baseOs,upstreamDigest'
-assert_keys '.operator.image.baseOs' 'id,versionId'
+assert_keys '.operator.image' 'tag'
 assert_keys '.broker' 'images,version'
 assert_keys '.broker.images' 'init,runtime'
-assert_keys '.broker.images.init' 'baseOs,digest'
-assert_keys '.broker.images.init.baseOs' 'id,versionId'
-assert_keys '.broker.images.runtime' 'baseOs,digest'
-assert_keys '.broker.images.runtime.baseOs' 'id,versionId'
+assert_keys '.broker.images.init' 'tag'
+assert_keys '.broker.images.runtime' 'tag'
 assert_keys '.zookeeper' 'image,version'
-assert_keys '.zookeeper.image' 'baseOs,digest'
-assert_keys '.zookeeper.image.baseOs' 'id,versionId'
-assert_equal 'schemaVersion' "$(yq -r '.schemaVersion // ""' "$release_file")" 'releases.artemis.apache.org/v1'
+assert_keys '.zookeeper.image' 'tag'
+assert_equal 'schemaVersion' "$(yq -r '.schemaVersion // ""' "$release_file")" 'releases.artemis.apache.org/v2'
 
 version_pattern='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
 digest_pattern='^sha256:[a-f0-9]{64}$'
@@ -91,23 +87,12 @@ operator_chart_oci_digest=$(yq -r '.operator.chart.ociDigest // ""' "$release_fi
 operator_chart_artifact_sha256=$(yq -r '.operator.chart.artifactSha256 // ""' "$release_file")
 operator_manifest_url=$(yq -r '.operator.manifest.url // ""' "$release_file")
 operator_manifest_sha256=$(yq -r '.operator.manifest.sha256 // ""' "$release_file")
-operator_upstream_digest=$(yq -r '.operator.image.upstreamDigest // ""' "$release_file")
+operator_image_tag=$(yq -r '.operator.image.tag // ""' "$release_file")
 broker_version=$(yq -r '.broker.version // ""' "$release_file")
 zookeeper_version=$(yq -r '.zookeeper.version // ""' "$release_file")
-broker_init_digest=$(yq -r '.broker.images.init.digest // ""' "$release_file")
-broker_runtime_digest=$(yq -r '.broker.images.runtime.digest // ""' "$release_file")
-zookeeper_release_digest=$(yq -r '.zookeeper.image.digest // ""' "$release_file")
-operator_os_id=$(yq -r '.operator.image.baseOs.id // ""' "$release_file")
-operator_os_version=$(yq -r '.operator.image.baseOs.versionId // ""' "$release_file")
-broker_init_os_id=$(yq -r '.broker.images.init.baseOs.id // ""' "$release_file")
-broker_init_os_version=$(yq -r '.broker.images.init.baseOs.versionId // ""' "$release_file")
-broker_runtime_os_id=$(yq -r '.broker.images.runtime.baseOs.id // ""' "$release_file")
-broker_runtime_os_version=$(yq -r '.broker.images.runtime.baseOs.versionId // ""' "$release_file")
-zookeeper_os_id=$(yq -r '.zookeeper.image.baseOs.id // ""' "$release_file")
-zookeeper_os_version=$(yq -r '.zookeeper.image.baseOs.versionId // ""' "$release_file")
-operator_image_tag=$operator_version
-broker_image_tag="artemis.$broker_version"
-zookeeper_image_tag=$zookeeper_version
+broker_init_image_tag=$(yq -r '.broker.images.init.tag // ""' "$release_file")
+broker_runtime_image_tag=$(yq -r '.broker.images.runtime.tag // ""' "$release_file")
+zookeeper_image_tag=$(yq -r '.zookeeper.image.tag // ""' "$release_file")
 
 for entry in \
   "operator.version:$operator_version" \
@@ -116,20 +101,13 @@ for entry in \
   "zookeeper.version:$zookeeper_version"; do
   assert_pattern "${entry%%:*}" "${entry#*:}" "$version_pattern"
 done
-assert_pattern 'broker.images.init.digest' "$broker_init_digest" "$digest_pattern"
-assert_pattern 'broker.images.runtime.digest' "$broker_runtime_digest" "$digest_pattern"
-assert_pattern 'zookeeper.image.digest' "$zookeeper_release_digest" "$digest_pattern"
-os_value_pattern='^[A-Za-z0-9][A-Za-z0-9._+-]*$'
+image_tag_pattern='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
 for entry in \
-  "operator.image.baseOs.id:$operator_os_id" \
-  "operator.image.baseOs.versionId:$operator_os_version" \
-  "broker.images.init.baseOs.id:$broker_init_os_id" \
-  "broker.images.init.baseOs.versionId:$broker_init_os_version" \
-  "broker.images.runtime.baseOs.id:$broker_runtime_os_id" \
-  "broker.images.runtime.baseOs.versionId:$broker_runtime_os_version" \
-  "zookeeper.image.baseOs.id:$zookeeper_os_id" \
-  "zookeeper.image.baseOs.versionId:$zookeeper_os_version"; do
-  assert_pattern "${entry%%:*}" "${entry#*:}" "$os_value_pattern"
+  "operator.image.tag:$operator_image_tag" \
+  "broker.images.init.tag:$broker_init_image_tag" \
+  "broker.images.runtime.tag:$broker_runtime_image_tag" \
+  "zookeeper.image.tag:$zookeeper_image_tag"; do
+  assert_pattern "${entry%%:*}" "${entry#*:}" "$image_tag_pattern"
 done
 assert_equal 'operator chart name' "$operator_chart_name" 'arkmq-org-broker-operator'
 assert_equal 'operator chart version' "$operator_chart_version" "$operator_version"
@@ -138,7 +116,6 @@ assert_equal 'operator chart version' "$operator_chart_version" "$operator_versi
 assert_pattern 'operator.chart.ociDigest' "$operator_chart_oci_digest" "$digest_pattern"
 assert_pattern 'operator.chart.artifactSha256' "$operator_chart_artifact_sha256" "$hex_pattern"
 assert_pattern 'operator.manifest.sha256' "$operator_manifest_sha256" "$hex_pattern"
-assert_pattern 'operator.image.upstreamDigest' "$operator_upstream_digest" "$digest_pattern"
 [[ "$operator_manifest_url" == https://* ]] || error "operator.manifest.url must use https: $operator_manifest_url"
 [[ "$operator_manifest_url" == *"/v$operator_version/"* ]] || \
   error "operator.manifest.url does not select operator.version $operator_version"
@@ -169,18 +146,18 @@ for environment in test nonprod prod; do
     "$(yq -r '.labels[0].pairs.env' "$overlay/kustomization.yaml")" "$environment"
   assert_equal "$environment operator image" \
     "$(yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .image' "$image_patch")" \
-    "$expected_ecr_repository/arkmq-operator:$operator_image_tag@$operator_upstream_digest"
+    "$expected_ecr_repository/arkmq-operator:$operator_image_tag"
   for image_kind in Init Kubernetes; do
     env_name="RELATED_IMAGE_ActiveMQ_Artemis_Broker_${image_kind}_$broker_compact"
     repository_suffix=activemq-artemis-broker-init
-    expected_image_digest=$broker_init_digest
+    expected_image_tag=$broker_init_image_tag
     if [[ "$image_kind" == Kubernetes ]]; then
       repository_suffix=activemq-artemis-broker-kubernetes
-      expected_image_digest=$broker_runtime_digest
+      expected_image_tag=$broker_runtime_image_tag
     fi
     assert_equal "$environment operator $env_name" \
       "$(ENV_NAME="$env_name" yq -r '.spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == strenv(ENV_NAME)) | .value' "$image_patch")" \
-      "$expected_ecr_repository/$repository_suffix:$broker_image_tag@$expected_image_digest"
+      "$expected_ecr_repository/$repository_suffix:$expected_image_tag"
   done
   application="$release_render_dir/composition-$environment.yaml"
   if ! "${composition_render_command[@]}" "$repo_root/argocd/bootstrap/$environment" > "$application"; then
@@ -232,18 +209,14 @@ zookeeper_base="$repo_root/kustomize/zookeeper/base"
 zookeeper_image=$(yq -r \
   '.spec.template.spec.containers[] | select(.name == "zookeeper") | .image' \
   "$zookeeper_base/statefulset.yaml")
-zookeeper_tagged_image=${zookeeper_image%@*}
-zookeeper_rendered_tag=${zookeeper_tagged_image##*:}
-zookeeper_digest=${zookeeper_image##*@}
+zookeeper_rendered_tag=${zookeeper_image##*:}
 assert_equal 'ZooKeeper Kustomize image tag' "$zookeeper_rendered_tag" "$zookeeper_image_tag"
-assert_pattern 'ZooKeeper Kustomize image digest' "$zookeeper_digest" "$digest_pattern"
-assert_equal 'ZooKeeper release image digest' "$zookeeper_digest" "$zookeeper_release_digest"
 assert_equal 'ZooKeeper Kustomize version label' \
   "$(yq -r '.labels[0].pairs."app.kubernetes.io/version"' "$zookeeper_base/kustomization.yaml")" \
-  "$zookeeper_image_tag"
+  "$zookeeper_version"
 assert_equal 'ZooKeeper Pod version label' \
   "$(yq -r '.spec.template.metadata.labels."app.kubernetes.io/version"' "$zookeeper_base/statefulset.yaml")" \
-  "$zookeeper_image_tag"
+  "$zookeeper_version"
 # The former Helm-rendered PVC template is immutable. These historical values
 # deliberately stay pinned while current release labels and pod images advance.
 assert_equal 'ZooKeeper PVC legacy chart label' \

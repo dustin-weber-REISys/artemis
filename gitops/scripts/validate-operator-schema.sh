@@ -35,9 +35,10 @@ if [[ "$schema_mode" == network ]]; then
 fi
 
 operator_version=$(yq -r '.operator.version' "$release_file")
-operator_image_tag=$operator_version
+operator_image_tag=$(yq -r '.operator.image.tag' "$release_file")
 broker_version=$(yq -r '.broker.version' "$release_file")
-broker_image_tag="artemis.$broker_version"
+broker_init_image_tag=$(yq -r '.broker.images.init.tag' "$release_file")
+broker_runtime_image_tag=$(yq -r '.broker.images.runtime.tag' "$release_file")
 operator_manifest_url=${ARKMQ_OPERATOR_MANIFEST_URL:-$(yq -r '.operator.manifest.url' "$release_file")}
 operator_manifest_sha256=${ARKMQ_OPERATOR_MANIFEST_SHA256:-$(yq -r '.operator.manifest.sha256' "$release_file")}
 
@@ -145,11 +146,8 @@ for environment in test nonprod prod; do
     exit 1
   fi
 
-  operator_digest=$(yq -r '.operator.image.upstreamDigest' "$release_file")
-  broker_init_digest=$(yq -r '.broker.images.init.digest' "$release_file")
-  broker_runtime_digest=$(yq -r '.broker.images.runtime.digest' "$release_file")
-  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:$operator_image_tag@$operator_digest" ]]; then
-    printf '%s operator Deployment must resolve the private ECR image by its centrally selected tag and digest\n' \
+  if [[ "$(yq -r 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' "$operator_rendered")" != "$ecr_repository/arkmq-operator:$operator_image_tag" ]]; then
+    printf '%s operator Deployment must resolve the private ECR image by its centrally selected tag\n' \
       "$environment" >&2
     exit 1
   fi
@@ -176,13 +174,13 @@ for environment in test nonprod prod; do
   broker_image=$(ENV_NAME="$broker_env" yq -r \
     'select(.kind == "Deployment") | .spec.template.spec.containers[].env[] | select(.name == strenv(ENV_NAME)) | .value' \
     "$operator_rendered")
-  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init:artemis.$broker_version@$broker_init_digest" ]]; then
-    printf '%s operator init image does not resolve version %s to the private mirror digest\n' \
+  if [[ "$init_image" != "$ecr_repository/activemq-artemis-broker-init:$broker_init_image_tag" ]]; then
+    printf '%s operator init image does not resolve version %s to the selected private mirror tag\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi
-  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes:artemis.$broker_version@$broker_runtime_digest" ]]; then
-    printf '%s operator broker image does not resolve version %s to the private mirror digest\n' \
+  if [[ "$broker_image" != "$ecr_repository/activemq-artemis-broker-kubernetes:$broker_runtime_image_tag" ]]; then
+    printf '%s operator broker image does not resolve version %s to the selected private mirror tag\n' \
       "$environment" "$broker_version" >&2
     exit 1
   fi

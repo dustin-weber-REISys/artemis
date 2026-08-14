@@ -38,7 +38,7 @@ help:
 		'  performance-local Run a load profile against the local broker' \
 		'  performance-deployed Run a load profile against PERF_URL' \
 		'  failure-deployed Run a destructive acknowledged-message failover test' \
-		'  build-image       Build the digest-pinned validation client image' \
+		'  build-image       Build the version-tagged validation client image' \
 		'' \
 		'Repository:' \
 		'  validate          Run the complete validation suite' \

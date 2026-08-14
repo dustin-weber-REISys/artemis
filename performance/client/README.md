@@ -35,6 +35,6 @@ The placeholder hostname above is intentionally non-routable. Supply real
 values only through a test-job secret or environment-specific deployment; do
 not put credentials in Git, rendered manifests, or shell history.
 
-The Dockerfile requires immutable build and runtime digests. The promotion
-pipeline should record the source version, digest, SBOM, license inventory, and
-scan result alongside the mirrored image.
+The Dockerfile uses explicit build and runtime version tags. The promotion
+pipeline should publish a new immutable validation-client tag for every rebuild
+and retain its SBOM, license inventory, and scan result.

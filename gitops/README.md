@@ -27,8 +27,8 @@ Run the network-backed phase explicitly on a connected workstation:
 ARTEMIS_SCHEMA_MODE=network make validate-charts
 ```
 
-The target Kubernetes version and the `/etc/os-release` identity of every
-promoted operator, broker, init, and ZooKeeper image come from
+The target Kubernetes version and immutable tag of every promoted operator,
+broker, init, and ZooKeeper image come from
 [`releases/current.yaml`](releases/current.yaml).
 Network mode fails when schema downloads fail. Custom-resource schema checks
 remain in `make validate-operator-schema`, which also distinguishes its offline

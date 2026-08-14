@@ -55,12 +55,11 @@ review.
 - **Compatibility first.** Preserve required Classic protocols and semantics
   during broker migration. Client-library or protocol modernization is a
   separate, reversible change.
-- **Immutable supply chain.** Mirror, scan, sign, and pin upstream artifacts.
-  Production does not pull unapproved public or mutable references. The
-  Platform Release records `ID` and `VERSION_ID` from `/etc/os-release` for
-  every promoted operator, broker-init, broker-runtime, and ZooKeeper digest so
-  base-image maintenance is reviewed even when the application version is
-  unchanged.
+- **Immutable supply chain.** Mirror, scan, sign, and tag upstream artifacts in
+  immutable ECR repositories. Production does not pull unapproved public or
+  mutable references. Every application or base-image rebuild receives a new
+  image tag, allowing base-image maintenance to be reviewed even when the
+  application version is unchanged.
 - **GitOps ownership.** Argo CD is the normal writer of deployment state;
   runtime operators reconcile only the resources they own.
 - **No secrets in Git.** Git stores secret references and non-secret policy,
@@ -260,7 +259,7 @@ operability. At minimum:
 Destructive scenarios are dry-run by default and require exact context,
 cluster, and namespace confirmation plus an approved change window.
 
-Artifacts move from test to nonprod to production by immutable digest. Do not
+Artifacts move from test to nonprod to production under the same immutable tag. Do not
 rebuild between environments or combine operator, broker, ZooKeeper, and client
 upgrades into one unobserved change. Production promotion requires successful
 failure, load, upgrade, rollback, credential-rotation, authorization, and

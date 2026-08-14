@@ -37,8 +37,8 @@ The proposed design is already present:
 - The environment overlays apply only environment identity and approved private
   image mappings.
 - [`releases/current.yaml`](../../releases/current.yaml) records the chart
-  version, OCI digest, downloaded artifact checksum, operator image digest,
-  container OS identities, and the operator/operand versions.
+  version, OCI digest, downloaded artifact checksum, immutable image tags, and
+  the operator/operand versions.
 - [`scripts/prepare-upgrade.sh`](../../scripts/prepare-upgrade.sh) stages an
   operator version change and validates it before writing, while
   [`kustomize/arkmq-operator/tests/test.sh`](../../kustomize/arkmq-operator/tests/test.sh)
@@ -96,8 +96,8 @@ It does not make upgrades automatic or risk-free:
 
 Keep the current unmodified ArkMQ Helm chart as the Kustomize base. It is the
 right maintenance boundary for this open-source EKS/GitOps architecture, and
-the repository already has the essential controls: exact version and digest
-pins, thin overlays, fail-closed related-image mappings, offline artifact
+the repository already has the essential controls: an exact chart version and
+digest, immutable container tags, thin overlays, fail-closed related-image mappings, offline artifact
 verification, render tests, and a staged upgrade workflow.
 
 For each operator upgrade:

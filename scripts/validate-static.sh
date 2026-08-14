@@ -176,10 +176,10 @@ if command -v yq >/dev/null 2>&1; then
     fi
   }
 
-  assert_yaml_pattern 'ZooKeeper release image digest' \
+  assert_yaml_pattern 'ZooKeeper release image tag' \
     '.spec.template.spec.containers[] | select(.name == "zookeeper") | .image // ""' \
     "$repo_root/gitops/kustomize/zookeeper/base/statefulset.yaml" \
-    '@sha256:[0-9a-f]{64}$'
+    ':[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
 
   assert_yaml_pattern 'ArkMQ Kustomize chart OCI repository' \
     '.helmCharts[0].repo // ""' \
@@ -214,16 +214,16 @@ fi
 
 dockerfile="$repo_root/performance/client/Dockerfile"
 if [[ -f "$dockerfile" ]]; then
-  grep -Eq '^ARG BUILD_IMAGE_DIGEST$' "$dockerfile" || { printf '%s\n' 'Dockerfile must require BUILD_IMAGE_DIGEST' >&2; errors=$((errors + 1)); }
-  grep -Eq '^ARG RUNTIME_IMAGE_DIGEST$' "$dockerfile" || { printf '%s\n' 'Dockerfile must require RUNTIME_IMAGE_DIGEST' >&2; errors=$((errors + 1)); }
-  grep -Eq '^FROM \$\{BUILD_IMAGE\}@\$\{BUILD_IMAGE_DIGEST\}' "$dockerfile" || { printf '%s\n' 'build stage is not digest-pinned' >&2; errors=$((errors + 1)); }
-  grep -Eq '^FROM \$\{RUNTIME_IMAGE\}@\$\{RUNTIME_IMAGE_DIGEST\}' "$dockerfile" || { printf '%s\n' 'runtime stage is not digest-pinned' >&2; errors=$((errors + 1)); }
+  grep -Eq '^ARG BUILD_IMAGE=[^:]+:[^[:space:]]+$' "$dockerfile" || { printf '%s\n' 'Dockerfile must default BUILD_IMAGE to a version tag' >&2; errors=$((errors + 1)); }
+  grep -Eq '^ARG RUNTIME_IMAGE=[^:]+:[^[:space:]]+$' "$dockerfile" || { printf '%s\n' 'Dockerfile must default RUNTIME_IMAGE to a version tag' >&2; errors=$((errors + 1)); }
+  grep -Eq '^FROM \$\{BUILD_IMAGE\} AS build$' "$dockerfile" || { printf '%s\n' 'build stage must use BUILD_IMAGE' >&2; errors=$((errors + 1)); }
+  grep -Eq '^FROM \$\{RUNTIME_IMAGE\}$' "$dockerfile" || { printf '%s\n' 'runtime stage must use RUNTIME_IMAGE' >&2; errors=$((errors + 1)); }
   grep -Eq '^USER 65532:65532$' "$dockerfile" || { printf '%s\n' 'runtime image must run as non-root UID 65532' >&2; errors=$((errors + 1)); }
 fi
 
 makefile="$repo_root/performance/Makefile"
-grep -q 'BUILD_IMAGE_DIGEST' "$makefile" || { printf '%s\n' 'Makefile must pass build image digest' >&2; errors=$((errors + 1)); }
-grep -q 'RUNTIME_IMAGE_DIGEST' "$makefile" || { printf '%s\n' 'Makefile must pass runtime image digest' >&2; errors=$((errors + 1)); }
+grep -q 'BUILD_IMAGE ?=' "$makefile" || { printf '%s\n' 'Makefile must select a build image tag' >&2; errors=$((errors + 1)); }
+grep -q 'RUNTIME_IMAGE ?=' "$makefile" || { printf '%s\n' 'Makefile must select a runtime image tag' >&2; errors=$((errors + 1)); }
 
 if command -v rg >/dev/null 2>&1; then
   if rg -n --hidden --glob '!/.git/**' --glob '!reports/**' \

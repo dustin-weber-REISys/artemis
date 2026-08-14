@@ -61,10 +61,9 @@ The `-v2` Deployment identity remains a declarative replacement for
 installations whose immutable selectors were rendered differently by earlier
 revisions. `PruneLast=true` keeps the old controller available until the
 replacement is healthy, then automated pruning removes it. Private image tags
-must be immutable under the platform's ECR policy. Upstream chart and image
-digests remain release provenance; do not combine an upstream image digest with
-a private repository unless promotion evidence proves that manifest exists in
-the target registry.
+must be immutable under the platform's ECR policy. The chart digest and
+checksum remain release provenance; container deployments use the selected
+private ECR tags.
 
 The bootstrap-managed `messaging-platform` project allows:
 

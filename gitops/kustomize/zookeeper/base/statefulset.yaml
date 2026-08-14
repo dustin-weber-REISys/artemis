@@ -55,7 +55,7 @@ spec:
               app.kubernetes.io/name: zookeeper
       initContainers:
         - name: configure-and-wait-for-peer-dns
-          image: example.invalid/ecr-mirror/zookeeper:3.9.5@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: example.invalid/ecr-mirror/zookeeper:3.9.5
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -99,7 +99,7 @@ spec:
               mountPath: /generated-conf
       containers:
         - name: zookeeper
-          image: example.invalid/ecr-mirror/zookeeper:3.9.5@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: example.invalid/ecr-mirror/zookeeper:3.9.5
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash

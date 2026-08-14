@@ -1,6 +1,6 @@
 services:
   broker-volume-init:
-    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0@sha256:060d9a2d3f7f2505873d58075c2066b3255757aa067235a754d04c18dece6a8c}
+    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0}
     user: "0:0"
     entrypoint:
       - /bin/sh
@@ -14,7 +14,7 @@ services:
       - artemis-data:/home/jboss/broker
 
   broker:
-    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0@sha256:060d9a2d3f7f2505873d58075c2066b3255757aa067235a754d04c18dece6a8c}
+    image: ${ARTEMIS_IMAGE:-quay.io/arkmq-org/activemq-artemis-broker:artemis.2.53.0}
     hostname: broker
     environment:
       AMQ_NAME: ${ARTEMIS_BROKER_NAME:-local-broker}

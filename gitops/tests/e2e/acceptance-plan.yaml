@@ -248,7 +248,7 @@ cases:
     execution:
       kind: runner-assisted
       runnerAction: operate-argocd-application
-    action: promote an immutable chart/image digest through Argo CD and roll back the application revision
+    action: promote an immutable image tag and chart artifact through Argo CD and roll back the application revision
     verification:
       - Argo returns to Synced and Healthy after each change
       - broker, replication, queue, and client evidence remains healthy

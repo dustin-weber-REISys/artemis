@@ -21,10 +21,7 @@ for command_name in kubectl rg yq; do
 done
 
 zookeeper_version=$(yq -er '.zookeeper.version' "$release_file")
-zookeeper_base_image=$(yq -er \
-  '.spec.template.spec.containers[] | select(.name == "zookeeper") | .image' \
-  "$zookeeper_dir/base/statefulset.yaml")
-zookeeper_digest=${zookeeper_base_image##*@}
+zookeeper_image_tag=$(yq -er '.zookeeper.image.tag' "$release_file")
 connect_template=$(yq -er \
   '.spec.template.spec.source.helm.parameters[] | select(.name == "zookeeper.connectString") | .value' \
   "$applicationset")
@@ -71,7 +68,7 @@ for environment in test nonprod prod; do
     ] | length) == 0
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" ECR="$expected_ecr" STORAGE="$expected_storage" MEMORY="$expected_memory" HEAP="$expected_heap" DOMAINS="$expected_zone_domains" SIZE="$expected_size" VERSION="$zookeeper_version" DIGEST="$zookeeper_digest" yq -e '
+  ENVIRONMENT="$environment" ECR="$expected_ecr" STORAGE="$expected_storage" MEMORY="$expected_memory" HEAP="$expected_heap" DOMAINS="$expected_zone_domains" SIZE="$expected_size" VERSION="$zookeeper_version" IMAGE_TAG="$zookeeper_image_tag" yq -e '
     select(.kind == "StatefulSet") |
       .metadata.name == (strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper") and
       .spec.serviceName == (strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-headless") and
@@ -85,9 +82,9 @@ for environment in test nonprod prod; do
       .spec.template.spec.topologySpreadConstraints[0].minDomains == (strenv(DOMAINS) | tonumber) and
       .spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == "DoNotSchedule" and
       .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey == "kubernetes.io/hostname" and
-      .spec.template.spec.initContainers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(VERSION) + "@" + strenv(DIGEST)) and
+      .spec.template.spec.initContainers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(IMAGE_TAG)) and
       .spec.template.spec.initContainers[0].resources.requests.memory == strenv(MEMORY) and
-      .spec.template.spec.containers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(VERSION) + "@" + strenv(DIGEST)) and
+      .spec.template.spec.containers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(IMAGE_TAG)) and
       .spec.template.spec.containers[0].resources.requests.memory == strenv(MEMORY) and
       (.spec.template.spec.containers[0].env[] | select(.name == "JVMFLAGS").value) == strenv(HEAP) and
       (.spec.volumeClaimTemplates[0].metadata | keys | sort | join(",")) == "labels,name" and

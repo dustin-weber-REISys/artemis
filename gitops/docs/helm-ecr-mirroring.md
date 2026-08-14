@@ -179,16 +179,14 @@ artifact media type and destination digest, then archives a fingerprinted
 rather than exposed as a parameter.
 
 Use `alpine/helm:<approved-version>` as the Helm runtime image, then mirror it
-into each environment's ECR and replace the pipeline's image and digest
-placeholders. The image includes the POSIX shell and Alpine utilities required
-by the transfer script. Pin and promote the reviewed digest, not a floating
-tag.
+into each environment's immutable-tag ECR repository and replace the
+pipeline's image placeholder. The image includes the POSIX shell and Alpine
+utilities required by the transfer script.
 
-The promotion record must include the upstream location, upstream and ECR
-digests, version, `ID` and `VERSION_ID` from the exact image's
-`/etc/os-release`, license, SBOM, vulnerability scan, signature/provenance
-result, rendered-manifest policy result, approval, and import date. Promote the
-same bytes to production; do not rebuild or repackage between environments.
+The promotion record must include the upstream location, chart digest, image
+tag, version, license, SBOM, vulnerability scan, signature/provenance result,
+rendered-manifest policy result, approval, and import date. Promote the same
+tagged build to production; do not rebuild or repackage between environments.
 
 ## Artemis and Argo CD wiring
 
@@ -202,11 +200,8 @@ Runtime image locations are derived from two ECR base placeholders:
 The operator Applications use the Artemis Git repository and point to the
 matching Kustomize overlay. Kustomize inflates the pinned, unmodified public
 OCI chart and patches only the final Kubernetes objects. The environment image
-patch selects the approved operator, init, and broker tag-plus-digest references
-from the Platform Release. Do not append an
-upstream Quay image digest to a private ECR repository unless the promotion
-record proves that exact manifest exists there; registry-side conversion or an
-incomplete copy otherwise produces `ErrImagePull: NotFound`.
+patch selects the approved operator, init, and broker tags from the Platform
+Release. Each tag must already exist in the target private ECR repository.
 
 The mirrored upstream Helm artifact remains approved provenance and an offline
 validation input. The current Argo deployment source is the public chart in the

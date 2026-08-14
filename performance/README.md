@@ -137,7 +137,7 @@ make -C performance test
 make -C performance package
 ```
 
-The promotion Dockerfile requires digest-pinned build and runtime images.
+The promotion Dockerfile uses explicit build and runtime image version tags.
 
 The local image normally builds the client entirely inside Docker. If the
 container trust store cannot reach Maven Central, the build helper falls back

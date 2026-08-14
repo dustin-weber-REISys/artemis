@@ -11,7 +11,7 @@ tokens with values supplied by the cluster platform; do not commit them.
 
 ## Preconditions
 
-- Confirm the approved image/chart digests and the maintenance window.
+- Confirm the approved immutable image tags, chart artifact, and maintenance window.
 - Confirm the target context, cluster, and namespace exactly.
 - Verify the ApplicationSet controller and generated child Applications before
   checking workloads:

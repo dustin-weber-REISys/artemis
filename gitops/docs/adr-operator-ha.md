@@ -42,7 +42,7 @@ candidate newer than the selected operator supported. The chart resolved that
 conflict by selecting an operator-supported operand and constraining accepted
 versions to the upstream matrix.
 
-Current operator, operand, image, and digest values are deliberately not copied
+Current operator, operand, and image-tag values are deliberately not copied
 into this ADR. They are authoritative in:
 
 - [`charts/artemis-ha/values.yaml`](../charts/artemis-ha/values.yaml);
@@ -87,7 +87,7 @@ Runtime acceptance on the exact mirrored artifacts must prove:
 The upstream image is preferred. A thin derivative is allowed only when runtime
 evidence demonstrates a missing required class or filesystem behavior. It must
 preserve the reviewed upstream base, contain no secrets, run non-root, and
-repeat license, SBOM, scan, signature, digest, and acceptance review.
+repeat license, SBOM, scan, signature, and acceptance review under a new tag.
 
 Vault injection is not equivalent to broker authentication integration. The
 operator may generate or consume Kubernetes Secrets, while the injector writes

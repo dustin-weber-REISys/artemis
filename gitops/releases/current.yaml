@@ -1,10 +1,10 @@
-schemaVersion: releases.artemis.apache.org/v1
+schemaVersion: releases.artemis.apache.org/v2
 
 platform:
   kubernetesVersion: 1.31.0
 
-# Canonical deployed versions. The operator chart is consumed unmodified by
-# Kustomize; its digests retain the approved upstream provenance.
+# Canonical deployed versions and container-image tags. Image tags are unique,
+# immutable release pointers in ECR; OS-only rebuilds receive a new tag.
 operator:
   version: 2.2.0
   chart:
@@ -17,29 +17,17 @@ operator:
     url: https://github.com/arkmq-org/arkmq-org-broker-operator/releases/download/v2.2.0/activemq-artemis-operator.yaml
     sha256: ae8ce2672e1cb17dc888e249b076c08e5fb4c44f8cc90dcaef067e86bb4b49f3
   image:
-    upstreamDigest: sha256:ab922b10ed90483cd4ec67d978d618b743b62ef5daba6fe97c7e10a72936302f
-    baseOs:
-      id: PLACEHOLDER_ARKMQ_OPERATOR_IMAGE_OS_ID
-      versionId: PLACEHOLDER_ARKMQ_OPERATOR_IMAGE_OS_VERSION_ID
+    tag: 2.2.0
 
 broker:
   version: 2.53.0
   images:
     init:
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      baseOs:
-        id: PLACEHOLDER_ARTEMIS_INIT_IMAGE_OS_ID
-        versionId: PLACEHOLDER_ARTEMIS_INIT_IMAGE_OS_VERSION_ID
+      tag: artemis.2.53.0
     runtime:
-      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      baseOs:
-        id: PLACEHOLDER_ARTEMIS_RUNTIME_IMAGE_OS_ID
-        versionId: PLACEHOLDER_ARTEMIS_RUNTIME_IMAGE_OS_VERSION_ID
+      tag: artemis.2.53.0
 
 zookeeper:
   version: 3.9.5
   image:
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    baseOs:
-      id: PLACEHOLDER_ZOOKEEPER_IMAGE_OS_ID
-      versionId: PLACEHOLDER_ZOOKEEPER_IMAGE_OS_VERSION_ID
+    tag: 3.9.5

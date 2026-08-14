@@ -1,9 +1,9 @@
 # Upgrade and rollback
 
-Promote the exact tested image and chart digests. Treat Kubernetes, operator,
+Promote the exact tested image tags and chart artifact. Treat Kubernetes, operator,
 broker, ZooKeeper, and client-library changes as separate observed Platform
-Release changes. The operating system inside every promoted container image is
-part of that image's release evidence, not the EKS worker-node configuration.
+Release changes. Publish a new immutable image tag for every application or
+base-OS rebuild; do not reuse a deployed tag.
 
 > This repository is an offline/test copy. Run registry, Kubernetes, and Argo CD
 > steps below only from the authorized work computer and approved
@@ -19,16 +19,14 @@ Review the centrally selected Platform Release:
 make versions
 ```
 
-Replace every image-OS placeholder with `ID` and `VERSION_ID` read from
-`/etc/os-release` in the exact digest-qualified image before the first
-promotion. Use one pull request and change window per row:
+Use one pull request and change window per row:
 
 | Component | Required preview inputs | Repository-owned result |
 | --- | --- | --- |
 | Kubernetes | semantic version | central platform assumption used by schema validation |
-| Operator | chart artifact and provenance; image digest and OS identity | central version/provenance plus every operator overlay |
-| Broker | version, current operator chart, and separate init/runtime OS identities | central version, chart schema/default, related-image mappings, and image OS records |
-| ZooKeeper | version, immutable image digest, and image OS identity | central version, pod labels, image references, and image OS record |
+| Operator | version, chart artifact/provenance, and optional image-tag override | central version/provenance, image tag, and every operator overlay |
+| Broker | version, current operator chart, and optional init/runtime image-tag overrides | central version, image tags, chart schema/default, and related-image mappings |
+| ZooKeeper | version and optional image-tag override | central version, image tag, pod labels, and image references |
 
 Do not combine control-plane, operator, operand, or client changes
 just because they are mutually compatible. Separate changes preserve a useful
@@ -37,24 +35,12 @@ rollback boundary.
 ### 2. Record artifact and live baselines
 
 Run the approved ECR image/chart transfer jobs first. Record their build URLs
-and fingerprinted promotion records; the target artifacts must already exist in
-the immutable destination repositories. Inspect each exact destination digest,
-not a mutable tag or an upstream Dockerfile:
-
-```sh
-docker pull REGISTRY/IMAGE@sha256:DIGEST
-./gitops/scripts/read-image-os.sh \
-  --image REGISTRY/IMAGE@sha256:DIGEST \
-  --format args
-```
-
-Run this independently for the operator, Artemis broker-init, Artemis broker
-runtime, and ZooKeeper images. If an image has no `/etc/os-release`, stop and
-record that exception from its SBOM rather than guessing a distribution. The
-SBOM, vulnerability scan, signature, digest, and OS identity must all describe
-the same image manifest and architecture. The helper creates a stopped
-temporary container only to copy `/etc/os-release`; it never runs the image and
-removes the container on exit.
+and promotion records; the tagged artifacts must already exist in destination
+repositories with ECR tag immutability enabled. Record the operator, Artemis
+broker-init, Artemis broker-runtime, and ZooKeeper tags independently. An OS
+rebuild receives a new tag such as `3.9.5-os2`; its SBOM and vulnerability scan
+remain attached to that build in the artifact system rather than duplicated in
+the Platform Release manifest.
 
 ### 3. Preview and write the repository change
 
@@ -69,20 +55,11 @@ one target:
 ./gitops/scripts/prepare-upgrade.sh \
   --component broker \
   --version VERSION \
-  --chart-artifact /path/to/current-operator-chart.tgz \
-  --init-image-digest sha256:... \
-  --runtime-image-digest sha256:... \
-  --init-image-os-id ID \
-  --init-image-os-version VERSION_ID \
-  --runtime-image-os-id ID \
-  --runtime-image-os-version VERSION_ID
+  --chart-artifact /path/to/current-operator-chart.tgz
 
 ./gitops/scripts/prepare-upgrade.sh \
   --component zookeeper \
-  --version VERSION \
-  --image-digest sha256:... \
-  --image-os-id ID \
-  --image-os-version VERSION_ID
+  --version VERSION
 ```
 
 Operator upgrades use the unmodified upstream chart and no vendor rebase:
@@ -94,11 +71,13 @@ Operator upgrades use the unmodified upstream chart and no vendor rebase:
   --baseline-chart-artifact /path/to/current-chart.tgz \
   --chart-artifact /path/to/candidate-chart.tgz \
   --chart-oci-digest sha256:... \
-  --manifest-sha256 HEX \
-  --image-digest sha256:... \
-  --image-os-id ID \
-  --image-os-version VERSION_ID
+  --manifest-sha256 HEX
 ```
+
+The defaults are operator/ZooKeeper `VERSION` and broker `artemis.VERSION`.
+For an OS-only rebuild, keep `--version` at the application version and pass
+`--image-tag`, or the broker-specific `--init-image-tag` and
+`--runtime-image-tag`, with the newly published immutable tag.
 
 Review the exact configuration diff and the canonical full-render diff written
 under `reports/`, then rerun the same command with `--write`. The render diff
@@ -109,15 +88,14 @@ copying them into the checkout. It does not download, mirror, commit, sync
 Argo CD, or deploy.
 
 The current operator chart is required for broker changes so validation can
-prove its related-image inventory supports the requested broker version. A
-ZooKeeper tag change without the matching digest does not change the image that
-Kubernetes runs. Historical labels on the ZooKeeper PVC template intentionally
+prove its related-image inventory supports the requested broker version.
+Historical labels on the ZooKeeper PVC template intentionally
 remain unchanged because the complete claim template is immutable.
 
 ### 4. Validate and promote
 
-1. Record source versions, immutable digests, `/etc/os-release` identity, SBOM,
-   license inventory, scan result, and the applicable compatibility matrix.
+1. Record immutable image tags, SBOM and license inventory, scan result, and
+   the applicable compatibility matrix in the artifact promotion record.
 2. Run `ARKMQ_UPSTREAM_CHART=/path/to/approved-chart.tgz make release-gate`
    with the renderer versions pinned in [`toolchain.yaml`](../../toolchain.yaml).
 3. Promote the approved Git revision to test and
