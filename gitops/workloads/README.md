@@ -17,3 +17,6 @@ subjects, certificate contents, token-bearing URLs, or rendered Secrets here.
 Use only references to externally materialized SSL and `*-jaas-config` Secrets.
 The sanitized, executable configuration example is
 [`external-mtls-values.yaml`](../charts/artemis-ha/tests/fixtures/external-mtls-values.yaml).
+For legacy Chef environment JSON, generate and review candidates with the
+[`Chef ActiveMQ import workflow`](../docs/chef-activemq-import.md); never use a
+generated candidate as this file without resolving its disposition report.

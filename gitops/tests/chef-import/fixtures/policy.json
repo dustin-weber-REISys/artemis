@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "chef-import-policy.artemis.apache.org/v1",
+  "defaults": {
+    "includeDlqDestinations": false,
+    "dropRoles": ["guests"]
+  },
+  "brokers": {
+    "sample-internal": {
+      "excludeAcceptors": ["mqtt"],
+      "excludeDestinations": ["OLD.*"],
+      "excludeAuthorizationMatches": ["OLD.>"]
+    }
+  }
+}

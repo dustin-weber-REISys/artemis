@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= ../reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow validate-scenarios validate-topology verify-applicationset diagnose-pod-startup test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow test-chef-import validate-scenarios validate-topology verify-applicationset diagnose-pod-startup test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 help:
 	@printf '%s\n' \
@@ -12,6 +12,7 @@ help:
 		'validate-toolchain       Validate exact Kustomize, Helm, and yq renderer versions' \
 		'release-gate             Run mandatory artifact-backed GitOps release validation' \
 		'test-upgrade-workflow    Exercise Platform Release preview regressions' \
+		'test-chef-import         Exercise Chef ActiveMQ import and redaction regressions' \
 		'validate                 Run all GitOps and Helm checks' \
 		'validate-scenarios       Validate EKS acceptance definitions' \
 		'validate-topology        Validate Workload Cell catalogs and rendered cluster composition' \
@@ -26,7 +27,7 @@ help:
 		'validate-operator-kustomize Render operator overlays (ARKMQ_UPSTREAM_CHART=/path/chart.tgz)' \
 		'validate-operator-schema Validate broker CRs against the selected ArkMQ release'
 
-validate: validate-release test-upgrade-workflow validate-scenarios validate-topology test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+validate: validate-release test-upgrade-workflow test-chef-import validate-scenarios validate-topology test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 versions:
 	@yq -r '"Kubernetes " + .platform.kubernetesVersion, "ArkMQ operator " + .operator.version + " (image OS " + .operator.image.baseOs.id + " " + .operator.image.baseOs.versionId + ")", "Artemis broker " + .broker.version + " (runtime image OS " + .broker.images.runtime.baseOs.id + " " + .broker.images.runtime.baseOs.versionId + ", init image OS " + .broker.images.init.baseOs.id + " " + .broker.images.init.baseOs.versionId + ")", "ZooKeeper " + .zookeeper.version + " (image OS " + .zookeeper.image.baseOs.id + " " + .zookeeper.image.baseOs.versionId + ")"' releases/current.yaml
@@ -47,6 +48,9 @@ release-gate:
 
 test-upgrade-workflow:
 	./tests/releases/test-prepare-upgrade.sh
+
+test-chef-import:
+	./tests/chef-import/test.sh
 
 validate-scenarios:
 	./scripts/validate-scenarios.sh --report "$(REPORT_DIR)/scenario-validation.json"

@@ -1,0 +1,70 @@
+{
+  "name": "sample-preprod",
+  "override_attributes": {
+    "activemq": {
+      "keycloak": {
+        "url": "https://identity.example.invalid/realms/sample"
+      },
+      "hawtio": {
+        "realm": "sample",
+        "oidcredirecturi": "https://console.example.invalid/console"
+      },
+      "version": "6.2.7",
+      "brokers": {
+        "sample-internal": {
+          "dbServerName": "database.example.invalid",
+          "dbPassword": "fixture-database-password",
+          "lockDuration": "60000",
+          "jettysettings": {
+            "bindaddress": "0.0.0.0",
+            "listenport": "8161"
+          },
+          "jmx": {
+            "connectorPort": "8096",
+            "rmiPort": "8098"
+          },
+          "transports": [
+            ["openwire", "nio", "0.0.0.0", "61616", "10000", "104857600", "60000", "30000"],
+            ["mqtt", "mqtt", "0.0.0.0", "1883", "1000", "104857600", "60000", "30000"],
+            ["websocket", "ws", "0.0.0.0", "61614", "500", "104857600", "60000", "30000"]
+          ],
+          "queues": [
+            "APP.REQUEST",
+            "DLQ.APP.REQUEST",
+            "APP.REQUEST",
+            "OLD.REQUEST"
+          ],
+          "ssl": {
+            "authorizationEntries": [
+              ["queue", "APP.REQUEST", "admins,guests,consumer", "admins,producer", "admins"],
+              ["topic", "APP.EVENTS", "consumer", "producer", "admins"],
+              ["topic", "ActiveMQ.Advisory.>", "guests,consumer", "guests", "admins"],
+              ["queue", "OLD.>", "guests", "guests", "admins"]
+            ],
+            "truststore": {
+              "path": "/legacy/truststore.jks",
+              "certs": ["fixture-ca-alias"]
+            },
+            "dnusers": [
+              ["certificate-user", "CN=fixture-client,OU=example"]
+            ],
+            "groups": [
+              ["consumer", "certificate-user"]
+            ]
+          }
+        },
+        "sample-external": {
+          "transports": [
+            ["partner-ssl", "ssl", "10.0.0.10", "61617", "5000", "104857600", "60000", "30000&amp;needClientAuth=true"]
+          ],
+          "queues": ["PARTNER.REQUEST"],
+          "ssl": {
+            "authorizationEntries": [
+              ["queue", "PARTNER.REQUEST", "partner-consumer", "partner-producer", "partner-admin"]
+            ]
+          }
+        }
+      }
+    }
+  }
+}

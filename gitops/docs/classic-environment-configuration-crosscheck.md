@@ -43,7 +43,11 @@ ZooKeeper, storage, topology, and durability remain outside that seam.
 
 The screenshots demonstrate configuration categories but crop or blur parts of
 the destination and authorization lists. Do not transcribe them as the source
-of truth. Export the original JSON on the work computer, sanitize it, and build
-the cell catalog from that machine-readable input. Treat any credential or
-token visible in a browser address bar as exposed and rotate it through its
-owning system.
+of truth. Export the original JSON on the work computer and use the
+[`import-chef-activemq.py`](../scripts/import-chef-activemq.py) review workflow
+documented in the [Chef import guide](chef-activemq-import.md). The importer
+creates typed candidates plus a disposition report; it cannot determine whether
+a declared listener, destination, or role is still live. Apply current-use
+evidence and a per-environment cleanup policy before copying approved entries
+into a Workload Cell. Treat any credential or token visible in a browser address
+bar as exposed and rotate it through its owning system.

@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -21,6 +21,7 @@ help:
 		'  validate-toolchain Validate exact Kustomize, Helm, and yq renderer versions' \
 		'  release-gate      Run mandatory artifact-backed release validation' \
 		'  test-upgrade-workflow Exercise Platform Release preview regressions' \
+		'  test-chef-import  Exercise Chef ActiveMQ import and redaction regressions' \
 		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
@@ -129,6 +130,9 @@ release-gate:
 
 test-upgrade-workflow:
 	$(MAKE) -C gitops test-upgrade-workflow
+
+test-chef-import:
+	$(MAKE) -C gitops test-chef-import
 
 validate-static:
 	./scripts/validate-static.sh --report "$(REPORT_DIR)/static-validation.json"

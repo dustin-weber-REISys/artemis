@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=16
+check_count=17
 run_check() {
   local label=$1
   local exit_code
@@ -80,6 +80,8 @@ run_check 'Central release contract' \
   "$repo_root/gitops/scripts/validate-release.sh"
 run_check 'Platform Release upgrade workflow' \
   "$repo_root/gitops/tests/releases/test-prepare-upgrade.sh"
+run_check 'Chef ActiveMQ import regressions' \
+  "$repo_root/gitops/tests/chef-import/test.sh"
 run_check 'Static invariants' \
   "$script_dir/validate-static.sh" \
   --report "$report_dir/static-validation.json"

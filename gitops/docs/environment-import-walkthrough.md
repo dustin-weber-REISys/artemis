@@ -206,6 +206,10 @@ For a Classic external broker, follow the
 to split the legacy keystore, truststore, DN users, groups, authorization
 entries, and queue list into the operator SSL Secret, mounted JAAS Secret,
 typed authorization rules, and destination catalog.
+Use the [Chef ActiveMQ importer](chef-activemq-import.md) to create a redacted,
+review-only candidate and disposition report from each machine-readable Chef
+environment JSON export. Do not copy the source JSON or unreviewed candidate
+into Git.
 The broader photographed-environment crosscheck is maintained in
 [`classic-environment-configuration-crosscheck.md`](classic-environment-configuration-crosscheck.md).
 
