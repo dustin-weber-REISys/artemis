@@ -11,7 +11,9 @@ spec:
       # volume's existing zone. Host anti-affinity remains required.
       topologySpreadConstraints:
         - maxSkew: 1
-          minDomains: 3
+          # minDomains is valid only with DoNotSchedule. Explicit null removes
+          # the base field during the strategic merge for ScheduleAnyway.
+          minDomains: null
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:

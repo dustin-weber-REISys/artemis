@@ -135,7 +135,9 @@ if [[ "$environment" == test ]]; then
 fi
 spread_ok=$(jq --arg schedule "$expected_zone_schedule" -r '[.spec.template.spec.topologySpreadConstraints[]? | select(
   .topologyKey == "topology.kubernetes.io/zone" and
-  .maxSkew == 1 and .minDomains == 3 and .whenUnsatisfiable == $schedule
+  .maxSkew == 1 and .whenUnsatisfiable == $schedule and
+  (($schedule == "DoNotSchedule" and .minDomains == 3) or
+   ($schedule == "ScheduleAnyway" and (has("minDomains") | not)))
 )] | length' <<<"$statefulset_json")
 host_anti_affinity_ok=$(jq -r '[
   .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[]?
@@ -148,7 +150,7 @@ if [[ "$spread_ok" -eq 1 ]]; then
     pass 'hard one-per-zone spread policy is active'
   fi
 else
-  fail "StatefulSet does not enforce maxSkew=1, minDomains=3, $expected_zone_schedule across zones"
+  fail "StatefulSet has an invalid or unexpected $expected_zone_schedule zone-spread constraint"
 fi
 [[ "$host_anti_affinity_ok" -ge 1 ]] && pass 'hard one-per-node anti-affinity is active' || \
   fail 'StatefulSet does not enforce required hostname anti-affinity'

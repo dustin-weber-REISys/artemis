@@ -17,7 +17,7 @@ cat >"$snapshot_dir/statefulset.json" <<'EOF'
     "selector":{"matchLabels":{"app.kubernetes.io/instance":"test-shared-zookeeper"}},
     "template":{"spec":{
       "affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"topologyKey":"kubernetes.io/hostname"}]}},
-      "topologySpreadConstraints":[{"maxSkew":1,"minDomains":3,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"ScheduleAnyway"}]
+      "topologySpreadConstraints":[{"maxSkew":1,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"ScheduleAnyway"}]
     }},
     "volumeClaimTemplates":[{"metadata":{"name":"data"}}]
   },
@@ -100,6 +100,21 @@ grep -Fq 'best-effort three-zone spread policy is active for test' "$temp_dir/pa
 grep -Fq 'retained voter volumes occupy 3 distinct availability zones' "$temp_dir/pass.out"
 grep -Fq 'ZooKeeper automatic sync is disabled' "$temp_dir/pass.out"
 
+jq '(.spec.template.spec.topologySpreadConstraints[0].minDomains) = 3' \
+  "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-invalid.json"
+mv "$snapshot_dir/statefulset-invalid.json" "$snapshot_dir/statefulset.json"
+if run_preflight >"$temp_dir/invalid-spread.out"; then
+  printf '%s\n' 'expected ScheduleAnyway with minDomains to fail rollout preflight' >&2
+  exit 1
+else
+  exit_code=$?
+fi
+[[ "$exit_code" -eq 1 ]]
+grep -Fq 'invalid or unexpected ScheduleAnyway zone-spread constraint' "$temp_dir/invalid-spread.out"
+jq 'del(.spec.template.spec.topologySpreadConstraints[0].minDomains)' \
+  "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-valid.json"
+mv "$snapshot_dir/statefulset-valid.json" "$snapshot_dir/statefulset.json"
+
 jq '(.items[] | select(.metadata.name == "pv-c")
   | .spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]) = "zone-b"' \
   "$snapshot_dir/pvs.json" >"$snapshot_dir/pvs-duplicate.json"
@@ -122,7 +137,8 @@ for snapshot in statefulset.json pods.json pvcs.json; do
   sed 's/test-shared/nonprod-shared/g' "$snapshot_dir/$snapshot" >"$snapshot_dir/$snapshot.nonprod"
   mv "$snapshot_dir/$snapshot.nonprod" "$snapshot_dir/$snapshot"
 done
-jq '(.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable) = "DoNotSchedule"' \
+jq '(.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable) = "DoNotSchedule" |
+  (.spec.template.spec.topologySpreadConstraints[0].minDomains) = 3' \
   "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-hard.json"
 mv "$snapshot_dir/statefulset-hard.json" "$snapshot_dir/statefulset.json"
 

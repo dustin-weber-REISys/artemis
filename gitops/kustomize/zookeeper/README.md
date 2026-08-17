@@ -45,7 +45,9 @@ toleration in the environment StatefulSet patch. Do not relax host
 anti-affinity or the three-voter count. Nonprod and prod must also retain
 `DoNotSchedule`. Test intentionally uses `ScheduleAnyway`: the scheduler still
 prefers one voter per zone, but an ordinal may return to its retained volume's
-existing zone instead of leaving the ensemble stuck during refresh.
+existing zone instead of leaving the ensemble stuck during refresh. Kubernetes
+allows `minDomains` only with `DoNotSchedule`, so the test patch must explicitly
+remove the base field while promotion overlays retain `minDomains: 3`.
 
 The selected EBS StorageClass must use `WaitForFirstConsumer`. The StatefulSet
 retains ordinal PVCs across deletion and scale-down, and a replacement voter

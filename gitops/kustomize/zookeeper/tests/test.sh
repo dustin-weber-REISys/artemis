@@ -88,8 +88,13 @@ for environment in test nonprod prod; do
       .spec.selector.matchLabels."app.kubernetes.io/instance" == (strenv(ENVIRONMENT) + "-shared-zookeeper") and
       .spec.template.metadata.labels."app.kubernetes.io/instance" == (strenv(ENVIRONMENT) + "-shared-zookeeper") and
       .spec.template.metadata.labels."app.kubernetes.io/version" == strenv(VERSION) and
-      .spec.template.spec.topologySpreadConstraints[0].minDomains == (strenv(DOMAINS) | tonumber) and
       .spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == strenv(ZONE_SCHEDULE) and
+      (
+        (strenv(ZONE_SCHEDULE) == "DoNotSchedule" and
+          .spec.template.spec.topologySpreadConstraints[0].minDomains == (strenv(DOMAINS) | tonumber)) or
+        (strenv(ZONE_SCHEDULE) == "ScheduleAnyway" and
+          (.spec.template.spec.topologySpreadConstraints[0] | has("minDomains") | not))
+      ) and
       .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey == "kubernetes.io/hostname" and
       .spec.template.spec.initContainers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(IMAGE_TAG)) and
       .spec.template.spec.initContainers[0].resources.requests.memory == strenv(MEMORY) and
