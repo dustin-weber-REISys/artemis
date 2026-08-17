@@ -60,7 +60,18 @@ EOF
 
 printf '%s\n' '{"items":[{"metadata":{"name":"gp3"},"volumeBindingMode":"WaitForFirstConsumer"}]}' >"$snapshot_dir/storageclasses.json"
 printf '%s\n' '{"spec":{"maxUnavailable":1}}' >"$snapshot_dir/pdb.json"
-printf '%s\n' '{"spec":{"syncPolicy":{"automated":{"enabled":false}}},"status":{"health":{"status":"Healthy"},"sync":{"status":"OutOfSync"},"operationState":{"phase":"Succeeded"}}}' >"$snapshot_dir/application.json"
+printf '%s\n' '{
+  "spec":{"syncPolicy":{"automated":{"enabled":false},"syncOptions":["PruneLast=true"]}},
+  "status":{
+    "health":{"status":"Healthy"},
+    "sync":{"status":"OutOfSync"},
+    "operationState":{"phase":"Succeeded"},
+    "resources":[
+      {"kind":"ConfigMap","namespace":"artemis-platform","name":"test-shared-zookeeper-zookeeper-config-6b7c8d9fgh","status":"OutOfSync","requiresPruning":true},
+      {"kind":"ConfigMap","namespace":"artemis-platform","name":"test-shared-zookeeper-zookeeper-config-7c8d9fghjk","status":"OutOfSync","requiresPruning":true}
+    ]
+  }
+}' >"$snapshot_dir/application.json"
 
 cat >"$temp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -99,6 +110,45 @@ grep -Fq 'READY: ZooKeeper baseline is ready' "$temp_dir/pass.out"
 grep -Fq 'best-effort three-zone spread policy is active for test' "$temp_dir/pass.out"
 grep -Fq 'retained voter volumes occupy 3 distinct availability zones' "$temp_dir/pass.out"
 grep -Fq 'ZooKeeper automatic sync is disabled' "$temp_dir/pass.out"
+grep -Fq '2 obsolete generated ZooKeeper ConfigMaps are waiting for prune-last' "$temp_dir/pass.out"
+grep -Fq 'argocd app sync test-shared-zookeeper --prune' "$temp_dir/pass.out"
+
+jq '.status.resources += [{
+  "kind":"PersistentVolumeClaim",
+  "namespace":"artemis-platform",
+  "name":"data-test-shared-zookeeper-zookeeper-0",
+  "status":"OutOfSync",
+  "requiresPruning":true
+}]' "$snapshot_dir/application.json" >"$snapshot_dir/application-unexpected-prune.json"
+mv "$snapshot_dir/application-unexpected-prune.json" "$snapshot_dir/application.json"
+if run_preflight >"$temp_dir/unexpected-prune.out"; then
+  printf '%s\n' 'expected a non-ConfigMap prune candidate to block rollout preflight' >&2
+  exit 1
+else
+  exit_code=$?
+fi
+[[ "$exit_code" -eq 1 ]]
+grep -Fq 'wants to prune unexpected ZooKeeper resources: PersistentVolumeClaim/artemis-platform/data-test-shared-zookeeper-zookeeper-0' \
+  "$temp_dir/unexpected-prune.out"
+jq 'del(.status.resources[-1])' "$snapshot_dir/application.json" \
+  >"$snapshot_dir/application-safe-prune.json"
+mv "$snapshot_dir/application-safe-prune.json" "$snapshot_dir/application.json"
+
+jq 'del(.spec.syncPolicy.syncOptions)' "$snapshot_dir/application.json" \
+  >"$snapshot_dir/application-missing-prune-last.json"
+mv "$snapshot_dir/application-missing-prune-last.json" "$snapshot_dir/application.json"
+if run_preflight >"$temp_dir/missing-prune-last.out"; then
+  printf '%s\n' 'expected generated ConfigMap pruning without PruneLast to block rollout preflight' >&2
+  exit 1
+else
+  exit_code=$?
+fi
+[[ "$exit_code" -eq 1 ]]
+grep -Fq '2 obsolete generated ZooKeeper ConfigMaps require pruning, but PruneLast=true is absent' \
+  "$temp_dir/missing-prune-last.out"
+jq '.spec.syncPolicy.syncOptions = ["PruneLast=true"]' "$snapshot_dir/application.json" \
+  >"$snapshot_dir/application-safe-prune.json"
+mv "$snapshot_dir/application-safe-prune.json" "$snapshot_dir/application.json"
 
 jq '(.spec.template.spec.topologySpreadConstraints[0].minDomains) = 3' \
   "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-invalid.json"

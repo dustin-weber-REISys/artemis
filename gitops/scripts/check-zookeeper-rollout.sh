@@ -264,6 +264,11 @@ automated_enabled=$(jq -r '
 health=$(jq -r '.status.health.status // "Unknown"' <<<"$application_json")
 sync_status=$(jq -r '.status.sync.status // "Unknown"' <<<"$application_json")
 operation_phase=$(jq -r '.status.operationState.phase // ""' <<<"$application_json")
+prune_last_enabled=$(jq -r '
+  any(.spec.syncPolicy.syncOptions[]?; . == "PruneLast=true")
+' <<<"$application_json")
+prunable_count=$(jq '[.status.resources[]? | select(.requiresPruning == true)] | length' \
+  <<<"$application_json")
 [[ "$automated_enabled" == false ]] && pass 'ZooKeeper automatic sync is disabled' || \
   fail 'ZooKeeper automatic sync is enabled; a Git change could restart a voter before preflight'
 [[ "$health" == Healthy ]] && pass 'Argo CD reports the ZooKeeper Application Healthy' || \
@@ -273,6 +278,39 @@ case "$operation_phase" in
   *) fail "Argo CD operation phase is $operation_phase" ;;
 esac
 printf 'INFO  Argo CD sync status=%s\n' "$sync_status"
+
+if [[ "$prunable_count" -gt 0 ]]; then
+  configmap_prefix="${application}-zookeeper-config-"
+  unexpected_prunable=$(jq -r \
+    --arg namespace "$namespace" \
+    --arg prefix "$configmap_prefix" '
+      .status.resources[]?
+      | select(.requiresPruning == true)
+      | select(
+          .kind != "ConfigMap" or
+          .namespace != $namespace or
+          (.name | startswith($prefix) | not) or
+          ((.name | ltrimstr($prefix)) | test("^[a-z0-9]{10}$") | not)
+        )
+      | "\(.kind)/\(.namespace)/\(.name)"
+    ' <<<"$application_json")
+
+  while IFS= read -r prune_candidate; do
+    [[ -n "$prune_candidate" ]] && printf 'INFO  prune candidate=%s\n' "$prune_candidate"
+  done < <(jq -r '
+    .status.resources[]?
+    | select(.requiresPruning == true)
+    | "\(.kind)/\(.namespace)/\(.name)"
+  ' <<<"$application_json")
+
+  if [[ -n "$unexpected_prunable" ]]; then
+    fail "Argo CD wants to prune unexpected ZooKeeper resources: ${unexpected_prunable//$'\n'/, }"
+  elif [[ "$prune_last_enabled" != true ]]; then
+    fail "$prunable_count obsolete generated ZooKeeper ConfigMaps require pruning, but PruneLast=true is absent"
+  else
+    pass "$prunable_count obsolete generated ZooKeeper ConfigMaps are waiting for prune-last"
+  fi
+fi
 
 section 'Result'
 if ((errors > 0)); then
@@ -286,4 +324,5 @@ if ((errors > 0)); then
 fi
 
 printf 'READY: ZooKeeper baseline is ready for a controlled one-voter-at-a-time StatefulSet rollout.\n'
-printf 'Next: review the Argo diff, sync %s without selective sync, and wait for Healthy before promotion.\n' "$application"
+printf 'Next: review the complete Argo diff, then run: argocd app sync %s --prune\n' "$application"
+printf 'Do not use selective sync; PruneLast keeps obsolete generated ConfigMaps until the rollout is healthy.\n'

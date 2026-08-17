@@ -34,6 +34,15 @@ a config-volume ownership mismatch from blocking startup. Keep the common
 settings in the base and overlay files aligned when changing ZooKeeper
 configuration.
 
+Kustomize gives that ConfigMap a content-hash suffix so a configuration change
+updates the Pod template. A completed rollout leaves the previous generated
+ConfigMap as a prune candidate. The controlled manual Argo sync must therefore
+include pruning (`argocd app sync ENVIRONMENT-shared-zookeeper --prune`, or
+select **Prune** in the Sync dialog). `PruneLast=true` defers the deletion until
+the replacement resources are healthy. If pruning is omitted, ZooKeeper can be
+fully healthy while the Application remains `OutOfSync` for the obsolete
+ConfigMap generations.
+
 A pod that remains in `Init:0/1` indicates that a peer has not received an IP,
 the headless Service has not published its endpoint, or DNS egress is
 unavailable. Check Pod scheduling and PVC events, the headless Service's
