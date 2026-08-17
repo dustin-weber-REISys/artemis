@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -24,6 +24,7 @@ help:
 		'  test-chef-import  Exercise Chef ActiveMQ import and redaction regressions' \
 		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
+		'  test-zookeeper-rollout-preflight Test the read-only ZooKeeper rollout gate' \
 		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
 		'  test-argocd-ecr-credentials Test the shared ECR credential refresh helper' \
 		'  validate-charts   Lint and render the Artemis Helm chart' \
@@ -92,6 +93,9 @@ validate-topology:
 
 test-topology:
 	$(MAKE) -C gitops test-topology
+
+test-zookeeper-rollout-preflight:
+	$(MAKE) -C gitops test-zookeeper-rollout-preflight
 
 test-diagnose-pod-startup:
 	$(MAKE) -C gitops test-diagnose-pod-startup

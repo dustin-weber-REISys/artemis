@@ -11,7 +11,7 @@ spec:
           value: ondemand
           effect: NoSchedule
       initContainers:
-        - name: configure-and-wait-for-peer-dns
+        - name: wait-for-peer-dns
           resources:
             requests:
               cpu: 250m

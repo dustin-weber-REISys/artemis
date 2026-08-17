@@ -27,13 +27,18 @@ spec:
         - /spec/volumeClaimTemplates
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      # ZooKeeper owns retained, AZ-bound volumes and a three-voter quorum.
+      # Require the repository rollout preflight before an operator starts a
+      # sync; an ordinary Git merge must not begin a voter restart by itself.
+      enabled: false
+      prune: false
+      selfHeal: false
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
       - ApplyOutOfSyncOnly=true
       - RespectIgnoreDifferences=true
+      - PruneLast=true
     retry:
       limit: 5
       backoff:

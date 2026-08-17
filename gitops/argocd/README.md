@@ -158,6 +158,23 @@ existing generated Application or its live resources. Retirement is a
 separate, explicitly approved operation documented in
 [`Workload Cell retirement`](../docs/runbooks/workload-cell-retirement.md).
 
+The shared ZooKeeper Application is the deliberate exception to automated
+child synchronization. Its three retained, AZ-bound volumes make scheduling a
+live prerequisite that Git rendering cannot prove. A merge may make the
+Application `OutOfSync`, but an operator must run the repository's read-only
+ZooKeeper rollout gate, review the Argo diff, and start the sync manually. The
+StatefulSet then performs the one-voter-at-a-time update; Argo CD does not
+provide a separate StatefulSet rollout controller.
+
+The `-10` annotation on the ZooKeeper `Application` orders that child
+Application between the operator (`-20`) and workload cells (`0`) in the root
+composition. It is not a pre-StatefulSet hook inside the ZooKeeper Application.
+Do not add a `YOUR_ECR/...:PINNED_TAG` hook placeholder: an in-cluster gate is
+safe only after its executable image has a repository-owned build, immutable
+promotion pin, read-only RBAC, and tests for initial bootstrap, rollout, and
+repair. Until those artifacts exist, the checked-in operator-run gate is the
+executable control.
+
 Do not copy these raw ApplicationSet manifests into an outer Helm
 `templates/` directory without escaping the ApplicationSet Go-template
 expressions. The intended root source is the raw YAML bootstrap directory.

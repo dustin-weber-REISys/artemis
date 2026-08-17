@@ -94,6 +94,7 @@ parameter_value() {
 
 assert_sync_policy() {
   local manifest=$1 kind=$2 name=$3 prefix=$4 label=$5
+  local automated=${6:-true}
   local option
   for option in CreateNamespace=true ServerSideApply=true ApplyOutOfSyncOnly=true; do
     OPTION="$option" KIND="$kind" NAME="$name" PREFIX="$prefix" assert_equal \
@@ -104,16 +105,26 @@ assert_sync_policy() {
         | length
       ' "$manifest")" 1
   done
-  assert_equal "$label automated prune" \
-    "$(KIND="$kind" NAME="$name" PREFIX="$prefix" yq ea -r '
-      select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
-      | eval(strenv(PREFIX) + ".automated.prune") // false
-    ' "$manifest")" true
-  assert_equal "$label automated self-heal" \
-    "$(KIND="$kind" NAME="$name" PREFIX="$prefix" yq ea -r '
-      select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
-      | eval(strenv(PREFIX) + ".automated.selfHeal") // false
-    ' "$manifest")" true
+  if [[ "$automated" == true ]]; then
+    assert_equal "$label automated prune" \
+      "$(KIND="$kind" NAME="$name" PREFIX="$prefix" yq ea -r '
+        select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
+        | eval(strenv(PREFIX) + ".automated.prune") // false
+      ' "$manifest")" true
+    assert_equal "$label automated self-heal" \
+      "$(KIND="$kind" NAME="$name" PREFIX="$prefix" yq ea -r '
+        select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
+        | eval(strenv(PREFIX) + ".automated.selfHeal") // false
+      ' "$manifest")" true
+  else
+    for field in enabled prune selfHeal; do
+      FIELD="$field" assert_equal "$label automated $field" \
+        "$(KIND="$kind" NAME="$name" PREFIX="$prefix" FIELD="$field" yq ea -r '
+          select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
+          | eval(strenv(PREFIX) + ".automated." + strenv(FIELD))
+        ' "$manifest")" false
+    done
+  fi
 }
 
 validate_profile() {
@@ -380,10 +391,15 @@ for environment in test nonprod prod; do
     "$(parameter_value "$rendered" "$workloads" brokerProperties.addressSettings.expiry.enabled)" \
     '{{ dig "expiryResources" "false" .features }}'
   assert_sync_policy "$rendered" Application "$operator" .spec.syncPolicy "cluster $environment operator"
-  assert_sync_policy "$rendered" Application "$zookeeper" .spec.syncPolicy "cluster $environment ZooKeeper"
+  assert_sync_policy "$rendered" Application "$zookeeper" .spec.syncPolicy "cluster $environment ZooKeeper" false
   assert_sync_policy "$rendered" ApplicationSet "$workloads" .spec.template.spec.syncPolicy "cluster $environment workloads"
   assert_equal "cluster $environment operator PruneLast count" \
     "$(KIND=Application NAME="$operator" yq ea -r '
+      select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
+      | [.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true")] | length
+    ' "$rendered")" 1
+  assert_equal "cluster $environment ZooKeeper PruneLast count" \
+    "$(KIND=Application NAME="$zookeeper" yq ea -r '
       select(.kind == strenv(KIND) and .metadata.name == strenv(NAME))
       | [.spec.syncPolicy.syncOptions[] | select(. == "PruneLast=true")] | length
     ' "$rendered")" 1

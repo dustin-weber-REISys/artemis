@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= ../reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow test-chef-import validate-scenarios render-topology validate-topology verify-applicationset diagnose-pod-startup test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow test-chef-import validate-scenarios render-topology validate-topology verify-applicationset diagnose-pod-startup check-zookeeper-rollout test-zookeeper-rollout-preflight test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 help:
 	@printf '%s\n' \
@@ -19,6 +19,8 @@ help:
 		'validate-topology        Validate Workload Cell catalogs and rendered cluster composition' \
 		'verify-applicationset    Verify live ApplicationSet reconciliation (requires CONTEXT, ARGOCD_NAMESPACE, ENVIRONMENT)' \
 		'diagnose-pod-startup     Classify one live pod startup failure (requires CONTEXT, NAMESPACE, POD)' \
+		'check-zookeeper-rollout  Run the read-only ZooKeeper/Argo rollout gate (requires CONTEXT, ENVIRONMENT)' \
+		'test-zookeeper-rollout-preflight Test the ZooKeeper rollout gate with captured fixtures' \
 		'test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \
 		'test-verify-applicationset Test ApplicationSet live verification failure detection' \
 		'test-topology            Exercise topology regression cases' \
@@ -28,7 +30,7 @@ help:
 		'validate-operator-kustomize Render operator overlays (ARKMQ_UPSTREAM_CHART=/path/chart.tgz)' \
 		'validate-operator-schema Validate broker CRs against the selected ArkMQ release'
 
-validate: validate-release test-upgrade-workflow test-chef-import validate-scenarios validate-topology test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+validate: validate-release test-upgrade-workflow test-chef-import validate-scenarios validate-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 versions:
 	@yq -r '"Kubernetes " + .platform.kubernetesVersion, "ArkMQ operator " + .operator.version + " (image " + .operator.image.tag + ")", "Artemis broker " + .broker.version + " (runtime image " + .broker.images.runtime.tag + ", init image " + .broker.images.init.tag + ")", "ZooKeeper " + .zookeeper.version + " (image " + .zookeeper.image.tag + ")"' releases/current.yaml
@@ -72,6 +74,12 @@ verify-applicationset:
 
 diagnose-pod-startup:
 	./scripts/diagnose-pod-startup.sh --context "$(CONTEXT)" --namespace "$(NAMESPACE)" --pod "$(POD)"
+
+check-zookeeper-rollout:
+	./scripts/check-zookeeper-rollout.sh --context "$(CONTEXT)" --environment "$(ENVIRONMENT)"
+
+test-zookeeper-rollout-preflight:
+	./tests/argocd/test-zookeeper-rollout-preflight.sh
 
 test-diagnose-pod-startup:
 	./tests/incidents/test-diagnose-pod-startup.sh

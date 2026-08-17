@@ -54,7 +54,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: zookeeper
       initContainers:
-        - name: configure-and-wait-for-peer-dns
+        - name: wait-for-peer-dns
           image: example.invalid/ecr-mirror/zookeeper:3.9.5
           imagePullPolicy: IfNotPresent
           command:
@@ -64,10 +64,8 @@ spec:
             - |
               statefulset="${HOSTNAME%-*}"
               headless="${statefulset}-headless"
-              cp /config-source/zoo.cfg /generated-conf/zoo.cfg
               for ordinal in 0 1 2; do
                 peer="${statefulset}-${ordinal}.${headless}.${POD_NAMESPACE}.svc.cluster.local"
-                printf 'server.%s=%s:2888:3888\n' "$((ordinal + 1))" "$peer" >> /generated-conf/zoo.cfg
                 until getent hosts "$peer" >/dev/null; do
                   printf 'waiting for ZooKeeper peer DNS: %s\n' "$peer"
                   sleep 2
@@ -91,12 +89,6 @@ spec:
             capabilities:
               drop:
                 - ALL
-          volumeMounts:
-            - name: config-source
-              mountPath: /config-source
-              readOnly: true
-            - name: config
-              mountPath: /generated-conf
       containers:
         - name: zookeeper
           image: example.invalid/ecr-mirror/zookeeper:3.9.5
@@ -171,7 +163,7 @@ spec:
                   - -ec
                   - zkServer.sh stop || true
           volumeMounts:
-            - name: config
+            - name: config-source
               mountPath: /conf/zoo.cfg
               subPath: zoo.cfg
               readOnly: true
@@ -184,8 +176,6 @@ spec:
           configMap:
             name: shared-zookeeper-zookeeper-config
             defaultMode: 0444
-        - name: config
-          emptyDir: {}
         - name: tmp
           emptyDir: {}
   volumeClaimTemplates:

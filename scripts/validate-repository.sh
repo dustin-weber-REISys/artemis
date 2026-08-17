@@ -59,7 +59,7 @@ fi
 mkdir -p "$report_dir"
 
 check_number=0
-check_count=17
+check_count=18
 run_check() {
   local label=$1
   local exit_code
@@ -92,6 +92,8 @@ run_check 'EKS scenario tooling regressions' \
   "$repo_root/gitops/tests/e2e/test-scenario-tools.sh"
 run_check 'Pod startup diagnosis regressions' \
   "$repo_root/gitops/tests/incidents/test-diagnose-pod-startup.sh"
+run_check 'ZooKeeper rollout preflight regressions' \
+  "$repo_root/gitops/tests/argocd/test-zookeeper-rollout-preflight.sh"
 run_check 'Generated workload topology' \
   "$repo_root/gitops/scripts/validate-topology.sh" \
   --report "$report_dir/topology-validation.json"

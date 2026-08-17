@@ -36,6 +36,13 @@ for environment in test nonprod prod; do
   overlay="$zookeeper_dir/overlays/$environment"
   rendered="$work_dir/$environment.yaml"
   rendered_again="$work_dir/$environment-again.yaml"
+  sed '/^server\.[0-9][0-9]*=/d' "$zookeeper_dir/base/zoo.cfg" >"$work_dir/base-common.cfg"
+  sed '/^server\.[0-9][0-9]*=/d' "$overlay/zoo.cfg" >"$work_dir/$environment-common.cfg"
+  cmp -s "$work_dir/base-common.cfg" "$work_dir/$environment-common.cfg" || {
+    printf 'ZooKeeper %s overlay configuration drifted from the base\n' "$environment" >&2
+    diff -u "$work_dir/base-common.cfg" "$work_dir/$environment-common.cfg" >&2 || true
+    exit 1
+  }
   kubectl kustomize "$overlay" > "$rendered"
   kubectl kustomize "$overlay" > "$rendered_again"
   cmp -s "$rendered" "$rendered_again" || {
@@ -105,15 +112,17 @@ for environment in test nonprod prod; do
 
   yq -e '
     select(.kind == "StatefulSet") |
+      .spec.template.spec.initContainers[0].name == "wait-for-peer-dns" and
       (.spec.template.spec.initContainers[0].args[0] | contains("statefulset=\"${HOSTNAME%-*}\"")) and
-      (.spec.template.spec.initContainers[0].args[0] | contains("/generated-conf/zoo.cfg")) and
+      (.spec.template.spec.initContainers[0].args[0] | contains("/generated-conf/zoo.cfg") | not) and
       (.spec.template.spec.initContainers[0].args[0] | contains("for ordinal in 0 1 2")) and
       (.spec.template.spec.initContainers[0].args[0] | contains("until getent hosts \"$peer\"")) and
-      (.spec.template.spec.initContainers[0].args[0] | contains("server.%s=%s:2888:3888")) and
+      (.spec.template.spec.initContainers[0].volumeMounts // [] | length) == 0 and
       (.spec.template.spec.containers[0].args[0] | contains("/data/data/myid")) and
       .spec.template.spec.containers[0].readinessProbe.initialDelaySeconds == 30 and
       .spec.template.spec.containers[0].livenessProbe.initialDelaySeconds == 30 and
-      (.spec.template.spec.containers[0].volumeMounts[] | select(.name == "config").subPath) == "zoo.cfg"
+      (.spec.template.spec.containers[0].volumeMounts[] | select(.name == "config-source").subPath) == "zoo.cfg" and
+      ([.spec.template.spec.volumes[] | select(.name == "config")] | length) == 0
   ' "$rendered" >/dev/null
 
   ENVIRONMENT="$environment" yq -e '
@@ -121,11 +130,14 @@ for environment in test nonprod prod; do
       .spec.groups[0].name == ("zookeeper-" + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper")
   ' "$rendered" >/dev/null
 
-  yq -e '
+  ENVIRONMENT="$environment" yq -e '
     select(.kind == "ConfigMap") |
       (.metadata.name | test("-shared-zookeeper-zookeeper-config-[a-z0-9]+$")) and
       (.data."zoo.cfg" | contains("standaloneEnabled=false")) and
-      (.data."zoo.cfg" | contains("metricsProvider.httpPort=7000"))
+      (.data."zoo.cfg" | contains("metricsProvider.httpPort=7000")) and
+      (.data."zoo.cfg" | contains("server.1=" + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-0." + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-headless.artemis-platform.svc.cluster.local:2888:3888")) and
+      (.data."zoo.cfg" | contains("server.2=" + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-1." + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-headless.artemis-platform.svc.cluster.local:2888:3888")) and
+      (.data."zoo.cfg" | contains("server.3=" + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-2." + strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-headless.artemis-platform.svc.cluster.local:2888:3888"))
   ' "$rendered" >/dev/null
 
   yq -e '

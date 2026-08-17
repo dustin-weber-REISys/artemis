@@ -75,6 +75,7 @@ gitops/scripts/validate-toolchain.sh
 gitops/scripts/verify-argocd-applicationset.sh
 gitops/scripts/refresh-argocd-ecr-credential.sh
 gitops/scripts/diagnose-pod-startup.sh
+gitops/scripts/check-zookeeper-rollout.sh
 gitops/scripts/import-chef-activemq.py
 gitops/tests/catalogs/test.sh
 gitops/tests/chef-import/test.sh
@@ -83,6 +84,7 @@ gitops/tests/chef-import/fixtures/policy.json
 gitops/tests/argocd/test-ecr-credential-refresh.sh
 gitops/tests/argocd/test-verify-applicationset.sh
 gitops/tests/incidents/test-diagnose-pod-startup.sh
+gitops/tests/argocd/test-zookeeper-rollout-preflight.sh
 gitops/tests/incidents/fixtures/aws-cni-ip-allocation.events.txt
 gitops/tests/e2e/acceptance-plan.yaml
 gitops/tests/e2e/test-scenario-tools.sh

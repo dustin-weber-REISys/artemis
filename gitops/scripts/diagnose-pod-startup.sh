@@ -96,11 +96,40 @@ DIAGNOSIS
 }
 
 classification_exit=0
-if grep -Fq 'failed to assign an IP address to container' <<<"$events" &&
+classification=NO_RECOGNIZED_POD_STARTUP_FAILURE
+if grep -Fq "didn't match PersistentVolume's node affinity" <<<"$events" &&
+   grep -Fq "didn't match pod topology spread constraints" <<<"$events"; then
+  classification=ZOOKEEPER_RETAINED_VOLUME_TOPOLOGY_CONFLICT
+  cat <<'DIAGNOSIS'
+classification=ZOOKEEPER_RETAINED_VOLUME_TOPOLOGY_CONFLICT
+startup_stage=scheduling
+application_container_started=false
+owner_boundary=EKS/storage-and-node-topology
+
+The replacement pod can run only in the availability zone of its retained
+volume, but placing it there would violate the StatefulSet's hard zone-spread
+policy. Argo CD cannot move an EBS volume between zones or solve this by
+retrying the sync.
+
+Most likely causes:
+1. Fewer than three eligible availability zones currently have worker capacity.
+2. The three retained ZooKeeper volumes are not distributed one per zone.
+3. A node-pool label, taint, toleration, or capacity change made a volume's zone
+   ineligible even though the volume remains bound there.
+
+Do not relax DoNotSchedule, delete a PVC, or restart another voter. Run the
+read-only ZooKeeper rollout preflight, restore eligible per-zone capacity, and
+if necessary migrate one retained voter volume at a time under a reviewed
+ZooKeeper recovery procedure.
+DIAGNOSIS
+  classification_exit=1
+elif grep -Fq 'failed to assign an IP address to container' <<<"$events" &&
    grep -Fq 'plugin type="aws-cni"' <<<"$events"; then
+  classification=EKS_VPC_CNI_POD_IP_ALLOCATION_FAILED
   print_aws_cni_diagnosis
   classification_exit=1
 elif grep -Eq 'FailedCreatePodSandBox|FailedCreatePodSandbox' <<<"$events"; then
+  classification=POD_SANDBOX_CREATION_FAILED_OTHER
   cat <<'DIAGNOSIS'
 classification=POD_SANDBOX_CREATION_FAILED_OTHER
 startup_stage=pod-sandbox
@@ -111,6 +140,7 @@ and the node's CNI daemon before collecting application logs.
 DIAGNOSIS
   classification_exit=1
 elif grep -Eq 'FailedScheduling|[Uu]nschedulable' <<<"$events"; then
+  classification=POD_SCHEDULING_FAILED
   cat <<'DIAGNOSIS'
 classification=POD_SCHEDULING_FAILED
 startup_stage=scheduling
@@ -121,6 +151,7 @@ taint, topology, PVC binding, or resource-capacity constraints.
 DIAGNOSIS
   classification_exit=1
 elif grep -Eq 'ErrImagePull|ImagePullBackOff|Failed to pull image' <<<"$events"; then
+  classification=CONTAINER_IMAGE_PULL_FAILED
   cat <<'DIAGNOSIS'
 classification=CONTAINER_IMAGE_PULL_FAILED
 startup_stage=image-pull
@@ -131,6 +162,7 @@ reference, registry reachability, node architecture, and image-pull credentials.
 DIAGNOSIS
   classification_exit=1
 elif grep -Eq 'FailedMount|FailedAttachVolume|FailedBinding' <<<"$events"; then
+  classification=POD_STORAGE_PRESTART_FAILED
   cat <<'DIAGNOSIS'
 classification=POD_STORAGE_PRESTART_FAILED
 startup_stage=storage

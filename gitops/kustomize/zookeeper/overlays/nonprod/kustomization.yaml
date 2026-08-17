@@ -6,6 +6,12 @@ namePrefix: nonprod-
 resources:
   - ../../base
 
+configMapGenerator:
+  - name: shared-zookeeper-zookeeper-config
+    behavior: replace
+    files:
+      - zoo.cfg
+
 labels:
   - pairs:
       app.kubernetes.io/instance: nonprod-shared-zookeeper

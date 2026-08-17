@@ -26,6 +26,21 @@ grep -Fq '1. Worker subnet has too few available pod IP addresses.' "$temp_dir/d
 grep -Fq '2. The selected node exhausted its ENI/IP or delegated-prefix capacity.' "$temp_dir/diagnosis.out"
 grep -Fq 'Do not restart or delete the ZooKeeper pod as a first response.' "$temp_dir/diagnosis.out"
 
+cat >"$temp_dir/zookeeper-topology.events.txt" <<'EOF'
+Warning FailedScheduling default-scheduler 0/4 nodes are available: 2 node(s) didn't match PersistentVolume's node affinity, 2 node(s) didn't match pod topology spread constraints. preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+EOF
+if "$diagnoser" --events-file "$temp_dir/zookeeper-topology.events.txt" >"$temp_dir/zookeeper-topology.out"; then
+  printf '%s\n' 'expected the retained-volume topology conflict to return a failing diagnosis' >&2
+  exit 1
+else
+  exit_code=$?
+fi
+[[ "$exit_code" -eq 1 ]]
+grep -Fq 'classification=ZOOKEEPER_RETAINED_VOLUME_TOPOLOGY_CONFLICT' "$temp_dir/zookeeper-topology.out"
+grep -Fq 'Argo CD cannot move an EBS volume between zones' "$temp_dir/zookeeper-topology.out"
+grep -Fq 'Fewer than three eligible availability zones' "$temp_dir/zookeeper-topology.out"
+grep -Fq 'Do not relax DoNotSchedule, delete a PVC, or restart another voter.' "$temp_dir/zookeeper-topology.out"
+
 printf '%s\n' 'Normal Pulled Container image already present' >"$temp_dir/healthy.events.txt"
 "$diagnoser" --events-file "$temp_dir/healthy.events.txt" >"$temp_dir/healthy.out"
 grep -Fq 'classification=NO_RECOGNIZED_POD_STARTUP_FAILURE' "$temp_dir/healthy.out"

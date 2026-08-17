@@ -104,9 +104,49 @@ remain unchanged because the complete claim template is immutable.
    [`tests/e2e/acceptance-plan.yaml`](../../tests/e2e/acceptance-plan.yaml).
 4. Promote the same revision and immutable artifacts to nonprod. Run upgrade
    and rollback there, then obtain operational approval before prod.
-5. Upgrade one ZooKeeper member at a time, then one Workload Cell or namespace
-   at a time. Observe replication, queue depth, paging, disk, JVM, client
-   reconnect, and Argo health between steps.
+5. Before every ZooKeeper sync, run the read-only rollout gate from the
+   authorized work computer:
+
+   ```sh
+   make -C gitops check-zookeeper-rollout \
+     CONTEXT=APPROVED_CONTEXT ENVIRONMENT=test
+   ```
+
+   The gate must report `READY`. `OutOfSync` is expected after promoting a new
+   revision; `Degraded`, an active rollout, fewer than three Ready voters,
+   fewer than three eligible/PV zones, non-`WaitForFirstConsumer` storage, or
+   enabled automatic sync blocks the operation.
+6. Review the complete Argo diff, then manually sync the ordinary Application
+   without selective sync so all safety behavior is included. Wait for it to
+   become `Healthy` before promoting anything else:
+
+   ```sh
+   argocd app diff test-shared-zookeeper
+   argocd app sync test-shared-zookeeper --prune
+   argocd app wait test-shared-zookeeper --sync --health --timeout 1800
+   ```
+
+7. The StatefulSet controller upgrades ordinal `2`, then `1`, then `0`, and
+   waits for each replacement to be Ready for `minReadySeconds`. Observe quorum,
+   JVM, client reconnects, and Argo health between members. Do not use Argo
+   selective sync or `kubectl rollout restart` to bypass the gate.
+8. Upgrade one Workload Cell or namespace at a time. Observe replication, queue
+   depth, paging, disk, JVM, client reconnect, and Argo health between steps.
+
+### Retained-volume topology block
+
+An event containing both `didn't match PersistentVolume's node affinity` and
+`didn't match pod topology spread constraints` means the replacement Pod is
+restricted to its retained volume's availability zone, but that placement
+would violate the hard three-zone quorum policy. Argo retry/backoff cannot
+repair this condition.
+
+Do not weaken `DoNotSchedule`, delete the pending Pod repeatedly, delete its
+PVC, or restart another voter. Keep the two running voters intact. Restore
+eligible worker capacity in the missing volume zone, or use the approved
+ZooKeeper recovery procedure to replace exactly one voter volume in the
+missing zone and allow it to rejoin before touching another member. Re-run the
+preflight until it reports three Ready voters and three distinct PV zones.
 
 ## Rollback
 
