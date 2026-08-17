@@ -133,12 +133,16 @@ expected_zone_schedule=DoNotSchedule
 if [[ "$environment" == test ]]; then
   expected_zone_schedule=ScheduleAnyway
 fi
-spread_ok=$(jq --arg schedule "$expected_zone_schedule" -r '[.spec.template.spec.topologySpreadConstraints[]? | select(
-  .topologyKey == "topology.kubernetes.io/zone" and
-  .maxSkew == 1 and .whenUnsatisfiable == $schedule and
-  (($schedule == "DoNotSchedule" and .minDomains == 3) or
-   ($schedule == "ScheduleAnyway" and (has("minDomains") | not)))
-)] | length' <<<"$statefulset_json")
+spread_ok=$(jq --arg schedule "$expected_zone_schedule" -r '
+  (.spec.template.spec.topologySpreadConstraints // []) as $constraints |
+  if ($constraints | length) == 1 and
+     $constraints[0].topologyKey == "topology.kubernetes.io/zone" and
+     $constraints[0].maxSkew == 1 and
+     $constraints[0].whenUnsatisfiable == $schedule and
+     (($schedule == "DoNotSchedule" and $constraints[0].minDomains == 3) or
+      ($schedule == "ScheduleAnyway" and ($constraints[0] | has("minDomains") | not)))
+  then 1 else 0 end
+' <<<"$statefulset_json")
 host_anti_affinity_ok=$(jq -r '[
   .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[]?
   | select(.topologyKey == "kubernetes.io/hostname")

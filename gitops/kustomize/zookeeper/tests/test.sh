@@ -88,6 +88,7 @@ for environment in test nonprod prod; do
       .spec.selector.matchLabels."app.kubernetes.io/instance" == (strenv(ENVIRONMENT) + "-shared-zookeeper") and
       .spec.template.metadata.labels."app.kubernetes.io/instance" == (strenv(ENVIRONMENT) + "-shared-zookeeper") and
       .spec.template.metadata.labels."app.kubernetes.io/version" == strenv(VERSION) and
+      (.spec.template.spec.topologySpreadConstraints | length) == 1 and
       .spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == strenv(ZONE_SCHEDULE) and
       (
         (strenv(ZONE_SCHEDULE) == "DoNotSchedule" and

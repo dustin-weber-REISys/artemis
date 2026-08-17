@@ -46,8 +46,10 @@ anti-affinity or the three-voter count. Nonprod and prod must also retain
 `DoNotSchedule`. Test intentionally uses `ScheduleAnyway`: the scheduler still
 prefers one voter per zone, but an ordinal may return to its retained volume's
 existing zone instead of leaving the ensemble stuck during refresh. Kubernetes
-allows `minDomains` only with `DoNotSchedule`, so the test patch must explicitly
-remove the base field while promotion overlays retain `minDomains: 3`.
+allows `minDomains` only with `DoNotSchedule`, so the test patch replaces the
+complete inherited constraint list with exactly one `ScheduleAnyway` rule.
+Strategic-merging a rule with a different `whenUnsatisfiable` value would keep
+the original hard rule too. Promotion overlays retain `minDomains: 3`.
 
 The selected EBS StorageClass must use `WaitForFirstConsumer`. The StatefulSet
 retains ordinal PVCs across deletion and scale-down, and a replacement voter

@@ -10,10 +10,8 @@ spec:
       # but do not deadlock a rollout when an ordinal must return to its
       # volume's existing zone. Host anti-affinity remains required.
       topologySpreadConstraints:
+        - $patch: replace
         - maxSkew: 1
-          # minDomains is valid only with DoNotSchedule. Explicit null removes
-          # the base field during the strategic merge for ScheduleAnyway.
-          minDomains: null
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:

@@ -136,6 +136,16 @@ remain unchanged because the complete claim template is immutable.
 
 ### Retained-volume topology block
 
+`NotTriggerScaleUp` with `pod didn't trigger scale-up` and
+`didn't match pod topology spread constraints` means Cluster Autoscaler
+simulated a new node and determined that the Pod would still be unschedulable.
+It therefore does not request a higher Auto Scaling Group desired capacity;
+this is not evidence that EC2 tried and failed to launch an instance. In the
+two-AZ test cluster, three ZooKeeper voters may share two zones, but hard
+hostname anti-affinity still requires three distinct eligible nodes. The test
+Pod must have the current `ScheduleAnyway` zone policy before another node in
+either existing zone can help.
+
 An event containing both `didn't match PersistentVolume's node affinity` and
 `didn't match pod topology spread constraints` means the replacement Pod is
 restricted to its retained volume's availability zone, but the installed
@@ -144,10 +154,27 @@ this condition.
 
 For test, first confirm that the desired rendered StatefulSet uses
 `ScheduleAnyway`, review the complete Argo diff, and sync that policy change
-without deleting Pods or PVCs. Keep every running voter intact while the
-pending ordinal schedules. The resulting warning means the ensemble may not
-retain quorum through loss of a zone; restore one-volume-per-zone placement
-before running the zone-loss promotion case.
+without deleting Pods or PVCs. If the same scheduling event continues after a
+successful sync, run the read-only pod-startup diagnostic against the Pending
+ordinal. A StatefulSet rollout can remain blocked on the Pod it created from
+the earlier bad template even after the template is corrected.
+
+Only when the diagnostic reports both
+`live_state=STALE_STATEFULSET_POD_REVISION` and
+`recovery=DELETE_ONLY_THIS_PENDING_POD`, delete that one Pending Pod normally
+so the StatefulSet recreates it from `status.updateRevision`:
+
+```sh
+kubectl --context "$KUBE_CONTEXT" --namespace artemis-platform \
+  delete pod test-shared-zookeeper-zookeeper-2
+```
+
+Do not use `--force`, delete its PVC, or restart either running voter. Watch
+the recreated Pod receive a new revision and become Ready before any other
+operation. If the diagnostic reports a different `live_state`, follow its
+evidence instead of deleting the Pod. Reduced test-zone spread still means the
+ensemble may not retain quorum through loss of a zone; restore
+one-volume-per-zone placement before running the zone-loss promotion case.
 
 For nonprod and prod, do not weaken `DoNotSchedule`, delete the pending Pod
 repeatedly, delete its PVC, or restart another voter. Keep the two running

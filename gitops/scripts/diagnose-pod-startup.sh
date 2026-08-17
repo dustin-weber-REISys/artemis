@@ -7,6 +7,9 @@ namespace=
 pod=
 kube_system_namespace=kube-system
 collection_failures=0
+pod_json=
+statefulset_json=
+owner_statefulset=
 
 usage() {
   cat <<'USAGE'
@@ -56,12 +59,32 @@ else
   [[ -n "$context" ]] || { printf '%s\n' '--context is required in live mode' >&2; exit 2; }
   [[ -n "$namespace" ]] || { printf '%s\n' '--namespace is required in live mode' >&2; exit 2; }
   [[ -n "$pod" ]] || { printf '%s\n' '--pod is required in live mode' >&2; exit 2; }
-  command -v kubectl >/dev/null 2>&1 || { printf '%s\n' 'kubectl is required in live mode' >&2; exit 2; }
+  for command_name in kubectl jq; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      printf '%s is required in live mode\n' "$command_name" >&2
+      exit 2
+    }
+  done
   if ! events=$(kubectl --context "$context" --namespace "$namespace" get events \
     --field-selector "involvedObject.kind=Pod,involvedObject.name=$pod" \
     --sort-by=.metadata.creationTimestamp 2>&1); then
     printf 'could not collect events for Pod %s/%s:\n%s\n' "$namespace" "$pod" "$events" >&2
     exit 2
+  fi
+  if ! pod_json=$(kubectl --context "$context" --namespace "$namespace" get pod "$pod" -o json 2>&1); then
+    printf 'could not collect Pod %s/%s:\n%s\n' "$namespace" "$pod" "$pod_json" >&2
+    exit 2
+  fi
+  owner_statefulset=$(jq -r '
+    [.metadata.ownerReferences[]? | select(.kind == "StatefulSet" and .controller == true) | .name][0] // ""
+  ' <<<"$pod_json")
+  if [[ -n "$owner_statefulset" ]]; then
+    if ! statefulset_json=$(kubectl --context "$context" --namespace "$namespace" \
+      get statefulset "$owner_statefulset" -o json 2>&1); then
+      printf 'could not collect StatefulSet %s/%s:\n%s\n' \
+        "$namespace" "$owner_statefulset" "$statefulset_json" >&2
+      exit 2
+    fi
   fi
 fi
 
@@ -95,9 +118,84 @@ keep retrying sandbox creation, and a restart does not create IP capacity.
 DIAGNOSIS
 }
 
+print_live_statefulset_topology_comparison() {
+  if [[ "$live_mode" -eq 1 && -n "$statefulset_json" ]]; then
+    local pod_phase pod_revision pod_zone_schedule update_strategy
+    local current_revision update_revision desired_zone_schedule
+    pod_phase=$(jq -r '.status.phase // "Unknown"' <<<"$pod_json")
+    pod_revision=$(jq -r '.metadata.labels["controller-revision-hash"] // ""' <<<"$pod_json")
+    pod_zone_schedule=$(jq -r '[.spec.topologySpreadConstraints[]? |
+      select(.topologyKey == "topology.kubernetes.io/zone") | .whenUnsatisfiable] | join(",")' \
+      <<<"$pod_json")
+    update_strategy=$(jq -r '.spec.updateStrategy.type // "RollingUpdate"' <<<"$statefulset_json")
+    current_revision=$(jq -r '.status.currentRevision // ""' <<<"$statefulset_json")
+    update_revision=$(jq -r '.status.updateRevision // ""' <<<"$statefulset_json")
+    desired_zone_schedule=$(jq -r '[.spec.template.spec.topologySpreadConstraints[]? |
+      select(.topologyKey == "topology.kubernetes.io/zone") | .whenUnsatisfiable] | join(",")' \
+      <<<"$statefulset_json")
+
+    printf '\nLive StatefulSet comparison:\n'
+    printf 'pod_phase=%s\n' "$pod_phase"
+    printf 'pod_revision=%s\n' "${pod_revision:-unset}"
+    printf 'pod_zone_schedule=%s\n' "${pod_zone_schedule:-unset}"
+    printf 'statefulset_current_revision=%s\n' "${current_revision:-unset}"
+    printf 'statefulset_update_revision=%s\n' "${update_revision:-unset}"
+    printf 'statefulset_desired_zone_schedule=%s\n' "${desired_zone_schedule:-unset}"
+
+    if [[ "$pod_phase" == Pending && "$update_strategy" == RollingUpdate &&
+          "$pod_zone_schedule" == *DoNotSchedule* &&
+          "$desired_zone_schedule" == *ScheduleAnyway* &&
+          -n "$pod_revision" && -n "$update_revision" && "$pod_revision" != "$update_revision" ]]; then
+      printf '%s\n' 'live_state=STALE_STATEFULSET_POD_REVISION'
+      printf '%s\n' 'recovery=DELETE_ONLY_THIS_PENDING_POD'
+      printf '%s\n' 'The StatefulSet has the corrected template, but this Pending Pod still has the previous hard constraint.'
+      printf 'After reviewing this evidence, recreate only this Pending ordinal with:\n'
+      printf 'kubectl --context %q --namespace %q delete pod %q\n' "$context" "$namespace" "$pod"
+      printf '%s\n' 'Do not delete its PVC, force-delete the Pod, or restart another voter.'
+    elif [[ "$desired_zone_schedule" == *DoNotSchedule* ]]; then
+      printf '%s\n' 'live_state=STATEFULSET_POLICY_NOT_UPDATED'
+      printf '%s\n' 'recovery=FIX_ARGO_TARGET_REVISION_OR_SYNC'
+    elif [[ "$pod_zone_schedule" == *DoNotSchedule* && "$pod_revision" == "$update_revision" ]]; then
+      printf '%s\n' 'live_state=POD_SPEC_DIFFERS_FROM_MATCHING_STATEFULSET_REVISION'
+      printf '%s\n' 'recovery=CHECK_ADMISSION_MUTATION'
+    elif [[ "$pod_zone_schedule" == *ScheduleAnyway* ]]; then
+      printf '%s\n' 'live_state=CURRENT_POD_POLICY_IS_SOFT'
+      printf '%s\n' 'recovery=CHECK_EVENT_TIMESTAMPS_AND_OTHER_CONSTRAINTS'
+    else
+      printf '%s\n' 'live_state=INCONCLUSIVE_REVISION_COMPARISON'
+      printf '%s\n' 'recovery=COLLECT_CONTROLLER_AND_ADMISSION_EVENTS'
+    fi
+  elif [[ "$live_mode" -eq 1 ]]; then
+    printf '%s\n' 'live_state=POD_HAS_NO_STATEFULSET_CONTROLLER_OWNER'
+    printf '%s\n' 'recovery=VERIFY_WORKLOAD_OWNERSHIP'
+  fi
+}
+
 classification_exit=0
 classification=NO_RECOGNIZED_POD_STARTUP_FAILURE
-if grep -Fq "didn't match PersistentVolume's node affinity" <<<"$events" &&
+if grep -Eq "NotTriggerScaleUp|didn't trigger scale-up" <<<"$events" &&
+   grep -Fq "didn't match pod topology spread constraints" <<<"$events"; then
+  classification=TOPOLOGY_CONSTRAINT_PREVENTED_SCALE_UP
+  cat <<'DIAGNOSIS'
+classification=TOPOLOGY_CONSTRAINT_PREVENTED_SCALE_UP
+startup_stage=scheduling
+application_container_started=false
+owner_boundary=Kubernetes-scheduling-and-node-autoscaling
+
+Cluster Autoscaler evaluated its node groups and concluded that scale-out
+would not satisfy this Pod's topology-spread constraint.
+Adding nodes in the same eligible zones will not make this Pod schedulable.
+Desired capacity is therefore not increased. This is different from an Auto
+Scaling Group launch failure.
+
+For the two-AZ test cluster, the desired ZooKeeper StatefulSet must use the
+repository's ScheduleAnyway zone policy while retaining hard hostname
+anti-affinity. Compare this Pending Pod's immutable spec and controller
+revision with the current StatefulSet template before changing node capacity.
+DIAGNOSIS
+  print_live_statefulset_topology_comparison
+  classification_exit=1
+elif grep -Fq "didn't match PersistentVolume's node affinity" <<<"$events" &&
    grep -Fq "didn't match pod topology spread constraints" <<<"$events"; then
   classification=ZOOKEEPER_RETAINED_VOLUME_TOPOLOGY_CONFLICT
   cat <<'DIAGNOSIS'
@@ -107,9 +205,9 @@ application_container_started=false
 owner_boundary=EKS/storage-and-node-topology
 
 The replacement pod can run only in the availability zone of its retained
-volume, but placing it there would violate the StatefulSet's hard zone-spread
-policy. Argo CD cannot move an EBS volume between zones or solve this by
-retrying the sync.
+volume, and its current Pod spec contains a hard topology-spread constraint
+that rejects the compatible nodes. Argo CD cannot move an EBS volume between
+zones or repair an already-created Pod spec by retrying the sync.
 
 Most likely causes:
 1. Fewer than three eligible availability zones currently have worker capacity.
@@ -124,6 +222,7 @@ prod, do not relax DoNotSchedule: restore eligible per-zone capacity and, if
 necessary, migrate one retained voter volume at a time under a reviewed
 ZooKeeper recovery procedure.
 DIAGNOSIS
+  print_live_statefulset_topology_comparison
   classification_exit=1
 elif grep -Fq 'failed to assign an IP address to container' <<<"$events" &&
    grep -Fq 'plugin type="aws-cni"' <<<"$events"; then

@@ -115,6 +115,25 @@ jq 'del(.spec.template.spec.topologySpreadConstraints[0].minDomains)' \
   "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-valid.json"
 mv "$snapshot_dir/statefulset-valid.json" "$snapshot_dir/statefulset.json"
 
+jq '.spec.template.spec.topologySpreadConstraints += [{
+  "maxSkew": 1,
+  "minDomains": 3,
+  "topologyKey": "topology.kubernetes.io/zone",
+  "whenUnsatisfiable": "DoNotSchedule"
+}]' "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-duplicate-spread.json"
+mv "$snapshot_dir/statefulset-duplicate-spread.json" "$snapshot_dir/statefulset.json"
+if run_preflight >"$temp_dir/duplicate-spread.out"; then
+  printf '%s\n' 'expected an additional hard zone constraint to fail test rollout preflight' >&2
+  exit 1
+else
+  exit_code=$?
+fi
+[[ "$exit_code" -eq 1 ]]
+grep -Fq 'invalid or unexpected ScheduleAnyway zone-spread constraint' "$temp_dir/duplicate-spread.out"
+jq 'del(.spec.template.spec.topologySpreadConstraints[1])' \
+  "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-valid.json"
+mv "$snapshot_dir/statefulset-valid.json" "$snapshot_dir/statefulset.json"
+
 jq '(.items[] | select(.metadata.name == "pv-c")
   | .spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]) = "zone-b"' \
   "$snapshot_dir/pvs.json" >"$snapshot_dir/pvs-duplicate.json"
