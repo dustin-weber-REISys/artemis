@@ -117,9 +117,11 @@ Most likely causes:
 3. A node-pool label, taint, toleration, or capacity change made a volume's zone
    ineligible even though the volume remains bound there.
 
-Do not relax DoNotSchedule, delete a PVC, or restart another voter. Run the
-read-only ZooKeeper rollout preflight, restore eligible per-zone capacity, and
-if necessary migrate one retained voter volume at a time under a reviewed
+Run the read-only ZooKeeper rollout preflight and do not delete a PVC or restart
+another voter. In test, confirm the desired StatefulSet has the repository's
+ScheduleAnyway policy and apply it through a reviewed Argo sync. In nonprod or
+prod, do not relax DoNotSchedule: restore eligible per-zone capacity and, if
+necessary, migrate one retained voter volume at a time under a reviewed
 ZooKeeper recovery procedure.
 DIAGNOSIS
   classification_exit=1

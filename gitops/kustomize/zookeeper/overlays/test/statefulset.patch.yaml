@@ -5,6 +5,18 @@ metadata:
 spec:
   template:
     spec:
+      # Test retains historical EBS volumes that are not guaranteed to be
+      # distributed one per availability zone. Prefer three-zone placement,
+      # but do not deadlock a rollout when an ordinal must return to its
+      # volume's existing zone. Host anti-affinity remains required.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: 3
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: zookeeper
       tolerations:
         - key: eid-platform/node-lifecycle
           operator: Equal

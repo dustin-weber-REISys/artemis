@@ -20,7 +20,7 @@ Usage:
 Performs read-only checks before a controlled Argo CD ZooKeeper sync. It
 validates the stable three-voter baseline, retained PVC/PV availability-zone
 placement, eligible node capacity, WaitForFirstConsumer storage, disruption
-budget, hard placement policy, and the Argo CD Application state.
+budget, environment placement policy, and the Argo CD Application state.
 
 No resource is patched, deleted, restarted, synced, or otherwise mutated.
 USAGE
@@ -77,6 +77,10 @@ fail() {
   errors=$((errors + 1))
 }
 
+warn() {
+  printf 'WARN  %s\n' "$1"
+}
+
 section() {
   printf '\n%s\n' "$1"
 }
@@ -125,16 +129,27 @@ ready_pod_count=$(jq '[.items[] | select(
   pass 'all voter Pods exist, are not terminating, and report Ready' || \
   fail "Pod baseline is not stable (pods=$pod_count ready=$ready_pod_count expected=$replicas)"
 
-spread_ok=$(jq -r '[.spec.template.spec.topologySpreadConstraints[]? | select(
+expected_zone_schedule=DoNotSchedule
+if [[ "$environment" == test ]]; then
+  expected_zone_schedule=ScheduleAnyway
+fi
+spread_ok=$(jq --arg schedule "$expected_zone_schedule" -r '[.spec.template.spec.topologySpreadConstraints[]? | select(
   .topologyKey == "topology.kubernetes.io/zone" and
-  .maxSkew == 1 and .minDomains == 3 and .whenUnsatisfiable == "DoNotSchedule"
+  .maxSkew == 1 and .minDomains == 3 and .whenUnsatisfiable == $schedule
 )] | length' <<<"$statefulset_json")
 host_anti_affinity_ok=$(jq -r '[
   .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[]?
   | select(.topologyKey == "kubernetes.io/hostname")
 ] | length' <<<"$statefulset_json")
-[[ "$spread_ok" -eq 1 ]] && pass 'hard one-per-zone spread policy is active' || \
-  fail 'StatefulSet does not enforce maxSkew=1, minDomains=3, DoNotSchedule across zones'
+if [[ "$spread_ok" -eq 1 ]]; then
+  if [[ "$environment" == test ]]; then
+    pass 'best-effort three-zone spread policy is active for test'
+  else
+    pass 'hard one-per-zone spread policy is active'
+  fi
+else
+  fail "StatefulSet does not enforce maxSkew=1, minDomains=3, $expected_zone_schedule across zones"
+fi
 [[ "$host_anti_affinity_ok" -ge 1 ]] && pass 'hard one-per-node anti-affinity is active' || \
   fail 'StatefulSet does not enforce required hostname anti-affinity'
 
@@ -209,6 +224,8 @@ done <<<"$claim_templates"
 unique_pv_zones=$(printf '%s\n' "${pv_zones[@]-}" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')
 if [[ "$unique_pv_zones" -eq "$replicas" ]]; then
   pass "retained voter volumes occupy $unique_pv_zones distinct availability zones"
+elif [[ "$environment" == test ]]; then
+  warn "retained test voter volumes occupy $unique_pv_zones distinct zones; ScheduleAnyway permits recovery but zone-loss quorum is reduced"
 else
   fail "retained voter volumes occupy $unique_pv_zones distinct zones; $replicas are required before a hard three-zone rollout"
 fi
@@ -218,8 +235,13 @@ running_zones=$(jq -r --slurpfile nodes <(printf '%s' "$nodes_json") '[
   | $nodes[0].items[] | select(.metadata.name == $name)
   | .metadata.labels["topology.kubernetes.io/zone"]
 ] | unique | length' <<<"$pods_json")
-[[ "$running_zones" -eq "$replicas" ]] && pass 'current voters occupy three distinct availability zones' || \
+if [[ "$running_zones" -eq "$replicas" ]]; then
+  pass 'current voters occupy three distinct availability zones'
+elif [[ "$environment" == test ]]; then
+  warn "current test voters occupy $running_zones distinct zones; member loss remains tolerated but some zone loss can remove quorum"
+else
   fail "current voters occupy $running_zones distinct zones; do not restart a voter"
+fi
 
 section 'Disruption and Argo CD gates'
 max_unavailable=$(jq -r '.spec.maxUnavailable // ""' <<<"$pdb_json")
@@ -249,9 +271,13 @@ printf 'INFO  Argo CD sync status=%s\n' "$sync_status"
 section 'Result'
 if ((errors > 0)); then
   printf 'BLOCKED: %d rollout preflight check(s) failed. Do not sync %s.\n' "$errors" "$application"
-  printf '%s\n' 'Correct node/AZ capacity or migrate one retained voter volume at a time under the ZooKeeper recovery runbook; do not relax quorum placement.'
+  if [[ "$environment" == test ]]; then
+    printf '%s\n' 'Correct readiness, storage, or node capacity first. The desired test StatefulSet must retain ScheduleAnyway and hard hostname anti-affinity.'
+  else
+    printf '%s\n' 'Correct node/AZ capacity or migrate one retained voter volume at a time under the ZooKeeper recovery runbook; do not relax quorum placement.'
+  fi
   exit 1
 fi
 
-printf 'READY: ZooKeeper baseline is safe for a controlled one-voter-at-a-time StatefulSet rollout.\n'
+printf 'READY: ZooKeeper baseline is ready for a controlled one-voter-at-a-time StatefulSet rollout.\n'
 printf 'Next: review the Argo diff, sync %s without selective sync, and wait for Healthy before promotion.\n' "$application"

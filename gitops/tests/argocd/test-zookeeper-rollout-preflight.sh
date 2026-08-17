@@ -17,7 +17,7 @@ cat >"$snapshot_dir/statefulset.json" <<'EOF'
     "selector":{"matchLabels":{"app.kubernetes.io/instance":"test-shared-zookeeper"}},
     "template":{"spec":{
       "affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"topologyKey":"kubernetes.io/hostname"}]}},
-      "topologySpreadConstraints":[{"maxSkew":1,"minDomains":3,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"DoNotSchedule"}]
+      "topologySpreadConstraints":[{"maxSkew":1,"minDomains":3,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"ScheduleAnyway"}]
     }},
     "volumeClaimTemplates":[{"metadata":{"name":"data"}}]
   },
@@ -53,7 +53,8 @@ cat >"$snapshot_dir/nodes.json" <<'EOF'
 {"items":[
   {"metadata":{"name":"node-a","labels":{"topology.kubernetes.io/zone":"zone-a"}},"spec":{},"status":{"conditions":[{"type":"Ready","status":"True"}]}},
   {"metadata":{"name":"node-b","labels":{"topology.kubernetes.io/zone":"zone-b"}},"spec":{},"status":{"conditions":[{"type":"Ready","status":"True"}]}},
-  {"metadata":{"name":"node-c","labels":{"topology.kubernetes.io/zone":"zone-c"}},"spec":{},"status":{"conditions":[{"type":"Ready","status":"True"}]}}
+  {"metadata":{"name":"node-c","labels":{"topology.kubernetes.io/zone":"zone-c"}},"spec":{},"status":{"conditions":[{"type":"Ready","status":"True"}]}},
+  {"metadata":{"name":"node-d","labels":{"topology.kubernetes.io/zone":"zone-b"}},"spec":{},"status":{"conditions":[{"type":"Ready","status":"True"}]}}
 ]}
 EOF
 
@@ -81,11 +82,12 @@ EOF
 chmod 755 "$temp_dir/bin/kubectl"
 
 run_preflight() {
+  local environment=${1:-test}
   PATH="$temp_dir/bin:$PATH" \
   KUBECTL=kubectl \
   KUBECTL_LOG="$temp_dir/kubectl.log" \
   SNAPSHOT_DIR="$snapshot_dir" \
-    "$preflight" --context test-context --environment test
+    "$preflight" --context test-context --environment "$environment"
 }
 
 if ! run_preflight >"$temp_dir/pass.out"; then
@@ -93,7 +95,8 @@ if ! run_preflight >"$temp_dir/pass.out"; then
   printf '%s\n' 'expected healthy three-zone snapshot to pass rollout preflight' >&2
   exit 1
 fi
-grep -Fq 'READY: ZooKeeper baseline is safe' "$temp_dir/pass.out"
+grep -Fq 'READY: ZooKeeper baseline is ready' "$temp_dir/pass.out"
+grep -Fq 'best-effort three-zone spread policy is active for test' "$temp_dir/pass.out"
 grep -Fq 'retained voter volumes occupy 3 distinct availability zones' "$temp_dir/pass.out"
 grep -Fq 'ZooKeeper automatic sync is disabled' "$temp_dir/pass.out"
 
@@ -101,9 +104,30 @@ jq '(.items[] | select(.metadata.name == "pv-c")
   | .spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]) = "zone-b"' \
   "$snapshot_dir/pvs.json" >"$snapshot_dir/pvs-duplicate.json"
 mv "$snapshot_dir/pvs-duplicate.json" "$snapshot_dir/pvs.json"
+jq '(.items[] | select(.metadata.name == "test-shared-zookeeper-zookeeper-2")
+  | .spec.nodeName) = "node-d"' \
+  "$snapshot_dir/pods.json" >"$snapshot_dir/pods-duplicate.json"
+mv "$snapshot_dir/pods-duplicate.json" "$snapshot_dir/pods.json"
 
-if run_preflight >"$temp_dir/fail.out"; then
-  printf '%s\n' 'expected duplicate retained-volume zones to block rollout' >&2
+if ! run_preflight >"$temp_dir/test-duplicate.out"; then
+  cat "$temp_dir/test-duplicate.out" >&2
+  printf '%s\n' 'expected test best-effort spread to accept duplicate retained-volume zones' >&2
+  exit 1
+fi
+grep -Fq 'retained test voter volumes occupy 2 distinct zones' "$temp_dir/test-duplicate.out"
+grep -Fq 'current test voters occupy 2 distinct zones' "$temp_dir/test-duplicate.out"
+grep -Fq 'READY:' "$temp_dir/test-duplicate.out"
+
+for snapshot in statefulset.json pods.json pvcs.json; do
+  sed 's/test-shared/nonprod-shared/g' "$snapshot_dir/$snapshot" >"$snapshot_dir/$snapshot.nonprod"
+  mv "$snapshot_dir/$snapshot.nonprod" "$snapshot_dir/$snapshot"
+done
+jq '(.spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable) = "DoNotSchedule"' \
+  "$snapshot_dir/statefulset.json" >"$snapshot_dir/statefulset-hard.json"
+mv "$snapshot_dir/statefulset-hard.json" "$snapshot_dir/statefulset.json"
+
+if run_preflight nonprod >"$temp_dir/fail.out"; then
+  printf '%s\n' 'expected duplicate retained-volume zones to block a nonprod rollout' >&2
   exit 1
 else
   exit_code=$?

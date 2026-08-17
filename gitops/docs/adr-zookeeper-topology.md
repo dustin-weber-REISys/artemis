@@ -78,5 +78,13 @@ Session and connection timeouts must be tuned from measured GC and network
 behavior. The configured values live in the Kustomize base and environment overlays;
 do not reduce them merely to make failure detection appear faster.
 
+Nonprod and prod enforce the three-zone placement policy with
+`DoNotSchedule`. The test overlay uses `ScheduleAnyway` while retaining hard
+hostname anti-affinity. This test-only availability tradeoff accommodates
+historical EBS volumes whose availability zones cannot change during an Argo
+refresh; it must be reported by preflight and cannot be used as evidence that
+the zone-loss acceptance case passed. Restore one-volume-per-zone placement
+before relying on test for that promotion gate.
+
 No credentials, certificates, account identifiers, real cluster names, or
 service domains belong in this ADR or shared defaults.

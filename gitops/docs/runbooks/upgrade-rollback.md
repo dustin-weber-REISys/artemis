@@ -114,8 +114,9 @@ remain unchanged because the complete claim template is immutable.
 
    The gate must report `READY`. `OutOfSync` is expected after promoting a new
    revision; `Degraded`, an active rollout, fewer than three Ready voters,
-   fewer than three eligible/PV zones, non-`WaitForFirstConsumer` storage, or
-   enabled automatic sync blocks the operation.
+   non-`WaitForFirstConsumer` storage, or enabled automatic sync blocks the
+   operation. Fewer than three eligible/PV zones also blocks nonprod and prod;
+   test reports the reduced zone-loss tolerance as a warning.
 6. Review the complete Argo diff, then manually sync the ordinary Application
    without selective sync so all safety behavior is included. Wait for it to
    become `Healthy` before promoting anything else:
@@ -137,16 +138,24 @@ remain unchanged because the complete claim template is immutable.
 
 An event containing both `didn't match PersistentVolume's node affinity` and
 `didn't match pod topology spread constraints` means the replacement Pod is
-restricted to its retained volume's availability zone, but that placement
-would violate the hard three-zone quorum policy. Argo retry/backoff cannot
-repair this condition.
+restricted to its retained volume's availability zone, but the installed
+StatefulSet currently forbids that placement. Argo retry/backoff cannot repair
+this condition.
 
-Do not weaken `DoNotSchedule`, delete the pending Pod repeatedly, delete its
-PVC, or restart another voter. Keep the two running voters intact. Restore
-eligible worker capacity in the missing volume zone, or use the approved
-ZooKeeper recovery procedure to replace exactly one voter volume in the
-missing zone and allow it to rejoin before touching another member. Re-run the
-preflight until it reports three Ready voters and three distinct PV zones.
+For test, first confirm that the desired rendered StatefulSet uses
+`ScheduleAnyway`, review the complete Argo diff, and sync that policy change
+without deleting Pods or PVCs. Keep every running voter intact while the
+pending ordinal schedules. The resulting warning means the ensemble may not
+retain quorum through loss of a zone; restore one-volume-per-zone placement
+before running the zone-loss promotion case.
+
+For nonprod and prod, do not weaken `DoNotSchedule`, delete the pending Pod
+repeatedly, delete its PVC, or restart another voter. Keep the two running
+voters intact. Restore eligible worker capacity in the missing volume zone, or
+use the approved ZooKeeper recovery procedure to replace exactly one voter
+volume in the missing zone and allow it to rejoin before touching another
+member. Re-run the preflight until it reports three Ready voters and three
+distinct PV zones.
 
 ## Rollback
 

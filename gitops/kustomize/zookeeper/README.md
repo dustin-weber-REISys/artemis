@@ -4,8 +4,10 @@ This base renders the shared, persistent three-voter ZooKeeper ensemble used
 for Artemis activation coordination. The base owns the quorum, persistence,
 security context, disruption budget, quorum-safe host and zone placement,
 network policy, and monitoring contract. The `test`, `nonprod`, and `prod`
-overlays own capacity, storage, approved node access, and integration values;
-they cannot weaken the three-zone quorum contract.
+overlays own capacity, storage, approved node access, and integration values.
+Nonprod and prod retain the hard three-zone quorum contract. Test keeps hard
+one-pod-per-node anti-affinity but uses best-effort zone spread so historical,
+AZ-bound test volumes cannot deadlock a replacement Pod.
 
 Resource names intentionally match the former Helm renders. In particular,
 the StatefulSet, its ordinal PVC names, the headless Service, and the client
@@ -37,10 +39,13 @@ the headless Service has not published its endpoint, or DNS egress is
 unavailable. Check Pod scheduling and PVC events, the headless Service's
 EndpointSlices, and CoreDNS before changing peer discovery.
 
-The hard host anti-affinity and zone spread are quorum safeguards. If the
-eligible nodes are tainted, add only the exact node-pool toleration in the
-environment StatefulSet patch. Do not relax `DoNotSchedule`, host
-anti-affinity, or the three-voter count merely to make pods schedule.
+The hard host anti-affinity and promotion-environment zone spread are quorum
+safeguards. If eligible nodes are tainted, add only the exact node-pool
+toleration in the environment StatefulSet patch. Do not relax host
+anti-affinity or the three-voter count. Nonprod and prod must also retain
+`DoNotSchedule`. Test intentionally uses `ScheduleAnyway`: the scheduler still
+prefers one voter per zone, but an ordinal may return to its retained volume's
+existing zone instead of leaving the ensemble stuck during refresh.
 
 The selected EBS StorageClass must use `WaitForFirstConsumer`. The StatefulSet
 retains ordinal PVCs across deletion and scale-down, and a replacement voter
@@ -50,10 +55,12 @@ use eviction-based drain, and disrupt only one voter at a time.
 
 The Argo CD ZooKeeper Application intentionally disables automatic sync. Before
 manual sync, run `make -C gitops check-zookeeper-rollout CONTEXT=... ENVIRONMENT=...`.
-This read-only gate verifies that the current ensemble is stable and that all
-three retained volumes, running voters, and eligible nodes still satisfy the
-three-zone contract. A retained EBS volume cannot move availability zones as
-part of a StatefulSet or Argo CD rollout.
+This read-only gate verifies that the current ensemble is stable and that
+retained volumes, running voters, eligible nodes, and the rendered placement
+policy agree. It blocks nonprod and prod unless all three voters occupy
+distinct zones; in test it reports reduced zone-loss tolerance as a warning.
+A retained EBS volume cannot move availability zones as part of a StatefulSet
+or Argo CD rollout.
 
 Run `./tests/test.sh` for deterministic rendering, contract assertions, and
 Kubernetes resource validation.

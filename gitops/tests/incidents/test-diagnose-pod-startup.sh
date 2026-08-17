@@ -39,7 +39,8 @@ fi
 grep -Fq 'classification=ZOOKEEPER_RETAINED_VOLUME_TOPOLOGY_CONFLICT' "$temp_dir/zookeeper-topology.out"
 grep -Fq 'Argo CD cannot move an EBS volume between zones' "$temp_dir/zookeeper-topology.out"
 grep -Fq 'Fewer than three eligible availability zones' "$temp_dir/zookeeper-topology.out"
-grep -Fq 'Do not relax DoNotSchedule, delete a PVC, or restart another voter.' "$temp_dir/zookeeper-topology.out"
+grep -Fq "In test, confirm the desired StatefulSet has the repository's" "$temp_dir/zookeeper-topology.out"
+grep -Fq 'prod, do not relax DoNotSchedule' "$temp_dir/zookeeper-topology.out"
 
 printf '%s\n' 'Normal Pulled Container image already present' >"$temp_dir/healthy.events.txt"
 "$diagnoser" --events-file "$temp_dir/healthy.events.txt" >"$temp_dir/healthy.out"

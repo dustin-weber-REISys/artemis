@@ -55,11 +55,13 @@ for environment in test nonprod prod; do
   expected_memory=2Gi
   expected_heap='-Xms512m -Xmx1Gi'
   expected_zone_domains=3
+  expected_zone_schedule=DoNotSchedule
   expected_size=20Gi
   if [[ "$environment" == test ]]; then
     expected_storage=PLACEHOLDER_TEST_GP3_STORAGE_CLASS
     expected_memory=1Gi
     expected_heap='-Xms256m -Xmx512m'
+    expected_zone_schedule=ScheduleAnyway
     expected_size=10Gi
   elif [[ "$environment" == prod ]]; then
     expected_ecr=PLACEHOLDER_PROD_ECR_REPOSITORY
@@ -75,7 +77,7 @@ for environment in test nonprod prod; do
     ] | length) == 0
   ' "$rendered" >/dev/null
 
-  ENVIRONMENT="$environment" ECR="$expected_ecr" STORAGE="$expected_storage" MEMORY="$expected_memory" HEAP="$expected_heap" DOMAINS="$expected_zone_domains" SIZE="$expected_size" VERSION="$zookeeper_version" IMAGE_TAG="$zookeeper_image_tag" yq -e '
+  ENVIRONMENT="$environment" ECR="$expected_ecr" STORAGE="$expected_storage" MEMORY="$expected_memory" HEAP="$expected_heap" DOMAINS="$expected_zone_domains" ZONE_SCHEDULE="$expected_zone_schedule" SIZE="$expected_size" VERSION="$zookeeper_version" IMAGE_TAG="$zookeeper_image_tag" yq -e '
     select(.kind == "StatefulSet") |
       .metadata.name == (strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper") and
       .spec.serviceName == (strenv(ENVIRONMENT) + "-shared-zookeeper-zookeeper-headless") and
@@ -87,7 +89,7 @@ for environment in test nonprod prod; do
       .spec.template.metadata.labels."app.kubernetes.io/instance" == (strenv(ENVIRONMENT) + "-shared-zookeeper") and
       .spec.template.metadata.labels."app.kubernetes.io/version" == strenv(VERSION) and
       .spec.template.spec.topologySpreadConstraints[0].minDomains == (strenv(DOMAINS) | tonumber) and
-      .spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == "DoNotSchedule" and
+      .spec.template.spec.topologySpreadConstraints[0].whenUnsatisfiable == strenv(ZONE_SCHEDULE) and
       .spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey == "kubernetes.io/hostname" and
       .spec.template.spec.initContainers[0].image == (strenv(ECR) + "/zookeeper:" + strenv(IMAGE_TAG)) and
       .spec.template.spec.initContainers[0].resources.requests.memory == strenv(MEMORY) and
