@@ -1,6 +1,8 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $consolePort := include "artemis-ha.consolePort" . | int -}}
 {{- $brokerPeerPort := include "artemis-ha.brokerPeerPort" . | int -}}
+{{- $jgroupsDiscoveryPort := include "artemis-ha.jgroupsDiscoveryPort" . | int -}}
+{{- $jgroupsFailureDetectionPort := include "artemis-ha.jgroupsFailureDetectionPort" . | int -}}
 {{- $clientPorts := list -}}
 {{- range $acceptor := .Values.acceptors -}}
 {{- if $acceptor.enabled -}}
@@ -35,14 +37,20 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # The operator's internal cluster connector is separate from client
-    # acceptors. Its generated headless Service supplies peer discovery.
+    # The operator's generated Services publish every peer before readiness,
+    # but the pods still need JGroups discovery/failure detection before the
+    # passive can find the active and start replication. CORE then carries the
+    # broker replication connection.
     - from:
         - podSelector:
             matchLabels:
               {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
       ports:
         - port: {{ $brokerPeerPort }}
+          protocol: TCP
+        - port: {{ $jgroupsDiscoveryPort }}
+          protocol: TCP
+        - port: {{ $jgroupsFailureDetectionPort }}
           protocol: TCP
     {{- range .Values.networkPolicy.clientSources }}
     {{- if $clientPorts }}
@@ -102,6 +110,10 @@ spec:
               {{- include "artemis-ha.brokerSelector" . | nindent 14 }}
       ports:
         - port: {{ $brokerPeerPort }}
+          protocol: TCP
+        - port: {{ $jgroupsDiscoveryPort }}
+          protocol: TCP
+        - port: {{ $jgroupsFailureDetectionPort }}
           protocol: TCP
     - to:
         - namespaceSelector:

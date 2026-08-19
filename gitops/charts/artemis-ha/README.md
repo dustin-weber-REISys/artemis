@@ -39,10 +39,14 @@ operator's `-jaas-config` suffix. See the
 for the required Secret shapes and role mapping.
 
 The operator-managed broker cluster connector uses the `CORE` protocol on the
-fixed `artemis` acceptor port `61616`; its peer NetworkPolicy rule remains
-separate from client-source rules. Console Services, management and
-monitoring policies, and all probes share the chart's fixed console-port
-helper, so they cannot be configured independently.
+fixed `artemis` acceptor port `61616`. Before that connection can form, the
+pinned operand uses JGroups TCP `7800` for DNS-based discovery and `7900` for
+failure detection. The peer NetworkPolicy permits all three ports in both
+directions and remains separate from client-source rules. Omitting the JGroups
+ports causes each broker to create its own one-member view, leaving the passive
+indefinitely waiting for a primary instead of beginning replication. Console
+Services, management and monitoring policies, and all probes share the chart's
+fixed console-port helper, so they cannot be configured independently.
 
 The readiness probe asks Jolokia for the `Active` attribute using a broker
 MBean pattern instead of deriving the MBean name from the Kubernetes
@@ -50,10 +54,12 @@ application name. The operand's broker name is image configuration (for
 example, `amq-broker`) and is not required to match the `ActiveMQArtemis`
 resource name. The local request includes the Origin header required by the
 default Jolokia CORS policy. Only the peer whose returned `Active` attribute
-is `true` becomes ready. In normal steady state, one broker pod is therefore
-Running and ready while the passive broker pod is Running but not ready. The
-passive process is healthy; startup and liveness probes remain independent of
-the active-only client-routing decision.
+is `true` becomes ready. In normal synchronized steady state, one broker pod is
+therefore Running and ready while the passive broker pod is Running but not
+ready. Startup and liveness prove that the passive process is alive; they do
+not prove that replication has connected or synchronized. A passive that
+remains at `awaiting connection to a primary to start replication` is a failed
+HA relationship even though its not-ready state alone is expected.
 
 The shared ZooKeeper deployment does not enable client SASL. The chart sets
 `zookeeper.sasl.client=false` on broker JVMs so the ZooKeeper client does not

@@ -230,6 +230,7 @@ fi
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-metrics") | .spec.publishNotReadyAddresses' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.startupProbe.tcpSocket.port' "$rendered")" == "8161" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.livenessProbe.tcpSocket.port' "$rendered")" == "8161" ]]
+[[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.env[] | select(.name == "PING_SVC_NAME") | .value' "$rendered")" == "ping-svc" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.topologySpreadConstraints[] | select(.topologyKey == "topology.kubernetes.io/zone") | .minDomains' "$rendered")" == "2" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[] | select(.topologyKey == "topology.kubernetes.io/zone") | .labelSelector.matchLabels.ActiveMQArtemis' "$rendered")" == "artemis-artemis-ha" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.storage.storageClassName' "$rendered")" == "gp3" ]]
@@ -300,7 +301,21 @@ client_ports=$(
     paste -sd, -
 )
 [[ "$client_ports" == "1883,61614,61616,25672" ]]
-[[ "$(yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") | .spec.ingress[] | select(.from[0].podSelector.matchLabels.application == "artemis-ports-artemis-ha-app") | .ports[].port' "$ports_rendered")" == "61616" ]]
+for direction in ingress egress; do
+  peer_ports=$(
+    DIRECTION="$direction" yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") |
+      .spec[env(DIRECTION)][] |
+      select(.from[0].podSelector.matchLabels.application == "artemis-ports-artemis-ha-app" or
+        .to[0].podSelector.matchLabels.application == "artemis-ports-artemis-ha-app") |
+      .ports[].port' "$ports_rendered" |
+      sort -n |
+      paste -sd, -
+  )
+  if [[ "$peer_ports" != "7800,7900,61616" ]]; then
+    echo "peer $direction NetworkPolicy ports must include JGroups discovery/failure detection and CORE; got $peer_ports" >&2
+    exit 1
+  fi
+done
 if rg -q 'name: artemis-ports-artemis-ha-stomp' "$ports_rendered"; then
   echo "disabled STOMP acceptor still rendered a client Service" >&2
   exit 1

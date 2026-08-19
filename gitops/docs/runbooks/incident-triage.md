@@ -100,6 +100,19 @@ After Kubernetes assigns the pod an IP and starts the container, continue with
 ZooKeeper logs, readiness probes, peer DNS, and quorum checks. Preserve the
 before/after events to prove which layer recovered.
 
+### Passive broker is running but replication never starts
+
+The chart deliberately keeps the passive broker out of ready client endpoints,
+so one Running/not-ready peer is normal only after the HA relationship has
+formed. The message `awaiting connection to a primary to start replication`
+persisting indefinitely is not normal readiness behavior. Confirm that the
+operator-generated ping and headless Services publish both pod addresses, then
+verify broker-to-broker TCP reachability on JGroups discovery `7800`, JGroups
+failure detection `7900`, and CORE replication `61616`. Under the chart's
+default-deny policy, all three ports must be allowed in both directions between
+pods in the same Workload Cell. A JGroups view containing only the local pod
+means replication discovery has not completed.
+
 ## Decision paths
 
 - **Two active brokers or coordination uncertainty:** isolate client traffic

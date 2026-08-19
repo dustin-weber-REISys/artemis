@@ -55,6 +55,19 @@ This is peer traffic, independent of the configurable client acceptors.
 61616
 {{- end -}}
 
+{{/*
+The pinned operand's JGroups TCP stack uses 7800 for DNS_PING discovery and
+7900 for FD_SOCK2 failure detection. Both are broker-to-broker traffic and
+must remain reachable through the chart's default-deny NetworkPolicy.
+*/}}
+{{- define "artemis-ha.jgroupsDiscoveryPort" -}}
+7800
+{{- end -}}
+
+{{- define "artemis-ha.jgroupsFailureDetectionPort" -}}
+7900
+{{- end -}}
+
 {{- define "artemis-ha.serviceAccountName" -}}
 {{- if .Values.security.serviceAccount.create -}}
 {{- default (include "artemis-ha.fullname" .) .Values.security.serviceAccount.name -}}
