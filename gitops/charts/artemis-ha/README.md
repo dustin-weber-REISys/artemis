@@ -50,7 +50,18 @@ application name. The operand's broker name is image configuration (for
 example, `amq-broker`) and is not required to match the `ActiveMQArtemis`
 resource name. The local request includes the Origin header required by the
 default Jolokia CORS policy. Only the peer whose returned `Active` attribute
-is `true` becomes ready.
+is `true` becomes ready. In normal steady state, one broker pod is therefore
+Running and ready while the passive broker pod is Running but not ready. The
+passive process is healthy; startup and liveness probes remain independent of
+the active-only client-routing decision.
+
+The shared ZooKeeper deployment does not enable client SASL. The chart sets
+`zookeeper.sasl.client=false` on broker JVMs so the ZooKeeper client does not
+attempt an unconfigured JAAS `Client` login and emit a misleading Curator
+`Authentication failed` event before falling back to the allowed connection.
+ZooKeeper access remains restricted by NetworkPolicy. Enabling ZooKeeper
+authentication later requires coordinated server and client configuration;
+do not remove this setting in isolation.
 
 Broker scheduling requires two eligible zone and host domains and injects an
 explicit anti-affinity selector for the pair. A separate metrics Service

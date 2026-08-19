@@ -2,6 +2,10 @@
 {{- $consolePort := include "artemis-ha.consolePort" . | int -}}
 {{- $podAnnotations := deepCopy .Values.broker.annotations -}}
 {{- $brokerLabels := mergeOverwrite (deepCopy .Values.broker.labels) .Values.commonLabels -}}
+{{- $javaArgsAppend := list "-Dzookeeper.sasl.client=false" -}}
+{{- if .Values.keycloak.enabled -}}
+{{- $javaArgsAppend = append $javaArgsAppend (printf "-Dhawtio.oidcConfig=/amq/extra/configmaps/%s-hawtio-oidc/hawtio-oidc.properties" $fullname) -}}
+{{- end -}}
 {{- if .Values.vault.enabled }}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject" "true" -}}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-pre-populate-only" "true" -}}
@@ -162,12 +166,11 @@ spec:
       value: $(CR_NAME)
     - name: PING_SVC_NAME
       value: ping-svc
-    {{- if .Values.keycloak.enabled }}
-    # Hawtio documents hawtio.oidcConfig as the generic OIDC integration
-    # point for the embedded Artemis console.
+    # This ZooKeeper deployment does not configure SASL. The Java client
+    # otherwise attempts it by default and emits a misleading AuthFailed event
+    # before continuing with the unauthenticated connection.
     - name: JAVA_ARGS_APPEND
-      value: {{ printf "-Dhawtio.oidcConfig=/amq/extra/configmaps/%s-hawtio-oidc/hawtio-oidc.properties" $fullname | quote }}
-    {{- end }}
+      value: {{ join " " $javaArgsAppend | quote }}
     {{- with .Values.keycloak.extraEnv }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

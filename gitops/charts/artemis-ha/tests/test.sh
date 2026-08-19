@@ -195,6 +195,7 @@ if rg -q 'vault.hashicorp.com/' "$rendered"; then
   exit 1
 fi
 rg -q -- '-Dhawtio\.oidcConfig=/amq/extra/configmaps/artemis-artemis-ha-hawtio-oidc/hawtio-oidc\.properties' "$rendered"
+rg -q -- '-Dzookeeper\.sasl\.client=false' "$rendered"
 rg -q 'code_challenge_method = S256' "$rendered"
 rg -q 'provider = https://keycloak.example.invalid/realms/example' "$rendered"
 rg -q 'readOnlyRootFilesystem: true' "$rendered"
