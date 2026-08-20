@@ -36,3 +36,11 @@ cluster names, domains, or secret contents. If the legacy Keycloak issuer is
 external to the cluster, also supply its approved TCP/443 CIDR through
 `networkPolicy.extraEgress`; the `keycloak.namespace` and `podSelector` values
 only authorize direct access to an in-cluster Keycloak pod.
+
+Approved internal client CIDRs that apply to every Artemis Workload Cell in an
+environment belong under `networkPolicy.extraIngress` in that environment's
+`artemis-values.yaml`. Restrict each entry to the intended mTLS listener port.
+Pair-specific in-cluster callers belong under the Workload Cell's
+`networkPolicy.clientSources`; pair-specific CIDRs are not currently a typed
+Workload Cell interface. See the
+[internal mTLS onboarding guide](../docs/runbooks/internal-mtls-onboarding.md#5-allow-internal-network-sources).

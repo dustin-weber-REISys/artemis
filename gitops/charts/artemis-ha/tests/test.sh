@@ -34,7 +34,7 @@ if helm template invalid "$chart_dir" \
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
-  --set-string 'commonLabels.contact=test@uscis.dhs.gov' >/dev/null 2>&1; then
+  --set-string 'commonLabels.contact=test@test.com' >/dev/null 2>&1; then
   echo "expected an email address used as a label value to fail" >&2
   exit 1
 fi

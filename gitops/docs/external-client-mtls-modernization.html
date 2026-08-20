@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Proposed design for automating external ActiveMQ Artemis client certificate issuance, renewal, trust, and authorization.">
+  <title>External client mTLS modernization</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #536176;
+      --line: #d8dee9;
+      --surface: #f7f9fc;
+      --surface-strong: #eef3f8;
+      --brand: #174ea6;
+      --brand-dark: #0b326f;
+      --good: #137333;
+      --good-bg: #e6f4ea;
+      --warn: #8a4f00;
+      --warn-bg: #fef7e0;
+      --risk: #a50e0e;
+      --risk-bg: #fce8e6;
+      --shadow: 0 12px 30px rgb(23 32 51 / 8%);
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: #fff;
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 16px;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover,
+    a:focus-visible {
+      color: var(--brand-dark);
+      text-decoration-thickness: 2px;
+    }
+
+    code,
+    pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    code {
+      background: var(--surface-strong);
+      border-radius: 4px;
+      padding: 0.1em 0.35em;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 1rem 0;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #111827;
+      color: #f8fafc;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .skip-link {
+      position: absolute;
+      top: -100px;
+      left: 1rem;
+      z-index: 20;
+      padding: 0.65rem 1rem;
+      background: #fff;
+      border: 2px solid var(--brand);
+      border-radius: 6px;
+    }
+
+    .skip-link:focus {
+      top: 1rem;
+    }
+
+    .hero {
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 92% 12%, rgb(66 133 244 / 16%), transparent 28rem),
+        linear-gradient(145deg, #f8fbff 0%, #fff 62%);
+    }
+
+    .hero-inner,
+    .page {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+
+    .hero-inner {
+      padding: 4.5rem 0 3.5rem;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.65rem;
+      color: var(--brand);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 820px;
+      margin: 0;
+      font-size: clamp(2.35rem, 5vw, 4.5rem);
+      font-weight: 720;
+      letter-spacing: -0.045em;
+    }
+
+    h2 {
+      margin: 0 0 1rem;
+      font-size: clamp(1.65rem, 3vw, 2.25rem);
+      letter-spacing: -0.025em;
+    }
+
+    h3 {
+      margin: 1.7rem 0 0.6rem;
+      font-size: 1.25rem;
+    }
+
+    p,
+    ul,
+    ol,
+    dl {
+      max-width: 78ch;
+    }
+
+    .lede {
+      max-width: 780px;
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: 1.2rem;
+    }
+
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem 1.25rem;
+      margin: 2rem 0 0;
+      padding: 0;
+      color: var(--muted);
+      list-style: none;
+      font-size: 0.94rem;
+    }
+
+    .metadata strong {
+      color: var(--ink);
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+      gap: 4rem;
+      padding: 3rem 0 5rem;
+    }
+
+    nav {
+      align-self: start;
+      position: sticky;
+      top: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow);
+      padding: 1.15rem;
+    }
+
+    nav h2 {
+      margin: 0 0 0.7rem;
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    nav ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.92rem;
+    }
+
+    nav li + li {
+      margin-top: 0.2rem;
+    }
+
+    nav a {
+      display: block;
+      padding: 0.38rem 0.5rem;
+      border-radius: 6px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    nav a:hover,
+    nav a:focus-visible {
+      background: var(--surface-strong);
+      color: var(--brand-dark);
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    section {
+      scroll-margin-top: 1rem;
+      padding: 0 0 3.25rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 3.25rem;
+    }
+
+    section:last-of-type {
+      border-bottom: 0;
+      margin-bottom: 0;
+    }
+
+    .summary-grid,
+    .card-grid,
+    .flow-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 1.5rem;
+    }
+
+    .card-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card,
+    .summary-card,
+    .notice {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .card,
+    .summary-card {
+      padding: 1.15rem 1.25rem;
+    }
+
+    .summary-card p,
+    .card p {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+    }
+
+    .summary-card .label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .summary-card .value {
+      display: block;
+      margin-top: 0.25rem;
+      font-size: 1.08rem;
+      font-weight: 700;
+    }
+
+    .notice {
+      margin: 1.25rem 0;
+      padding: 1rem 1.15rem;
+      border-left: 5px solid var(--brand);
+      background: #eef5ff;
+    }
+
+    .notice.warning {
+      border-left-color: var(--warn);
+      background: var(--warn-bg);
+    }
+
+    .notice.risk {
+      border-left-color: var(--risk);
+      background: var(--risk-bg);
+    }
+
+    .notice p {
+      margin: 0;
+    }
+
+    .decision {
+      border: 1px solid #9ec2ff;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #eef5ff, #fff);
+      padding: 1.35rem 1.5rem;
+      box-shadow: var(--shadow);
+    }
+
+    .decision h3 {
+      margin-top: 0;
+      color: var(--brand-dark);
+    }
+
+    figure {
+      margin: 1.75rem 0;
+    }
+
+    figcaption {
+      margin-top: 0.75rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .trust-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 0.8rem;
+      align-items: center;
+      padding: 1.25rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .trust-node {
+      min-height: 112px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 1rem;
+      border: 1px solid #b8c5d6;
+      border-radius: 10px;
+      background: #fff;
+      text-align: center;
+    }
+
+    .trust-node strong {
+      display: block;
+    }
+
+    .trust-node span {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .arrow {
+      color: var(--brand);
+      font-size: 1.55rem;
+      font-weight: 700;
+    }
+
+    .two-way {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .direction {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      background: #fff;
+    }
+
+    .direction h3 {
+      margin-top: 0;
+    }
+
+    .direction ol {
+      margin-bottom: 0;
+      padding-left: 1.25rem;
+    }
+
+    .direction li + li,
+    main li + li {
+      margin-top: 0.38rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 0.94rem;
+    }
+
+    caption {
+      padding: 0.8rem 1rem;
+      background: var(--surface-strong);
+      font-weight: 700;
+      text-align: left;
+    }
+
+    th,
+    td {
+      padding: 0.8rem 1rem;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: var(--good-bg);
+      color: var(--good);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .status.conditional {
+      background: var(--warn-bg);
+      color: var(--warn);
+    }
+
+    .timeline {
+      counter-reset: phase;
+      margin: 1.5rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .timeline > li {
+      counter-increment: phase;
+      position: relative;
+      margin-left: 1.1rem;
+      padding: 0 0 1.4rem 2.4rem;
+      border-left: 2px solid #b6caf1;
+    }
+
+    .timeline > li:last-child {
+      border-left-color: transparent;
+      padding-bottom: 0;
+    }
+
+    .timeline > li::before {
+      content: counter(phase);
+      position: absolute;
+      top: -0.15rem;
+      left: -1.05rem;
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .timeline h3 {
+      margin: 0;
+    }
+
+    .timeline p {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: minmax(140px, 0.35fr) minmax(0, 1fr);
+      gap: 0.7rem 1.25rem;
+    }
+
+    dt {
+      font-weight: 700;
+    }
+
+    dd {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+    }
+
+    footer .hero-inner {
+      padding: 1.5rem 0;
+    }
+
+    footer p {
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      nav {
+        position: static;
+      }
+
+      nav ol {
+        columns: 2;
+      }
+
+      .summary-grid,
+      .card-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .hero-inner {
+        padding: 3rem 0 2.5rem;
+      }
+
+      nav ol {
+        columns: 1;
+      }
+
+      .trust-flow,
+      .two-way,
+      dl {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+        text-align: center;
+      }
+    }
+
+    @media print {
+      body {
+        font-size: 10.5pt;
+      }
+
+      .hero {
+        background: #fff;
+      }
+
+      .hero-inner,
+      .page {
+        width: 100%;
+      }
+
+      .hero-inner {
+        padding: 0 0 1.25rem;
+      }
+
+      .page {
+        display: block;
+        padding: 1.5rem 0 0;
+      }
+
+      nav,
+      .skip-link,
+      footer {
+        display: none;
+      }
+
+      section {
+        break-inside: avoid;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .card,
+      .summary-card,
+      .decision,
+      .notice,
+      .trust-flow,
+      .table-wrap {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Proposed design</p>
+      <h1>External client mTLS modernization</h1>
+      <p class="lede">Replace coordinated annual leaf-certificate exchanges with CA-based trust, automated renewal, stable workload identities, and independent rotation.</p>
+      <ul class="metadata" aria-label="Document metadata">
+        <li><strong>Status:</strong> Proposed</li>
+        <li><strong>Version:</strong> 0.1</li>
+        <li><strong>Date:</strong> August 20, 2026</li>
+        <li><strong>Audience:</strong> Messaging, security, platform, and partner integration teams</li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="page">
+    <nav aria-label="Table of contents">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#summary">Executive summary</a></li>
+        <li><a href="#problem">Problem</a></li>
+        <li><a href="#goals">Goals and non-goals</a></li>
+        <li><a href="#decision">Recommended decision</a></li>
+        <li><a href="#trust-model">Trust model</a></li>
+        <li><a href="#client-changes">External client changes</a></li>
+        <li><a href="#workflows">Lifecycle workflows</a></li>
+        <li><a href="#migration">Migration plan</a></li>
+        <li><a href="#implementation">Artemis implementation</a></li>
+        <li><a href="#risks">Risks and mitigations</a></li>
+        <li><a href="#alternatives">Alternatives</a></li>
+        <li><a href="#acceptance">Acceptance criteria</a></li>
+        <li><a href="#open-decisions">Open decisions</a></li>
+        <li><a href="#references">References</a></li>
+      </ol>
+    </nav>
+
+    <main id="main-content">
+      <section id="summary">
+        <h2>Executive summary</h2>
+        <p>The current certificate process requires the Artemis team and each external client team to exchange and install new leaf certificates on a coordinated annual schedule. This process consumes engineering time and can cause outages when either side misses a step or changes a certificate without sufficient overlap.</p>
+        <p>This design moves trust from individual leaf certificates to approved issuing certificate authorities (CAs). Artemis trusts each approved external client CA. External clients trust the CA that issues the Artemis server certificate. Each side then renews its own leaf certificate independently.</p>
+
+        <div class="summary-grid" aria-label="Design summary">
+          <div class="summary-card">
+            <span class="label">Primary outcome</span>
+            <span class="value">Independent renewal</span>
+            <p>Routine leaf-certificate renewal does not require a truststore update by the other party.</p>
+          </div>
+          <div class="summary-card">
+            <span class="label">Authorization model</span>
+            <span class="value">Stable identity and role</span>
+            <p>Artemis maps a stable certificate identity to least-privilege send and consume roles.</p>
+          </div>
+          <div class="summary-card">
+            <span class="label">Recommended automation</span>
+            <span class="value">Vault or enterprise PKI</span>
+            <p>Clients obtain and renew certificates through an automated workload-bound process.</p>
+          </div>
+        </div>
+
+        <div class="notice">
+          <p><strong>Expected result:</strong> Annual leaf-certificate changes become routine automated renewals. Coordination is required only for infrequent CA-chain changes or identity-policy changes.</p>
+        </div>
+      </section>
+
+      <section id="problem">
+        <h2>Problem</h2>
+        <p>The current process pins individual client and server certificates. A leaf certificate change therefore changes trust configuration on both sides:</p>
+        <ul>
+          <li>The external client sends its replacement certificate to the Artemis team.</li>
+          <li>The Artemis team adds the certificate to the broker truststore.</li>
+          <li>The Artemis team sends the replacement broker certificate to the external client.</li>
+          <li>Both teams schedule deployment and validation before either old certificate expires.</li>
+        </ul>
+        <p>This process has several failure modes:</p>
+        <ul>
+          <li>A certificate expires before deployment finishes.</li>
+          <li>One party installs the wrong environment certificate or an incomplete chain.</li>
+          <li>The subject identity changes and no longer matches broker authorization.</li>
+          <li>The old certificate is removed before every client instance reloads the new certificate.</li>
+          <li>A truststore update requires a broker or client restart during a limited maintenance window.</li>
+        </ul>
+      </section>
+
+      <section id="goals">
+        <h2>Goals and non-goals</h2>
+        <div class="card-grid">
+          <article class="card">
+            <h3>Goals</h3>
+            <ul>
+              <li>Remove coordinated annual leaf-certificate exchanges.</li>
+              <li>Automate certificate issuance, renewal, distribution, and reload.</li>
+              <li>Preserve mutual TLS (mTLS) and least-privilege Artemis authorization.</li>
+              <li>Support external clients that use OpenWire, AMQP, or STOMP.</li>
+              <li>Support staged migration without an outage.</li>
+              <li>Provide revocation, expiration monitoring, and auditable workload identity.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Non-goals</h3>
+            <ul>
+              <li>Require every external organization to use the platform Vault deployment.</li>
+              <li>Trust every certificate issued by a broad enterprise CA without additional identity checks.</li>
+              <li>Replace all messaging protocols during the certificate migration.</li>
+              <li>Store client private keys in Git, Helm values, or the Artemis broker.</li>
+              <li>Use the Hawtio human-login design for application messaging clients.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="decision">
+        <h2>Recommended decision</h2>
+        <div class="decision">
+          <h3>Adopt CA-based mTLS with automated leaf renewal</h3>
+          <p>Configure Artemis to trust approved external client issuing CAs. Configure external clients to trust the approved Artemis server issuing CA. Map each stable client certificate identity to an Artemis application role. Use pinned leaf certificates only when an issuing CA is too broad, cannot meet policy, or cannot provide reliable revocation.</p>
+        </div>
+
+        <h3>Identity granularity</h3>
+        <p>Assign one logical identity to each application and environment. Do not assign a separate identity to every producer object, consumer object, connection, or thread.</p>
+        <p>Multiple replicas can use certificates that represent the same logical application identity. A certificate automation system can issue a unique key and serial number to each replica while retaining the same approved identity.</p>
+
+        <h3>Trust granularity</h3>
+        <p>Prefer a dedicated messaging-client intermediate CA for each organization or trust boundary. If only a broad enterprise CA is available, combine CA trust with an exact or narrowly matched certificate identity allowlist in Artemis.</p>
+      </section>
+
+      <section id="trust-model">
+        <h2>Trust model</h2>
+        <p>Transport trust and messaging authorization remain separate controls. Passing the TLS handshake does not grant permission to send or consume messages.</p>
+
+        <figure>
+          <div class="trust-flow" role="img" aria-label="An external client certificate is signed by an approved external client issuing CA. Artemis trusts the issuing CA and maps the stable certificate identity to an Artemis role.">
+            <div class="trust-node">
+              <strong>External client certificate</strong>
+              <span>Short-lived leaf certificate and private key</span>
+            </div>
+            <div class="arrow" aria-hidden="true">&rarr;</div>
+            <div class="trust-node">
+              <strong>Approved client issuing CA</strong>
+              <span>Stable trust anchor or intermediate</span>
+            </div>
+            <div class="arrow" aria-hidden="true">&rarr;</div>
+            <div class="trust-node">
+              <strong>Artemis identity and role</strong>
+              <span>Allowed subject identity with send or consume permissions</span>
+            </div>
+          </div>
+          <figcaption>Artemis first validates the certificate chain, then maps the certificate identity to an authorized role.</figcaption>
+        </figure>
+
+        <div class="two-way">
+          <article class="direction">
+            <h3>Client-to-broker trust</h3>
+            <ol>
+              <li>The client presents its leaf certificate and intermediate chain.</li>
+              <li>Artemis validates the chain against the external client trust bundle.</li>
+              <li>Artemis validates expiration and revocation status.</li>
+              <li>JAAS maps the stable identity to an application role.</li>
+              <li>Artemis applies destination-level send and consume permissions.</li>
+            </ol>
+          </article>
+          <article class="direction">
+            <h3>Broker-to-client trust</h3>
+            <ol>
+              <li>Artemis presents its server certificate and intermediate chain.</li>
+              <li>The client validates the chain against its server trust bundle.</li>
+              <li>The client verifies that the DNS name matches a certificate subject alternative name.</li>
+              <li>The client establishes the TLS connection.</li>
+            </ol>
+          </article>
+        </div>
+
+        <div class="notice warning">
+          <p><strong>Security boundary:</strong> Do not grant an Artemis role solely because a certificate chains to an enterprise CA. Require an approved workload identity and a least-privilege role mapping.</p>
+        </div>
+      </section>
+
+      <section id="client-changes">
+        <h2>External client changes</h2>
+        <p>Most clients need configuration and certificate-lifecycle changes, not application business-logic changes.</p>
+
+        <div class="table-wrap">
+          <table>
+            <caption>Required external client capabilities</caption>
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col">Required change</th>
+                <th scope="col">Operational effect</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">TLS endpoint</th>
+                <td>Connect to the external mTLS listener. Use an SSL OpenWire endpoint, an <code>amqps://</code> endpoint, or TLS-enabled STOMP.</td>
+                <td>The client uses encrypted transport and presents a client certificate.</td>
+              </tr>
+              <tr>
+                <th scope="row">Client key material</th>
+                <td>Provide a leaf certificate, private key, and issuing chain in PEM, JKS, or PKCS#12 format.</td>
+                <td>The client proves its workload identity during the TLS handshake.</td>
+              </tr>
+              <tr>
+                <th scope="row">Server trust</th>
+                <td>Trust the Artemis server issuing CA instead of the current Artemis leaf certificate.</td>
+                <td>Artemis can renew its server certificate without a client truststore update.</td>
+              </tr>
+              <tr>
+                <th scope="row">Automated issuance</th>
+                <td>Use Vault Agent, cert-manager, an enterprise certificate agent, or another approved enrollment process.</td>
+                <td>The client receives a replacement certificate before expiration.</td>
+              </tr>
+              <tr>
+                <th scope="row">Reload or restart</th>
+                <td>Reload the TLS context, recycle the connection pool, or perform a rolling restart after renewal.</td>
+                <td>New connections use the replacement certificate before the old certificate expires.</td>
+              </tr>
+              <tr>
+                <th scope="row">Monitoring</th>
+                <td>Report certificate expiration, renewal failure, and the active certificate serial number.</td>
+                <td>Teams can correct failures before they affect connectivity.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Client implementation patterns</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>Recommended automation by runtime</caption>
+            <thead>
+              <tr>
+                <th scope="col">Runtime</th>
+                <th scope="col">Recommended pattern</th>
+                <th scope="col">Typical application change</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Kubernetes</th>
+                <td>Use cert-manager with an approved Vault or enterprise issuer. Generate PKCS#12 or JKS output when the Java client requires it.</td>
+                <td>Mount the generated Secret and add a rolling restart or TLS reload trigger.</td>
+              </tr>
+              <tr>
+                <th scope="row">Virtual machine</th>
+                <td>Use Vault Agent or an approved enterprise certificate agent to write the certificate and key to a protected path.</td>
+                <td>Configure keystore paths and a reload command or service restart.</td>
+              </tr>
+              <tr>
+                <th scope="row">External partner platform</th>
+                <td>Use the partner's enterprise PKI. Share only the approved issuing CA chain and expected stable identity with the Artemis team.</td>
+                <td>Automate renewal within the partner platform and reconnect after renewal.</td>
+              </tr>
+              <tr>
+                <th scope="row">Legacy appliance</th>
+                <td>Use vendor-supported automation. If the appliance cannot automate renewal, evaluate an approved local TLS proxy.</td>
+                <td>Point the appliance to the proxy or retain leaf pinning as a documented exception.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Illustrative Java client configuration</h3>
+        <p>A Java client can often consume a renewed keystore without business-logic changes. Exact properties depend on the JMS client and protocol.</p>
+        <pre><code>-Djavax.net.ssl.keyStore=/run/secrets/messaging/client.p12
+-Djavax.net.ssl.keyStoreType=PKCS12
+-Djavax.net.ssl.trustStore=/run/secrets/messaging/server-trust.p12
+-Djavax.net.ssl.trustStoreType=PKCS12</code></pre>
+        <p>Store passwords in the approved runtime secret mechanism. Do not place passwords or private keys in source control, startup logs, or connection URLs.</p>
+      </section>
+
+      <section id="workflows">
+        <h2>Lifecycle workflows</h2>
+
+        <h3>Routine client certificate renewal</h3>
+        <ol>
+          <li>The certificate agent requests a replacement certificate before the current certificate expires.</li>
+          <li>The issuer returns a new leaf certificate and chain with the same approved workload identity.</li>
+          <li>The agent writes the new key material atomically.</li>
+          <li>The client reloads its TLS context or performs a rolling restart.</li>
+          <li>New connections present the replacement certificate.</li>
+          <li>Monitoring confirms successful connections with the replacement certificate.</li>
+        </ol>
+        <p>Artemis requires no truststore or role-mapping change because the issuer and stable identity did not change.</p>
+
+        <h3>Routine Artemis server certificate renewal</h3>
+        <ol>
+          <li>The platform certificate controller renews the Artemis server certificate.</li>
+          <li>The server certificate retains the required DNS subject alternative names.</li>
+          <li>The broker reloads the certificate or restarts one high-availability peer at a time.</li>
+          <li>External clients validate the replacement certificate against the existing server CA trust bundle.</li>
+        </ol>
+        <p>External clients require no truststore update because the trusted server CA did not change.</p>
+
+        <h3>Issuing CA rotation</h3>
+        <ol>
+          <li>Add the new CA chain to the trust bundle while retaining the old chain.</li>
+          <li>Verify that Artemis and external clients accept both chains.</li>
+          <li>Begin issuing new leaf certificates from the new CA.</li>
+          <li>Wait until every workload uses the new chain and all old leaf certificates expire.</li>
+          <li>Remove the old CA chain after the approved overlap period.</li>
+        </ol>
+        <p>CA rotation remains coordinated, but it occurs much less often than leaf-certificate renewal and uses a planned dual-trust period.</p>
+
+        <h3>Revocation</h3>
+        <ol>
+          <li>Revoke a compromised or retired client certificate through its issuing CA.</li>
+          <li>Update the certificate revocation list (CRL) or online certificate status protocol (OCSP) service.</li>
+          <li>Remove or disable the corresponding Artemis identity mapping.</li>
+          <li>Close active connections for the revoked identity when policy requires immediate termination.</li>
+        </ol>
+      </section>
+
+      <section id="migration">
+        <h2>Migration plan</h2>
+        <p>The migration uses dual trust and does not require a shared cutover window.</p>
+        <ol class="timeline">
+          <li>
+            <h3>Inventory current identities</h3>
+            <p>Record each client protocol, endpoint, certificate subject, issuer, expiration date, application owner, and required send or consume permissions.</p>
+          </li>
+          <li>
+            <h3>Approve the issuing CA model</h3>
+            <p>Select a dedicated messaging intermediate when available. Document exceptions that require a broad enterprise CA or leaf pinning.</p>
+          </li>
+          <li>
+            <h3>Establish dual trust</h3>
+            <p>Add approved issuing CA chains while retaining all current leaf certificates and current authentication paths.</p>
+          </li>
+          <li>
+            <h3>Enable automated issuance</h3>
+            <p>Configure each client to obtain, store, renew, and reload its certificate without manual transfer.</p>
+          </li>
+          <li>
+            <h3>Migrate clients incrementally</h3>
+            <p>Move one client at a time to the external mTLS listener. Validate identity, authorization, reconnect, and failover behavior.</p>
+          </li>
+          <li>
+            <h3>Remove obsolete pins</h3>
+            <p>After all clients migrate and old leaf certificates expire, remove pinned leaf certificates and legacy credential paths.</p>
+          </li>
+          <li>
+            <h3>Exercise rotation</h3>
+            <p>Perform an early renewal and a planned dual-CA rotation test before production approval.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="implementation">
+        <h2>Artemis implementation</h2>
+        <p>The repository already includes a configuration surface for TLS acceptors, client authentication, TLS Secret references, trust Secret references, per-acceptor security domains, and a mounted JAAS Secret.</p>
+
+        <h3>Required broker configuration</h3>
+        <ul>
+          <li>Create a separate external mTLS acceptor and Service.</li>
+          <li>Set <code>sslEnabled</code> and <code>needClientAuth</code> to <code>true</code>.</li>
+          <li>Reference the Artemis server certificate through <code>sslSecret</code>.</li>
+          <li>Reference the external client CA bundle through <code>trustSecret</code> or the operator-compatible client truststore.</li>
+          <li>Assign an external certificate security domain.</li>
+          <li>Map stable client identities to roles in the externally materialized JAAS Secret.</li>
+          <li>Grant each role only the required address and queue operations.</li>
+        </ul>
+
+        <h3>Repository changes still required</h3>
+        <ul>
+          <li>Connect Vault, cert-manager, or the approved secret synchronization system to the operator-compatible TLS and JAAS Secret shapes.</li>
+          <li>Add per-listener NetworkPolicy source selection so external sources cannot reach unrelated client listeners.</li>
+          <li>Configure and validate TLS reload behavior or one-peer-at-a-time restart behavior.</li>
+          <li>Add CRL or OCSP configuration and failure-path tests.</li>
+          <li>Extend the validation client to mount a client keystore and truststore and to test mTLS without a username and password.</li>
+          <li>Provide the approved private external TCP exposure path.</li>
+        </ul>
+
+        <div class="notice">
+          <p><strong>Deployment boundary:</strong> The Artemis chart should store only Secret names and non-secret authorization policy. Private keys, certificate contents, certificate subjects, and rendered JAAS data must remain in the approved external secret system.</p>
+        </div>
+      </section>
+
+      <section id="risks">
+        <h2>Risks and mitigations</h2>
+        <div class="table-wrap">
+          <table>
+            <caption>Primary risks</caption>
+            <thead>
+              <tr>
+                <th scope="col">Risk</th>
+                <th scope="col">Impact</th>
+                <th scope="col">Mitigation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Broad CA trust</th>
+                <td>Unrelated enterprise certificates can complete the TLS chain validation step.</td>
+                <td>Prefer a dedicated intermediate. Require an exact or narrow Artemis identity allowlist, NetworkPolicy restrictions, and connection limits.</td>
+              </tr>
+              <tr>
+                <th scope="row">Identity drift</th>
+                <td>A renewed certificate uses a different subject and fails JAAS mapping.</td>
+                <td>Define a stable identity profile and test renewal before production. Normalize distinguished names where supported.</td>
+              </tr>
+              <tr>
+                <th scope="row">Failed client reload</th>
+                <td>The client keeps using an old certificate until expiration.</td>
+                <td>Renew early, perform a rolling restart when hot reload is unavailable, and alert on the active certificate expiration date.</td>
+              </tr>
+              <tr>
+                <th scope="row">Incomplete certificate chain</th>
+                <td>The peer cannot build a path to a trusted CA.</td>
+                <td>Include the leaf and required intermediates in the presented chain. Test with a clean truststore.</td>
+              </tr>
+              <tr>
+                <th scope="row">Revocation gap</th>
+                <td>A compromised certificate remains usable until expiration.</td>
+                <td>Use short certificate lifetimes and configure the approved CRL or OCSP policy.</td>
+              </tr>
+              <tr>
+                <th scope="row">CA rotation ordering</th>
+                <td>New leaves are issued before the peer trusts the new CA.</td>
+                <td>Add the new CA first, verify dual trust, rotate leaves, and remove the old CA last.</td>
+              </tr>
+              <tr>
+                <th scope="row">Private key exposure</th>
+                <td>An attacker can impersonate a client or broker.</td>
+                <td>Generate keys within the workload boundary, restrict filesystem permissions, use short lifetimes, and never transfer private keys between teams.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="alternatives">
+        <h2>Alternatives</h2>
+        <div class="table-wrap">
+          <table>
+            <caption>Alternative approaches</caption>
+            <thead>
+              <tr>
+                <th scope="col">Approach</th>
+                <th scope="col">Assessment</th>
+                <th scope="col">Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Continue leaf pinning</th>
+                <td>Provides narrow trust but preserves annual exchange, deployment, and coordination work.</td>
+                <td><span class="status conditional">Exception only</span></td>
+              </tr>
+              <tr>
+                <th scope="row">CA-based mTLS with automation</th>
+                <td>Preserves protocol compatibility and removes routine cross-team renewal coordination.</td>
+                <td><span class="status">Recommended</span></td>
+              </tr>
+              <tr>
+                <th scope="row">SPIFFE and SPIRE</th>
+                <td>Provides short-lived workload identities and streamed trust bundles. It requires compatible workload identity infrastructure and federation across organizations.</td>
+                <td><span class="status conditional">Future evaluation</span></td>
+              </tr>
+              <tr>
+                <th scope="row">OIDC and short-lived tokens</th>
+                <td>Can remove client-certificate lifecycle work for supported protocols. It requires token acquisition, client-library support, and a messaging authentication redesign.</td>
+                <td><span class="status conditional">New AMQP clients</span></td>
+              </tr>
+              <tr>
+                <th scope="row">TLS proxy or gateway</th>
+                <td>Can isolate certificate handling from a legacy application. It adds another security boundary and must preserve a trustworthy client identity for authorization.</td>
+                <td><span class="status conditional">Legacy fallback</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="acceptance">
+        <h2>Acceptance criteria</h2>
+        <p>The design is ready for production when tests demonstrate all of the following results:</p>
+        <ul>
+          <li>An approved external client connects with a CA-issued certificate and no messaging username or password.</li>
+          <li>An unmapped certificate from a trusted CA fails Artemis authentication.</li>
+          <li>An untrusted, expired, or revoked certificate fails the connection.</li>
+          <li>A producer identity can send only to approved destinations.</li>
+          <li>A consumer identity can consume or browse only approved queues.</li>
+          <li>A routine client leaf renewal completes without an Artemis truststore or role-mapping change.</li>
+          <li>A routine Artemis server leaf renewal completes without an external client truststore change.</li>
+          <li>The client reloads or reconnects before the old certificate expires.</li>
+          <li>A dual-CA overlap test supports an issuing CA rotation without an outage.</li>
+          <li>Monitoring alerts before expiration and on renewal, reload, chain-validation, or revocation failures.</li>
+          <li>No private key or certificate password appears in Git, rendered manifests, command-line history, logs, or reports.</li>
+        </ul>
+      </section>
+
+      <section id="open-decisions">
+        <h2>Open decisions</h2>
+        <dl>
+          <dt>Issuing authority</dt>
+          <dd>Can the enterprise certificate team issue a dedicated messaging-client intermediate, or must Artemis trust broader enterprise intermediates?</dd>
+
+          <dt>Client inventory</dt>
+          <dd>Which external clients use OpenWire, AMQP, STOMP, or an appliance-specific library, and which clients support automated reload?</dd>
+
+          <dt>Certificate lifetime</dt>
+          <dd>What leaf-certificate lifetime and renewal window meet security policy and provide enough time to recover from renewal failures?</dd>
+
+          <dt>Revocation policy</dt>
+          <dd>Does the environment require CRL, OCSP, short-lived certificates, or a combination?</dd>
+
+          <dt>Secret delivery</dt>
+          <dd>Will the platform use cert-manager, Vault Agent, an external secret synchronization controller, or an enterprise certificate agent?</dd>
+
+          <dt>Identity field</dt>
+          <dd>Will authorization use a stable subject distinguished name, a subject alternative name URI, or another approved workload identifier?</dd>
+
+          <dt>External exposure</dt>
+          <dd>Which private load balancer, gateway, or network path will expose the external mTLS listener?</dd>
+
+          <dt>Legacy exceptions</dt>
+          <dd>Which clients cannot automate renewal and require temporary leaf pinning or a local TLS proxy?</dd>
+        </dl>
+      </section>
+
+      <section id="references">
+        <h2>References</h2>
+        <ul>
+          <li><a href="https://artemis.apache.org/components/artemis/documentation/latest/security.html">Apache ActiveMQ Artemis authentication and authorization</a></li>
+          <li><a href="https://artemis.apache.org/components/artemis/documentation/latest/configuring-transports.html">Apache ActiveMQ Artemis transport and TLS configuration</a></li>
+          <li><a href="https://developer.hashicorp.com/vault/docs/secrets/pki">HashiCorp Vault PKI secrets engine</a></li>
+          <li><a href="https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent/template">HashiCorp Vault Agent templates and certificate renewal</a></li>
+          <li><a href="https://cert-manager.io/docs/usage/certificate/">cert-manager certificate lifecycle</a></li>
+          <li><a href="https://spiffe.io/docs/latest/spiffe-specs/spiffe_workload_api/">SPIFFE Workload API</a></li>
+          <li><a href="https://developers.google.com/style">Google developer documentation style guide</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div class="hero-inner">
+      <p>External client mTLS modernization · Proposed design · Version 0.1</p>
+    </div>
+  </footer>
+</body>
+</html>

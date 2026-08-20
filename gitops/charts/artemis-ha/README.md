@@ -137,6 +137,12 @@ queue, and listener-port values fail rendering. The fixed per-cell file under
 `gitops/workloads/<environment>/<workloadCellName>` is the normal owner for
 pair-specific policy.
 
+The current rollout is internal-client mTLS only. Use the
+[internal mTLS onboarding guide](../../docs/runbooks/internal-mtls-onboarding.md)
+for enterprise CA trust, Vault/Secret ownership, certificate-DN mapping, and
+the separate locations for Kubernetes selectors and approved client CIDRs.
+External-client mTLS remains documented there as deferred work.
+
 OpenWire advisory support is explicit on each acceptor because the operator's
 default is not the compatibility contract. `supportAdvisory` is valid only on
 an acceptor containing `OPENWIRE`; protocol-specific options such as
