@@ -27,8 +27,8 @@ connection while retaining separate volumes.
 
 The operator continues to own the generated StatefulSet, PVC lifecycle, and
 peer discovery. The chart owns stable protocol and management services,
-console ingress, security/policy resources, and an authenticated readiness
-check intended to select only the active broker. Startup and liveness do not
+console ingress, security/policy resources, and a readiness check intended to
+select only the active broker. Startup and liveness do not
 treat normal passive state as failure.
 
 This is the smallest operator-compatible customization. A repository-owned
@@ -89,10 +89,11 @@ evidence demonstrates a missing required class or filesystem behavior. It must
 preserve the reviewed upstream base, contain no secrets, run non-root, and
 repeat license, SBOM, scan, signature, and acceptance review under a new tag.
 
-Vault injection is not equivalent to broker authentication integration. The
-operator may generate or consume Kubernetes Secrets, while the injector writes
-pod-local files. The environment must provide and test an approved bridge
-without placing secret values in Git or manifests.
+Vault injection is not equivalent to broker authentication integration.
+Internal messaging login is disabled and does not need that bridge. Before a
+future external cell enables authentication, its environment must prove how
+the operator consumes externally materialized Secrets without placing values
+in Git or manifests.
 
 Hawtio OIDC configuration authenticates the browser but does not complete
 Artemis management authorization. Principal mapping, scoped management grants,
@@ -103,5 +104,5 @@ and both UI and direct-Jolokia enforcement remain production gates.
 The design retains operator ownership of broker lifecycle and keeps the HA
 policy reviewable in the custom resource. It also makes real-cluster
 destructive testing mandatory: local rendering can verify topology and property
-shape, but not durability, activation safety, client routing, authorization, or
-credential rotation.
+shape, but not durability, activation safety, client routing, CIDR admission,
+or management authorization.

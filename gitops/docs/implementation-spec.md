@@ -17,8 +17,8 @@ The system is accepted only when runtime evidence demonstrates:
 3. automatic restoration of client service after primary failure;
 4. acceptable behavior for the inventoried ActiveMQ Classic clients and
    features; and
-5. operable upgrades, rollback, credential rotation, authorization, monitoring,
-   and recovery.
+5. operable upgrades, rollback, network admission, management authorization,
+   monitoring, and recovery.
 
 In-flight work may be redelivered. The delivery contract is at least once, so
 consumers must be idempotent and producers should use a stable duplicate ID
@@ -32,9 +32,7 @@ changeable implementation facts belong in executable files:
 | Concern | Authoritative source |
 | --- | --- |
 | Local-cluster composition and child Applications | Rendered [`argocd/bootstrap`](../argocd/bootstrap) adapters |
-| Stable Workload Cell identity, traffic class, hostname, storage, and Profile | [`argocd/workload-cell-baseline.yaml`](../argocd/workload-cell-baseline.yaml) |
-| Cluster identity, Workload Cell resources, features, and enablement | Environment overlays under [`argocd/topology`](../argocd/catalogs) |
-| Catalog consumed by Argo CD | Generated, drift-checked files under [`argocd/topology`](../argocd/catalogs) |
+| Cluster identity and complete Workload Cell topology consumed by Argo CD | Environment files under [`argocd/topology`](../argocd/topology) |
 | Argo CD repository credentials and root Application | Per-cluster EKS Terraform inputs |
 | `messaging-platform` AppProject policy | Shared [`argocd/bootstrap/base`](../argocd/bootstrap/base) rendered through the matching cluster adapter |
 | Current platform, component, and image versions | [`releases/current.yaml`](../releases/current.yaml), the Artemis chart, and Kustomize deployment bases/overlays |
@@ -43,7 +41,7 @@ changeable implementation facts belong in executable files:
 | Validation workflow | [`Makefile`](../Makefile) and [`scripts`](../scripts) |
 | Acceptance scenarios and thresholds | [`tests/e2e/acceptance-plan.yaml`](../tests/e2e/acceptance-plan.yaml) and [`performance/profiles/sustained-load-profiles.yaml`](../../performance/profiles/sustained-load-profiles.yaml) |
 | Classic compatibility inventory | [`tests/compatibility/classic-6.2.6-inventory.yaml`](../tests/compatibility/classic-6.2.6-inventory.yaml) |
-| Pair-owned listener, identity-reference, destination, authorization, and client-source policy | Schema-validated files under [`workloads`](../workloads) |
+| Pair-owned listener, destination, and client-network policy; deferred external identity and authorization | Schema-validated files under [`workloads`](../workloads) |
 
 If prose conflicts with one of these files, the executable source governs the
 current implementation. A change that alters the design decision or safety
@@ -86,10 +84,8 @@ cluster connections, federation, and bridges are absent unless separately
 designed and approved.
 
 Each EKS cluster runs its own Argo CD instance and consumes only its matching
-thin Kustomize adapter and generated effective Workload Cell catalog. That
-catalog is composed from the stable baseline and the matching environment
-overlay, then checked for drift by repository validation. The ApplicationSet
-generates only entries whose `enabled` field is `"true"`; the assignment below
+thin Kustomize adapter and directly editable Workload Cell topology file. The
+ApplicationSet generates only entries whose `enabled` field is `"true"`; the assignment below
 is design intent, not evidence that a pair is currently deployed. Sandbox is
 intentionally non-promotable and makes no HA, AZ-loss, durability, or upgrade
 claim.
@@ -98,7 +94,7 @@ The accepted production topology assigns PE, PP, DM, and PR one internal
 active/passive pair each, plus a distinct external pair for PP and PR.
 External clients do not share the internal pair. PP and PR also retain
 disabled batch placeholders. When enabled, every pair receives a
-baseline-owned management hostname, exact OIDC redirect URI, namespace,
+topology-owned management hostname, exact OIDC redirect URI, namespace,
 coordination identity, and storage size. See the
 [`workload-cell topology ADR`](adr-workload-cell-topology.md).
 
@@ -185,32 +181,35 @@ The deployment boundary requires:
 
 - non-root containers, least privilege, and default-deny network policy;
 - no public broker load balancer;
-- approved TLS for ingress and messaging paths;
+- approved TLS for ingress and for future external messaging paths;
 - immutable, scanned, signed artifacts;
-- separate human-management roles and application messaging roles; and
+- separate human-management authorization and messaging network admission; and
 - audit evidence without credentials, tokens, or message bodies.
 
 Keycloak owns human identity and group-to-role assignment. Hawtio authenticates
 the browser session, while Artemis management RBAC must authorize the actual
 JMX/Jolokia operation. UI visibility is not an authorization control.
 
-Messaging-client JAAS configuration is supplied only through an externally
-materialized `*-jaas-config` Secret reference. The typed `authorization.rules`
-interface renders address and queue role permissions without admitting users,
-passwords, certificate subjects, or group membership into Git. The chart
-exposes Keycloak role mapping, the operator's management-RBAC switch, and
-scoped `mops.#` `view`/`edit` grants through the same typed authorization
-interface. The exact principal-class mapping and absence of a competing
-`management.xml` authorization mechanism still require runtime verification
-before production. Both Hawtio and direct Jolokia negative tests are required.
+Internal and batch messaging clients do not authenticate to Artemis. Those
+Workload Cells render `requireLogin: false` and admit approved sources through
+typed `networkPolicy.clientCidrs` or namespace/pod selectors. These rules reach
+only enabled messaging acceptors; management and monitoring sources are
+separate. Runtime acceptance must prove both allowed and denied sources using
+the address actually observed by broker pods.
+
+Keycloak role mapping and the operator's management-RBAC switch remain in
+scope for Hawtio and direct Jolokia. External messaging-client JAAS, mTLS, and
+typed destination authorization remain supported chart surfaces but are
+deferred until an external Workload Cell is prepared and enabled.
 
 ### Secrets and Vault
 
 Vault owns secret data and access policy. This chart may request pod-local
 files through the Vault Agent Injector, but an injected credential file is not
 automatically the operator's broker administrative identity. The environment
-must provide and test an approved bridge, such as a platform secret-sync
-controller or operator-supported mounted authentication configuration.
+must provide and test an approved bridge before external messaging
+authentication is enabled, such as a platform secret-sync controller or
+operator-supported mounted authentication configuration.
 
 The bridge must support rotation without secret values entering Git, rendered
 manifests, Argo CD parameters, commands, or logs. ZooKeeper authentication and
@@ -240,7 +239,7 @@ for acknowledged messages, and follow
 | GitOps platform | Per-cluster Argo CD installation, standalone Git/OCI credentials, local root Application, and bootstrap control |
 | Security/Vault | Secret values, Vault auth mounts, policies, roles, certificate material, and approved secret materialization |
 | Identity | Keycloak realm, public clients, redirect URIs, claims, groups, and role assignments |
-| Application owners | Queue catalog, client identities, compatibility evidence, traffic quiescence, cutover, and business reconciliation |
+| Application owners | Queue catalog, approved client source ranges, compatibility evidence, traffic quiescence, cutover, and business reconciliation |
 | Operations | Monitoring selection, log collection, alarms, backup policy, incident command, and production approval |
 | This repository | Artemis charts and versions, local-cluster Argo composition and project policy, workload topology, schemas, environment baselines, validation harness, ADRs, and runbooks |
 
@@ -256,7 +255,8 @@ operability. At minimum:
 - ZooKeeper quorum loss never permits dual activation;
 - client recovery is measured against the currently approved target;
 - Argo CD returns to healthy reconciled state;
-- authentication and authorization succeed and fail for the intended roles;
+- approved internal CIDRs connect without credentials and unapproved sources are denied;
+- management authentication and authorization succeed and fail for the intended roles;
 - no secret appears in source, rendered resources, commands, or logs; and
 - monitoring and logs contain enough evidence to explain each result.
 
@@ -266,7 +266,7 @@ cluster, and namespace confirmation plus an approved change window.
 Artifacts move from test to nonprod to production under the same immutable tag. Do not
 rebuild between environments or combine operator, broker, ZooKeeper, and client
 upgrades into one unobserved change. Production promotion requires successful
-failure, load, upgrade, rollback, credential-rotation, authorization, and
+failure, load, upgrade, rollback, CIDR-admission, management-authorization, and
 recovery evidence plus operational approval.
 
 ## Migration sequence

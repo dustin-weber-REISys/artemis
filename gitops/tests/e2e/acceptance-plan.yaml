@@ -31,7 +31,7 @@ requiredCoverage:
   - ebs-detach-reschedule
   - argo-managed-upgrade-rollback
   - failed-upgrade-rollback
-  - vault-credential-rotation
+  - internal-cidr-admission
   - keycloak-hawtio-authorization
   - queue-management
   - per-source-dead-letter
@@ -263,17 +263,18 @@ cases:
     verification:
       - failed revision is identifiable
       - rollback does not erase acknowledged durable messages
-  - id: vault-credential-rotation
+  - id: internal-cidr-admission
     claim: operability
-    destructive: true
+    destructive: false
     eksRequired: true
     execution:
-      kind: runner-assisted
-      runnerAction: restart-broker-statefulsets
-    action: rotate broker/application credentials in Vault and restart one HA peer at a time
+      kind: manual-procedure
+    action: connect to every enabled messaging listener from approved and unapproved internal source ranges without broker credentials
     verification:
-      - no secret value appears in manifests or logs
-      - clients reconnect with the rotated credential
+      - approved CIDRs connect and perform inventoried messaging operations without credentials
+      - unapproved sources cannot establish a TCP connection
+      - the client CIDR rule does not expose the console or metrics port
+      - the pod-observed source address matches the documented network-path assumption
   - id: keycloak-hawtio-authorization
     claim: operability
     destructive: false

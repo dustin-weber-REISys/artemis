@@ -22,7 +22,7 @@ help:
 		'  release-gate      Run mandatory artifact-backed release validation' \
 		'  test-upgrade-workflow Exercise Platform Release preview regressions' \
 		'  test-chef-import  Exercise Chef ActiveMQ import and redaction regressions' \
-		'  validate-topology Validate Workload Cell catalogs and rendered Argo composition' \
+		'  validate-topology Validate Workload Cell topology and rendered Argo composition' \
 		'  test-topology     Exercise topology validation regression cases' \
 		'  test-zookeeper-rollout-preflight Test the read-only ZooKeeper rollout gate' \
 		'  test-diagnose-pod-startup Test pod startup failure classification and read-only collection' \

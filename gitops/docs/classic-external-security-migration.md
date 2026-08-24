@@ -1,5 +1,9 @@
 # Classic external-broker settings in the Artemis deployment
 
+> **Deferred:** This design applies only to future external Workload Cells.
+> Current internal Artemis clients use CIDR-based NetworkPolicy admission and
+> do not authenticate to the broker.
+
 The legacy external broker is not represented by copying its Chef JSON or JKS
 paths into the container. The Artemis deployment separates non-secret desired
 state in Git from externally materialized key, trust, and identity data.

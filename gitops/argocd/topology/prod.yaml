@@ -1,57 +1,152 @@
-schemaVersion: topology.artemis.apache.org/v3
+schemaVersion: topology.artemis.apache.org/v2
 environment: prod
 clusterName: PLACEHOLDER_PROD_EKS_CLUSTER
 platformNamespace: artemis-platform
 
-# PE, PP, DM, and PR each receive one internal active/passive pair. PP and PR
-# also receive a separate external pair. The environment overlay owns runtime
-# sizing, feature selection, and enablement only.
-workloadCellOverrides:
-  prod-pe:
+# This is the source of truth consumed directly by Argo CD. Edit Workload Cell
+# identity, sizing, features, and enablement here; no generation step is needed.
+workloadCells:
+  - workloadCellName: prod-pe
+    workloadNamespace: artemis-int-pe
+    coordinationId: prod-pe-pair01
+    logicalEnvironment: PE
+    trafficClass: internal
+    managementHost: artemis-pe-internal.example.invalid
+    storageSize: 100Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pp:
+  - workloadCellName: prod-pp
+    workloadNamespace: artemis-int-pp
+    coordinationId: prod-pp-pair01
+    logicalEnvironment: PP
+    trafficClass: internal
+    managementHost: artemis-pp-internal.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pp-external:
+  - workloadCellName: prod-pp-external
+    workloadNamespace: artemis-ext-pp
+    coordinationId: prod-pp-ext01
+    logicalEnvironment: PP
+    trafficClass: external
+    managementHost: artemis-pp-external.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pp-batch:
+  - workloadCellName: prod-pp-batch
+    workloadNamespace: artemis-batch-pp
+    coordinationId: prod-pp-batch01
+    logicalEnvironment: PP
+    trafficClass: batch
+    managementHost: artemis-pp-batch.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-dm:
+  - workloadCellName: prod-dm
+    workloadNamespace: artemis-int-dm
+    coordinationId: prod-dm-pair01
+    logicalEnvironment: DM
+    trafficClass: internal
+    managementHost: artemis-dm-internal.example.invalid
+    storageSize: 100Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pr:
+  - workloadCellName: prod-pr
+    workloadNamespace: artemis-int-pr
+    coordinationId: prod-pr-pair01
+    logicalEnvironment: PR
+    trafficClass: internal
+    managementHost: artemis-pr-internal.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pr-external:
+  - workloadCellName: prod-pr-external
+    workloadNamespace: artemis-ext-pr
+    coordinationId: prod-pr-ext01
+    logicalEnvironment: PR
+    trafficClass: external
+    managementHost: artemis-pr-external.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"
-  prod-pr-batch:
+  - workloadCellName: prod-pr-batch
+    workloadNamespace: artemis-batch-pr
+    coordinationId: prod-pr-batch01
+    logicalEnvironment: PR
+    trafficClass: batch
+    managementHost: artemis-pr-batch.example.invalid
+    storageSize: 500Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
-    features: {diskGuardrail: conservative}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
+    features:
+      diskGuardrail: conservative
     enabled: "false"

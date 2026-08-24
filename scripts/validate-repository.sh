@@ -94,11 +94,11 @@ run_check 'Pod startup diagnosis regressions' \
   "$repo_root/gitops/tests/incidents/test-diagnose-pod-startup.sh"
 run_check 'ZooKeeper rollout preflight regressions' \
   "$repo_root/gitops/tests/argocd/test-zookeeper-rollout-preflight.sh"
-run_check 'Generated workload topology' \
+run_check 'Workload topology' \
   "$repo_root/gitops/scripts/validate-topology.sh" \
   --report "$report_dir/topology-validation.json"
 run_check 'Topology regression tests' \
-  "$repo_root/gitops/tests/catalogs/test.sh"
+  "$repo_root/gitops/tests/topology/test.sh"
 run_check 'Argo CD ECR credential refresh regressions' \
   "$repo_root/gitops/tests/argocd/test-ecr-credential-refresh.sh"
 run_check 'Helm charts and overlays' \

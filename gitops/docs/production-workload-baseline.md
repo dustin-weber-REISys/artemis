@@ -86,7 +86,7 @@ network utilization, thread pools, and management/metrics overhead.
 
 The consumer total also creates a recovery concern. A broker or endpoint
 recovery may cause thousands of consumers to reconnect and reattach at once.
-Client retry backoff, jitter, topology discovery, authentication load, and
+Client retry backoff, jitter, topology discovery, connection admission, and
 session recreation must be tested as part of failover rather than after it.
 
 ### Burst and backlog behavior
@@ -137,7 +137,7 @@ dead-letter inventory so an incident is not hidden by old data.
 
 | Scenario | Minimum production-derived shape | Evidence to collect |
 | --- | --- | --- |
-| Consumer attachment | Approximately 8,300 attached consumers using a realistic connection/session ratio | Attach success, connection and session counts, heap, direct memory, file descriptors, authentication rate |
+| Consumer attachment | Approximately 8,300 attached consumers using a realistic connection/session ratio | Attach success, connection and session counts, heap, direct memory, file descriptors, connection admission rate |
 | Routine burst | Low-hundreds baseline followed by approximately 3,000 pending | Producer acknowledgement latency, consumer latency, drain time, paging, disk and network utilization |
 | Daily high backlog | 19,000-23,000 pending, concentrated according to actual per-queue distribution | Per-queue drain rate, fairness, ordering, redelivery, journal and replication behavior |
 | Overnight event | Rise to approximately 379,000 pending using exported production timing and message-size distributions | Peak resource use, producer errors, paging, replication lag, recovery time, post-event correctness |

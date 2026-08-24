@@ -7,6 +7,10 @@ answers whether the repository has a configuration interface for each shape;
 it does not claim that truncated photographs are an exact destination export or
 that compatibility has passed at runtime.
 
+Internal Artemis cells carry forward listener and destination compatibility but
+not Classic client authentication or authorization. The identity, role, TLS,
+and mTLS rows below are retained only for deferred external cells.
+
 | Observed Classic shape | Artemis representation | Repository coverage | Remaining gate |
 | --- | --- | --- | --- |
 | OpenWire on `61616` plus broker peer traffic | Required `artemis` acceptor with `CORE,OPENWIRE` | Render validation prevents removing CORE, moving the peer port, or duplicating an enabled port | Existing client reconnect/failover test |
@@ -32,11 +36,11 @@ The ApplicationSet loads values in this order:
 2. the cluster environment baseline; and
 3. the required Workload Cell file under `gitops/workloads`.
 
-Acceptors, destinations, and authorization rules are keyed maps, so later files
-can add or refine named entries without replacing unrelated entries. The
+Acceptors, destinations, client CIDRs, and external authorization rules are
+keyed maps, so later files can add or refine named entries without replacing unrelated entries. The
 environment validator permits shared messaging entries only in the environment
-layer. The workload validator permits only pair-owned listener, identity Secret
-reference, destination, authorization, and client-source paths. Release, HA,
+layer. The workload validator permits pair-owned listeners, destinations, and
+client-network paths plus deferred external identity and authorization. Release, HA,
 ZooKeeper, storage, topology, and durability remain outside that seam.
 
 ## Exact-import limitation

@@ -18,7 +18,7 @@ spec:
               repoURL: https://example.invalid/PLACEHOLDER_ORG/PLACEHOLDER_GITOPS_REPOSITORY.git
               revision: main
               files:
-                - path: gitops/argocd/catalogs/cluster.yaml
+                - path: gitops/argocd/topology/cluster.yaml
           - list:
               elementsYaml: '{{ .workloadCells | toJson }}'
       selector:
@@ -73,6 +73,10 @@ spec:
               value: '{{ if eq (dig "diskGuardrail" "standard" .features) "conservative" }}80{{ else }}90{{ end }}'
             - name: brokerProperties.addressSettings.expiry.enabled
               value: '{{ dig "expiryResources" "false" .features }}'
+            - name: workloadCell.trafficClass
+              value: '{{.trafficClass}}'
+            - name: workloadCell.enabled
+              value: '{{.enabled}}'
             - name: console.ingress.host
               value: '{{.managementHost}}'
             - name: keycloak.redirectUri

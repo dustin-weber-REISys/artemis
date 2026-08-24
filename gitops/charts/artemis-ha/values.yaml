@@ -1,6 +1,13 @@
 # This file is intentionally generic. Environment overlays must provide the
 # external ZooKeeper connection string and a pair-unique coordination ID.
 
+# The catalog is authoritative for traffic classification and enablement.
+# Internal and batch Workload Cells use network admission; external Workload
+# Cells require broker authentication and, when enabled, an mTLS acceptor.
+workloadCell:
+  trafficClass: internal
+  enabled: true
+
 # Required enterprise resource labels. Replace the ownership and system ID
 # placeholders during environment import; keep env aligned with the overlay.
 commonLabels:
@@ -152,11 +159,10 @@ acceptors:
     extraParams:
       httpEnabled: "true"
 
-# Messaging-client authentication is supplied by an externally materialized
-# Secret. When configured, its name must end in -jaas-config and it must contain
-# login.config plus every properties file referenced by that JAAS configuration.
-# Keep the image/operator-generated PropertiesLoginModule in login.config so the
-# operator and readiness probe retain administrative access.
+# Internal messaging clients are admitted by NetworkPolicy and do not log in to
+# the broker. Authentication is reserved for a future external-client Workload
+# Cell. When enabled there, the externally materialized Secret name must end in
+# -jaas-config and contain login.config plus every referenced properties file.
 authentication:
   jaasSecretName: ""
 
@@ -317,6 +323,10 @@ networkPolicy:
   # Empty defaults keep this chart deny-by-default until an environment adds
   # its approved callers.
   clientSources: []
+  # Pair- or environment-owned internal source ranges. Each CIDR reaches only
+  # enabled messaging acceptors; console and metrics access remain separate.
+  # Keep this empty in reusable defaults and supply approved ranges in overlays.
+  clientCidrs: {}
   # ALB traffic does not originate from an in-cluster ingress-controller pod.
   # Environments must allow their approved ALB/VPC sources on the console port
   # with extraIngress (or an equivalent platform-owned policy).

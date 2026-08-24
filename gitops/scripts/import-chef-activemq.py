@@ -75,6 +75,15 @@ def parse_args() -> argparse.Namespace:
         help="optional externally materialized JAAS Secret; must end in -jaas-config",
     )
     parser.add_argument(
+        "--authenticated-broker",
+        action="append",
+        default=[],
+        help=(
+            "legacy broker that maps to a future authenticated external "
+            "Workload Cell; repeatable"
+        ),
+    )
+    parser.add_argument(
         "--keep-role",
         action="append",
         default=[],
@@ -371,6 +380,7 @@ def transform_broker(
     used_destination_keys: set[str] = set()
     used_rule_keys: set[str] = set()
     used_ports: dict[int, str] = {}
+    authenticated = broker_name in args.authenticated_broker
 
     transports = broker.get("transports", [])
     if transports is None:
@@ -442,9 +452,23 @@ def transform_broker(
             if "=" in token
         ]
         tls_enabled = "ssl" in " ".join(str(value).lower() for value in transport[:2])
-        need_client_auth = any(
+        source_need_client_auth = any(
             parameter.lower() == "needclientauth=true" for parameter in query_parameters
         )
+        need_client_auth = source_need_client_auth and authenticated
+        if source_need_client_auth and not authenticated:
+            report_items.append(
+                item(
+                    broker_name,
+                    source_path,
+                    "retired",
+                    (
+                        "internal broker client authentication was not carried forward; "
+                        "access is owned by approved CIDR policy"
+                    ),
+                    identifier=source_name,
+                )
+            )
         if tls_enabled and not args.ssl_secret_name:
             report_items.append(
                 item(
@@ -747,10 +771,11 @@ def transform_broker(
         rule_key = unique_key(
             f"{'-'.join(sorted(grouped_kinds[artemis_match]))}-{artemis_match}", used_rule_keys
         )
-        authorization_rules[rule_key] = {
-            "match": artemis_match,
-            "permissions": permissions,
-        }
+        if authenticated:
+            authorization_rules[rule_key] = {
+                "match": artemis_match,
+                "permissions": permissions,
+            }
         wildcard_note = " Wildcard scope requires an explicit least-privilege review." if any(
             marker in artemis_match for marker in ("#", "*")
         ) else ""
@@ -758,11 +783,18 @@ def transform_broker(
             item(
                 broker_name,
                 grouped_sources[artemis_match][0],
-                "candidate-review",
-                "Classic read/write roles were translated to consume+browse/send."
-                + wildcard_note,
+                "candidate-review" if authenticated else "retired",
+                (
+                    "Classic read/write roles were translated to consume+browse/send."
+                    + wildcard_note
+                    if authenticated
+                    else (
+                        "internal broker authorization was not carried forward; "
+                        "access is owned by approved CIDR policy"
+                    )
+                ),
                 identifier=artemis_match,
-                target_path=f"authorization.rules.{rule_key}",
+                target_path=(f"authorization.rules.{rule_key}" if authenticated else None),
             )
         )
 
@@ -797,10 +829,20 @@ def transform_broker(
             )
         )
 
+    if authenticated:
+        # Helm deep-merges the chart's standard plaintext client acceptors.
+        # External candidates must turn off any default listener that was not
+        # replaced by an explicitly imported mTLS listener. The fixed artemis
+        # acceptor remains for operator-managed CORE peer traffic.
+        for default_acceptor in ("amqp", "stomp", "mqtt", "websocket"):
+            acceptors.setdefault(default_acceptor, {"enabled": False})
+
     if acceptors:
         candidate["acceptors"] = acceptors
-    if args.jaas_secret_name:
-        candidate["authentication"] = {"jaasSecretName": args.jaas_secret_name}
+    if authenticated:
+        candidate["authentication"] = {
+            "jaasSecretName": args.jaas_secret_name,
+        }
         report_items.append(
             item(
                 broker_name,
@@ -811,7 +853,7 @@ def transform_broker(
             )
         )
     candidate["destinations"] = destinations
-    candidate["authorization"] = {"rules": authorization_rules}
+    candidate["authorization"] = {"rules": authorization_rules if authenticated else {}}
 
     for field, reason in (
         ("jmx", "remote JMX/RMI is intentionally replaced by scoped Hawtio/Jolokia access"),
@@ -1076,6 +1118,20 @@ def main() -> int:
         )
     if len(selected_names) != len(set(selected_names)):
         raise ImportFailure("--broker values must be unique")
+    unknown_authenticated_brokers = sorted(
+        set(args.authenticated_broker) - set(selected_names)
+    )
+    if unknown_authenticated_brokers:
+        raise ImportFailure(
+            "--authenticated-broker values must also be selected brokers: "
+            + ", ".join(unknown_authenticated_brokers)
+        )
+    if len(args.authenticated_broker) != len(set(args.authenticated_broker)):
+        raise ImportFailure("--authenticated-broker values must be unique")
+    if args.authenticated_broker and not args.jaas_secret_name:
+        raise ImportFailure("--jaas-secret-name is required with --authenticated-broker")
+    if args.jaas_secret_name and not args.authenticated_broker:
+        raise ImportFailure("--jaas-secret-name requires at least one --authenticated-broker")
     policy = load_policy(args.policy)
     unknown_policy_brokers = sorted(set(policy["brokers"]) - set(brokers))
     if unknown_policy_brokers:

@@ -1,5 +1,7 @@
 {{- $fullname := include "artemis-ha.crName" . -}}
 {{- $consolePort := include "artemis-ha.consolePort" . | int -}}
+{{- $externalClientCell := eq .Values.workloadCell.trafficClass "external" -}}
+{{- $enabledExternalClientCell := and $externalClientCell .Values.workloadCell.enabled -}}
 {{- $podAnnotations := deepCopy .Values.broker.annotations -}}
 {{- $brokerLabels := mergeOverwrite (deepCopy .Values.broker.labels) .Values.commonLabels -}}
 {{- $javaArgsAppend := list "-Dzookeeper.sasl.client=false" -}}
@@ -104,6 +106,7 @@
 {{- fail "acceptors.artemis must remain enabled on port 61616 and include the CORE protocol for operator-managed peer traffic" }}
 {{- end }}
 {{- $seenAcceptorPorts := dict }}
+{{- $mtlsAcceptors := list }}
 {{- range $acceptorName, $acceptor := .Values.acceptors }}
 {{- if $acceptor.enabled }}
 {{- $portKey := printf "%d" (int $acceptor.port) }}
@@ -116,6 +119,15 @@
 {{- end }}
 {{- if and (not $acceptor.sslEnabled) (or $acceptor.needClientAuth (not (empty $acceptor.sslSecret)) (not (empty $acceptor.trustSecret))) }}
 {{- fail (printf "acceptors.%s needClientAuth/sslSecret/trustSecret require sslEnabled=true" $acceptorName) }}
+{{- end }}
+{{- if and $acceptor.needClientAuth (not $externalClientCell) }}
+{{- fail (printf "acceptors.%s needClientAuth is reserved for external Workload Cells" $acceptorName) }}
+{{- end }}
+{{- if and $acceptor.sslEnabled $acceptor.needClientAuth }}
+{{- $mtlsAcceptors = append $mtlsAcceptors $acceptorName }}
+{{- end }}
+{{- if and $enabledExternalClientCell (ne $acceptorName "artemis") (or (not $acceptor.sslEnabled) (not $acceptor.needClientAuth)) }}
+{{- fail (printf "enabled external Workload Cells require acceptors.%s to use mTLS or be disabled" $acceptorName) }}
 {{- end }}
 {{- if and $acceptor.supportAdvisory (not (has "OPENWIRE" (splitList "," $acceptor.protocols))) }}
 {{- fail (printf "acceptors.%s supportAdvisory requires the OPENWIRE protocol" $acceptorName) }}
@@ -142,6 +154,24 @@
 {{- end }}
 {{- if and (not (empty .Values.authentication.jaasSecretName)) (not (hasSuffix "-jaas-config" .Values.authentication.jaasSecretName)) }}
 {{- fail "authentication.jaasSecretName must end in -jaas-config" }}
+{{- end }}
+{{- if and $enabledExternalClientCell (empty .Values.authentication.jaasSecretName) }}
+{{- fail "authentication.jaasSecretName is required when an external Workload Cell is enabled" }}
+{{- end }}
+{{- if and (not $externalClientCell) (not (empty .Values.authentication.jaasSecretName)) }}
+{{- fail "authentication.jaasSecretName is reserved for external Workload Cells" }}
+{{- end }}
+{{- if and (not $externalClientCell) (not (empty .Values.authorization.rules)) }}
+{{- fail "authorization.rules are reserved for external Workload Cells" }}
+{{- end }}
+{{- if and $enabledExternalClientCell (empty .Values.authorization.rules) }}
+{{- fail "authorization.rules are required when an external Workload Cell is enabled" }}
+{{- end }}
+{{- if and $enabledExternalClientCell (eq (len $mtlsAcceptors) 0) }}
+{{- fail "an enabled external Workload Cell requires at least one enabled TLS acceptor with needClientAuth=true" }}
+{{- end }}
+{{- if and $enabledExternalClientCell (or (not (empty .Values.networkPolicy.clientSources)) (not (empty .Values.networkPolicy.clientCidrs))) }}
+{{- fail "external Workload Cells require per-listener network sources; clientSources and clientCidrs grant every enabled acceptor" }}
 {{- end }}
 apiVersion: broker.amq.io/v1beta1
 kind: ActiveMQArtemis
@@ -175,9 +205,10 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- end }}
   deploymentPlan:
-    # This chart is deliberately a durable, authenticated, two-peer HA pair.
+    # Internal and batch Workload Cells rely on network admission. External
+    # Workload Cells require broker login and an mTLS acceptor before enablement.
     size: 2
-    requireLogin: true
+    requireLogin: {{ $externalClientCell }}
     persistenceEnabled: true
     journalType: {{ .Values.persistence.journalType | quote }}
     messageMigration: false

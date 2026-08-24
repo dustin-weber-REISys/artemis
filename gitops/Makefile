@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= ../reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow test-chef-import validate-scenarios render-topology validate-topology verify-applicationset diagnose-pod-startup check-zookeeper-rollout test-zookeeper-rollout-preflight test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate validate test-upgrade-workflow test-chef-import validate-scenarios validate-topology verify-applicationset diagnose-pod-startup check-zookeeper-rollout test-zookeeper-rollout-preflight test-diagnose-pod-startup test-verify-applicationset test-topology test-argocd-ecr-credentials validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema
 
 help:
 	@printf '%s\n' \
@@ -15,8 +15,7 @@ help:
 		'test-chef-import         Exercise Chef ActiveMQ import and redaction regressions' \
 		'validate                 Run all GitOps and Helm checks' \
 		'validate-scenarios       Validate EKS acceptance definitions' \
-		'render-topology          Compose baseline and environment overrides into Argo CD catalogs' \
-		'validate-topology        Validate Workload Cell catalogs and rendered cluster composition' \
+		'validate-topology        Validate Workload Cell topology and rendered cluster composition' \
 		'verify-applicationset    Verify live ApplicationSet reconciliation (requires CONTEXT, ARGOCD_NAMESPACE, ENVIRONMENT)' \
 		'diagnose-pod-startup     Classify one live pod startup failure (requires CONTEXT, NAMESPACE, POD)' \
 		'check-zookeeper-rollout  Run the read-only ZooKeeper/Argo rollout gate (requires CONTEXT, ENVIRONMENT)' \
@@ -58,14 +57,6 @@ test-chef-import:
 validate-scenarios:
 	./scripts/validate-scenarios.sh --report "$(REPORT_DIR)/scenario-validation.json"
 
-render-topology:
-	@for environment in test nonprod prod; do \
-		./scripts/compose-topology.sh \
-			--baseline argocd/workload-cell-baseline.yaml \
-			--topology "argocd/catalogs/$$environment.yaml" \
-			--output "argocd/catalogs/$$environment.yaml"; \
-	done
-
 validate-topology:
 	./scripts/validate-topology.sh --report "$(REPORT_DIR)/topology-validation.json"
 
@@ -88,7 +79,7 @@ test-verify-applicationset:
 	./tests/argocd/test-verify-applicationset.sh
 
 test-topology:
-	./tests/catalogs/test.sh
+	./tests/topology/test.sh
 
 test-argocd-ecr-credentials:
 	./tests/argocd/test-ecr-credential-refresh.sh

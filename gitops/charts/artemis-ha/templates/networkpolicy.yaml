@@ -66,6 +66,18 @@ spec:
         {{- end }}
     {{- end }}
     {{- end }}
+    {{- range $sourceName, $cidr := .Values.networkPolicy.clientCidrs }}
+    {{- if $clientPorts }}
+    - from:
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+      ports:
+        {{- range $clientPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+    {{- end }}
+    {{- end }}
     {{- range .Values.networkPolicy.managementSources }}
     - from:
         - namespaceSelector:

@@ -44,17 +44,14 @@ view:
 - [ ] `gitops/argocd/bootstrap/test/*`
 - [ ] `gitops/argocd/bootstrap/nonprod/*`
 - [ ] `gitops/argocd/bootstrap/prod/*`
-- [ ] `gitops/argocd/catalogs/*`
-- [ ] `gitops/argocd/catalogs/*`
+- [ ] `gitops/argocd/topology/*`
 - [ ] `gitops/argocd/profiles/standard/*`
-- [ ] `gitops/argocd/workload-cell-baseline.yaml`
 - [ ] `gitops/releases/current.yaml`
 - [ ] `gitops/scripts/prepare-upgrade.sh`
 - [ ] `gitops/scripts/validate-release.sh`
 - [ ] `gitops/scripts/validate-operator-schema.sh`
 - [ ] `gitops/scripts/validate-topology.sh`
-- [ ] `gitops/scripts/compose-topology.sh`
-- [ ] `gitops/tests/catalogs/test.sh`
+- [ ] `gitops/tests/topology/test.sh`
 - [ ] `scripts/validate-static.sh`
 - [ ] `scripts/validate-repository.sh`
 - [ ] `Makefile` and `gitops/Makefile`

@@ -24,7 +24,6 @@ argo_app=''
 argo_action=status
 argo_revision=''
 load_manifest=''
-rotation_ready=0
 allow_node_drain=0
 cleanup=0
 list_actions=0
@@ -39,7 +38,6 @@ list_runner_actions() {
     manage-replication-isolation-policy 'Apply or remove the temporary broker replication NetworkPolicy.' \
     manage-zookeeper-isolation-policy 'Apply or remove the temporary broker-to-ZooKeeper NetworkPolicy.' \
     operate-argocd-application 'Get, sync, or roll back one explicitly named Argo CD application.' \
-    restart-broker-statefulsets 'Request a rolling restart after separately approved credential rotation.' \
     check-console-http-access 'Request the console URL and record its HTTP status; role verification remains manual.' \
     apply-load-job 'Apply an operator-supplied Kubernetes Job manifest; load verification remains manual.'
 }
@@ -81,7 +79,6 @@ while (($#)); do
     --argo-action) require_option_value "$1" "${2-}"; argo_action=$2; shift 2 ;;
     --argo-revision) require_option_value "$1" "${2-}"; argo_revision=$2; shift 2 ;;
     --load-manifest) require_option_value "$1" "${2-}"; load_manifest=$2; shift 2 ;;
-    --rotation-ready) rotation_ready=1; shift ;;
     --allow-node-drain) allow_node_drain=1; shift ;;
     --cleanup) cleanup=1; shift ;;
     --report) require_option_value "$1" "${2-}"; report=$2; shift 2 ;;
@@ -308,15 +305,6 @@ case "$runner_action" in
         sync) argocd app sync "$argo_app" --revision "$argo_revision" ;;
         rollback) argocd app rollback "$argo_app" "$argo_revision" ;;
       esac
-      status=ACTION_EXECUTED
-    fi
-    ;;
-  restart-broker-statefulsets)
-    [[ "$rotation_ready" == 1 ]] || { printf '%s\n' '--rotation-ready is required after Vault rotation approval' >&2; exit 2; }
-    target_description=$broker_selector
-    planned="request a rolling restart of matching StatefulSets after external credential rotation"
-    if [[ "$mode" == execute ]]; then
-      kubectl --context "$context" --namespace "$namespace" rollout restart statefulset --selector "$broker_selector"
       status=ACTION_EXECUTED
     fi
     ;;

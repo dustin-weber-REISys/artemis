@@ -10,6 +10,8 @@ expiry_rendered="$temp_dir/expiry.yaml"
 ports_rendered="$temp_dir/ports.yaml"
 vault_rendered="$temp_dir/vault.yaml"
 external_rendered="$temp_dir/external.yaml"
+external_disabled_rendered="$temp_dir/external-disabled.yaml"
+external_no_authorization_values="$temp_dir/external-no-authorization-values.yaml"
 prod_rendered="$temp_dir/prod.yaml"
 nonprod_rendered="$temp_dir/nonprod.yaml"
 test_rendered="$temp_dir/test.yaml"
@@ -23,6 +25,12 @@ fi
 helm_args=(
   --set 'ha.coordinationId=pair-id-test01'
   --set-string 'zookeeper.connectString=zookeeper-0.zookeeper-headless:2181\,zookeeper-1.zookeeper-headless:2181\,zookeeper-2.zookeeper-headless:2181'
+)
+external_client_defaults_disabled_args=(
+  --set 'acceptors.amqp.enabled=false'
+  --set 'acceptors.stomp.enabled=false'
+  --set 'acceptors.mqtt.enabled=false'
+  --set 'acceptors.websocket.enabled=false'
 )
 
 helm lint "$chart_dir" "${helm_args[@]}" >/dev/null
@@ -71,6 +79,34 @@ fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
   --set-string 'authentication.jaasSecretName=invalid-secret-name' >/dev/null 2>&1; then
   echo "expected a JAAS Secret name without the operator suffix to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'authentication.jaasSecretName=internal-clients-jaas-config' >/dev/null 2>&1; then
+  echo "expected an internal Workload Cell to reject a JAAS Secret" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  "${external_client_defaults_disabled_args[@]}" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' >/dev/null 2>&1; then
+  echo "expected an enabled external Workload Cell without a JAAS Secret to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  "${external_client_defaults_disabled_args[@]}" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
+  --set-string 'authentication.jaasSecretName=partner-clients-jaas-config' \
+  --set-string 'authorization.rules.partner.match=PARTNER.#' \
+  --set-string 'authorization.rules.partner.permissions.send[0]=partner-client' \
+  >/dev/null 2>&1; then
+  echo "expected an enabled external Workload Cell without an mTLS acceptor to fail" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" "${helm_args[@]}" \
+  --set-string 'networkPolicy.clientCidrs.invalid=999.42.0.0/16' >/dev/null 2>&1; then
+  echo "expected an invalid client CIDR to fail" >&2
   exit 1
 fi
 if helm template invalid "$chart_dir" "${helm_args[@]}" \
@@ -221,7 +257,7 @@ fi
 [[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/target-type"' "$rendered")" == "ip" ]]
 [[ "$(yq eval -r 'select(.kind == "Ingress") | .spec | has("tls")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.size' "$rendered")" == "2" ]]
-[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "true" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.persistenceEnabled' "$rendered")" == "true" ]]
 [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$rendered")" == "PLACEHOLDER_ARTEMIS_ADMIN_USERNAME" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec | has("adminPassword")' "$rendered")" == "false" ]]
@@ -291,6 +327,7 @@ helm template artemis-ports "$chart_dir" --namespace example-messaging \
   --set 'acceptors.stomp.enabled=false' \
   --set 'networkPolicy.clientSources[0].namespaceSelector.matchLabels.test=client' \
   --set 'networkPolicy.clientSources[0].podSelector.matchLabels.test=client' \
+  --set-string 'networkPolicy.clientCidrs.test-client=10.42.0.0/16' \
   > "$ports_rendered"
 
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "amqp") | .port' "$ports_rendered")" == "25672" ]]
@@ -301,6 +338,15 @@ client_ports=$(
     paste -sd, -
 )
 [[ "$client_ports" == "1883,61614,61616,25672" ]]
+cidr_client_ports=$(
+  yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") |
+    .spec.ingress[] |
+    select(.from[0].ipBlock.cidr == "10.42.0.0/16") |
+    .ports[].port' "$ports_rendered" |
+    sort -n |
+    paste -sd, -
+)
+[[ "$cidr_client_ports" == "1883,61614,61616,25672" ]]
 for direction in ingress egress; do
   peer_ports=$(
     DIRECTION="$direction" yq eval 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-ports-artemis-ha-allow") |
@@ -321,9 +367,52 @@ if rg -q 'name: artemis-ports-artemis-ha-stomp' "$ports_rendered"; then
   exit 1
 fi
 
+helm template artemis-external-disabled "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  -f "$chart_dir/tests/fixtures/external-mtls-values.yaml" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=false' \
+  > "$external_disabled_rendered"
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$external_disabled_rendered")" == "true" ]]
+
+cp "$chart_dir/tests/fixtures/external-mtls-values.yaml" "$external_no_authorization_values"
+yq -i '.authorization.rules = {}' "$external_no_authorization_values"
+if helm template invalid "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  -f "$external_no_authorization_values" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
+  >/dev/null 2>&1; then
+  echo "expected an enabled external Workload Cell without authorization rules to fail" >&2
+  exit 1
+fi
+
+if helm template invalid "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  -f "$chart_dir/tests/fixtures/external-mtls-values.yaml" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
+  --set-string 'networkPolicy.clientCidrs.partner=10.42.0.0/16' \
+  >/dev/null 2>&1; then
+  echo "expected an external Workload Cell to reject all-acceptor CIDR admission" >&2
+  exit 1
+fi
+if helm template invalid "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  -f "$chart_dir/tests/fixtures/external-mtls-values.yaml" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
+  --set 'acceptors.amqp.enabled=true' \
+  >/dev/null 2>&1; then
+  echo "expected an external Workload Cell to reject a plaintext client acceptor" >&2
+  exit 1
+fi
+
 helm template artemis-external "$chart_dir" --namespace example-messaging \
   "${helm_args[@]}" \
   -f "$chart_dir/tests/fixtures/external-mtls-values.yaml" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
   > "$external_rendered"
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .port' "$external_rendered")" == "61617" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .sslEnabled' "$external_rendered")" == "true" ]]
@@ -332,6 +421,7 @@ helm template artemis-external "$chart_dir" --namespace example-messaging \
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-openwire") | .supportAdvisory' "$external_rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.acceptors[] | select(.name == "partner-stomp") | .port' "$external_rendered")" == "61612" ]]
 [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.extraMounts.secrets[0]' "$external_rendered")" == "partner-clients-jaas-config" ]]
+[[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.requireLogin' "$external_rendered")" == "true" ]]
 rg -Fq 'addressConfigurations."PARTNER.REQUEST".queueConfigs."PARTNER.REQUEST".durable=true' "$external_rendered"
 rg -Fq 'addressConfigurations."PARTNER.RESPONSE".queueConfigs."PARTNER.RESPONSE".maxConsumers=20' "$external_rendered"
 rg -Fq 'securityRoles."PARTNER.REQUEST".partner-client.send=true' "$external_rendered"

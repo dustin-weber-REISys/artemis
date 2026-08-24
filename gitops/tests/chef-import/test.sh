@@ -34,6 +34,7 @@ python3 -B "$script" \
   --policy "$policy" \
   --ssl-secret-name sample-broker-tls \
   --trust-secret-name sample-client-ca \
+  --authenticated-broker sample-external \
   --jaas-secret-name sample-clients-jaas-config >/dev/null
 
 internal="$output/sample-internal.artemis-values.candidate.yaml"
@@ -48,11 +49,19 @@ yq -e '.destinations."app-request".address == "APP.REQUEST"' "$internal" >/dev/n
 yq -e '[.destinations[].address | select(. == "DLQ.APP.REQUEST")] | length == 0' "$internal" >/dev/null
 yq -e '[.destinations[].address | select(. == "OLD.REQUEST")] | length == 0' "$internal" >/dev/null
 yq -e '[.destinations[].address | select(. == "APP.EVENTS")] | length == 1' "$internal" >/dev/null
-yq -e '[.authorization.rules[].match | select(. == "ActiveMQ.Advisory.#")] | length == 1' "$internal" >/dev/null
-yq -e '[.authorization.rules[].match | select(. == "OLD.#")] | length == 0' "$internal" >/dev/null
-yq -e '.authentication.jaasSecretName == "sample-clients-jaas-config"' "$internal" >/dev/null
+yq -e '.authorization.rules | length == 0' "$internal" >/dev/null
+yq -e '. | has("authentication") | not' "$internal" >/dev/null
 yq -e '.acceptors."partner-ssl".sslEnabled == true and .acceptors."partner-ssl".needClientAuth == true' "$external" >/dev/null
 yq -e '.acceptors."partner-ssl".sslSecret == "sample-broker-tls" and .acceptors."partner-ssl".trustSecret == "sample-client-ca"' "$external" >/dev/null
+yq -e '
+  .acceptors.amqp.enabled == false and
+  .acceptors.stomp.enabled == false and
+  .acceptors.mqtt.enabled == false and
+  .acceptors.websocket.enabled == false
+' "$external" >/dev/null
+yq -e '.authentication.jaasSecretName == "sample-clients-jaas-config"' "$external" >/dev/null
+yq -e '[.authorization.rules[].match | select(. == "PARTNER.REQUEST")] | length == 1' "$external" >/dev/null
+yq -e '[.authorization.rules[].match | select(. == "OLD.#")] | length == 0' "$external" >/dev/null
 
 if rg -q 'fixture-database-password|CN=fixture-client|fixture-ca-alias|guests' "$internal" "$external"; then
   printf '%s\n' 'candidate leaked a secret, certificate identity, alias, or dropped role' >&2
@@ -76,7 +85,10 @@ helm_args=(
   --set-string 'zookeeper.connectString=zookeeper-0.zookeeper-headless:2181\,zookeeper-1.zookeeper-headless:2181\,zookeeper-2.zookeeper-headless:2181'
 )
 helm template chef-import "$chart" "${helm_args[@]}" -f "$internal" >/dev/null
-helm template chef-import "$chart" "${helm_args[@]}" -f "$external" >/dev/null
+helm template chef-import "$chart" "${helm_args[@]}" -f "$external" \
+  --set-string 'workloadCell.trafficClass=external' \
+  --set 'workloadCell.enabled=true' \
+  >/dev/null
 
 second="$temp_dir/second"
 python3 -B "$script" \
@@ -85,6 +97,7 @@ python3 -B "$script" \
   --policy "$policy" \
   --ssl-secret-name sample-broker-tls \
   --trust-secret-name sample-client-ca \
+  --authenticated-broker sample-external \
   --jaas-secret-name sample-clients-jaas-config >/dev/null
 cmp -s "$internal" "$second/sample-internal.artemis-values.candidate.yaml"
 cmp -s "$external" "$second/sample-external.artemis-values.candidate.yaml"

@@ -6,10 +6,11 @@ policy, and metrics defaults. Its `test`, `nonprod`, and `prod` overlays under
 [`kustomize/zookeeper`](../kustomize/zookeeper) own ZooKeeper sizing and
 cluster integration references. This directory now contains only Artemis
 chart values. Workload Cell identity and sizing live in
-[`argocd/topology`](../argocd/catalogs), while pair-owned messaging policy lives
+[`argocd/topology`](../argocd/topology), while pair-owned messaging policy lives
 under [`workloads`](../workloads). Environment-wide listener, destination, and
-authorization map entries may be placed here when they genuinely apply to
-every cell; later Workload Cell maps deep-merge pair-specific additions.
+client CIDR entries may be placed here when they genuinely apply to every cell;
+deferred external authorization entries belong here only when they apply to
+every external cell. Later Workload Cell maps deep-merge pair-specific additions.
 
 Image locations and release pins do not belong in environment overlays.
 The Argo CD bootstraps use one nonprod and one prod ECR base placeholder; test
@@ -38,9 +39,8 @@ external to the cluster, also supply its approved TCP/443 CIDR through
 only authorize direct access to an in-cluster Keycloak pod.
 
 Approved internal client CIDRs that apply to every Artemis Workload Cell in an
-environment belong under `networkPolicy.extraIngress` in that environment's
-`artemis-values.yaml`. Restrict each entry to the intended mTLS listener port.
-Pair-specific in-cluster callers belong under the Workload Cell's
-`networkPolicy.clientSources`; pair-specific CIDRs are not currently a typed
-Workload Cell interface. See the
-[internal mTLS onboarding guide](../docs/runbooks/internal-mtls-onboarding.md#5-allow-internal-network-sources).
+environment belong under `networkPolicy.clientCidrs` in that environment's
+`artemis-values.yaml`. Pair-specific CIDRs and in-cluster selectors belong in
+the Workload Cell values file. The chart limits both forms to enabled messaging
+acceptors; do not use `extraIngress` for ordinary client access. See the
+[internal CIDR onboarding guide](../docs/runbooks/internal-cidr-onboarding.md).

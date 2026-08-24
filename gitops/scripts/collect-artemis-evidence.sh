@@ -53,7 +53,7 @@ for command_name in kubectl yq; do
   command -v "$command_name" >/dev/null 2>&1 || { printf '%s is required\n' "$command_name" >&2; exit 2; }
 done
 
-topology="$gitops_root/argocd/catalogs/$environment.yaml"
+topology="$gitops_root/argocd/topology/$environment.yaml"
 [[ -f "$topology" ]] || { printf 'effective topology file not found: %s\n' "$topology" >&2; exit 2; }
 platform_namespace=$(yq -r '.platformNamespace // ""' "$topology")
 [[ -n "$platform_namespace" ]] || { printf 'platformNamespace is missing from %s\n' "$topology" >&2; exit 2; }

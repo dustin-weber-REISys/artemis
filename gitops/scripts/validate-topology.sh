@@ -3,33 +3,28 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-topology_dir="$repo_root/argocd/catalogs"
-effective_topology_dir="$repo_root/argocd/catalogs"
+topology_dir="$repo_root/argocd/topology"
 bootstrap_dir="$repo_root/argocd/bootstrap"
 profile_dir="$repo_root/argocd/profiles"
 environment_dir="$repo_root/environments"
 workload_dir="$repo_root/workloads"
 chart_dir="$repo_root/charts/artemis-ha"
-baseline="$repo_root/argocd/workload-cell-baseline.yaml"
-composer="$repo_root/scripts/compose-topology.sh"
 report="$repo_root/reports/topology-validation.json"
 
 while (($#)); do
   case "$1" in
     --topology-dir) topology_dir=$2; shift 2 ;;
-    --topology-dir) effective_topology_dir=$2; shift 2 ;;
     --bootstrap-dir) bootstrap_dir=$2; shift 2 ;;
     --profile-dir) profile_dir=$2; shift 2 ;;
     --environment-dir) environment_dir=$2; shift 2 ;;
     --workload-dir) workload_dir=$2; shift 2 ;;
-    --baseline) baseline=$2; shift 2 ;;
     --report) report=$2; shift 2 ;;
     *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
 
 command -v yq >/dev/null 2>&1 || {
-  printf '%s\n' 'yq is required (the repository baseline uses yq 4.53.3)' >&2
+  printf '%s\n' 'yq is required (the repository toolchain uses yq 4.53.3)' >&2
   exit 2
 }
 command -v helm >/dev/null 2>&1 || {
@@ -151,17 +146,6 @@ validate_profile() {
   done
 }
 
-[[ -x "$composer" ]] || record_error "topology composer not found or executable: $composer"
-[[ -f "$baseline" ]] || record_error "Workload Cell baseline not found: $baseline"
-if [[ -f "$baseline" ]]; then
-  assert_equal 'Workload Cell baseline schemaVersion' \
-    "$(yq -r '.schemaVersion // ""' "$baseline")" baseline.artemis.apache.org/v2
-  assert_equal 'Workload Cell baseline root keys' \
-    "$(yq -r 'keys | sort | join(",")' "$baseline")" 'clusters,schemaVersion'
-  assert_equal 'Workload Cell baseline clusters' \
-    "$(yq -r '.clusters | keys | sort | join(",")' "$baseline")" 'nonprod,prod,test'
-fi
-
 # Validate each Profile once before any cluster references it.
 known_profiles=''
 if [[ -d "$profile_dir" ]]; then
@@ -175,65 +159,27 @@ fi
 [[ -n "${known_profiles// }" ]] || record_error 'no Workload Cell Profiles are defined'
 
 for environment in test nonprod prod; do
-  topology_overlay="$topology_dir/$environment.yaml"
-  checked_topology="$effective_topology_dir/$environment.yaml"
-  topology="$render_dir/$environment-effective.yaml"
+  topology="$topology_dir/$environment.yaml"
   adapter="$bootstrap_dir/$environment"
   rendered="$render_dir/$environment.yaml"
   rendered_again="$render_dir/$environment-again.yaml"
 
-  [[ -f "$topology_overlay" ]] || { record_error "cluster $environment topology overlay not found: $topology_overlay"; continue; }
+  [[ -f "$topology" ]] || { record_error "cluster $environment topology not found: $topology"; continue; }
   assert_equal "cluster $environment topology schemaVersion" \
-    "$(yq -r '.schemaVersion // ""' "$topology_overlay")" topology.artemis.apache.org/v3
+    "$(yq -r '.schemaVersion // ""' "$topology")" topology.artemis.apache.org/v2
   assert_equal "cluster $environment topology root keys" \
-    "$(yq -r 'keys | sort | join(",")' "$topology_overlay")" \
-    'clusterName,environment,platformNamespace,schemaVersion,workloadCellOverrides'
+    "$(yq -r 'keys | sort | join(",")' "$topology")" \
+    'clusterName,environment,platformNamespace,schemaVersion,workloadCells'
   assert_equal "cluster $environment topology environment" \
-    "$(yq -r '.environment // ""' "$topology_overlay")" "$environment"
+    "$(yq -r '.environment // ""' "$topology")" "$environment"
   assert_equal "cluster $environment topology platform namespace" \
-    "$(yq -r '.platformNamespace // ""' "$topology_overlay")" artemis-platform
-  for root_field in clusterName platformNamespace workloadCellOverrides; do
-    ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology_overlay" >/dev/null || \
+    "$(yq -r '.platformNamespace // ""' "$topology")" artemis-platform
+  for root_field in clusterName platformNamespace workloadCells; do
+    ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology" >/dev/null || \
       record_error "cluster $environment topology field $root_field is required"
   done
-
-  if [[ -f "$baseline" ]]; then
-    assert_equal "cluster $environment Workload Cell baseline keys" \
-      "$(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)] | keys | sort | join(",")' "$baseline")" \
-      'workloadCells'
-    baseline_cells_type=$(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)].workloadCells | tag' "$baseline")
-    [[ "$baseline_cells_type" == '!!map' ]] || \
-      record_error "cluster $environment Workload Cell baseline must be a mapping keyed by workloadCellName"
-    while IFS= read -r cell; do
-      [[ -n "$cell" ]] || continue
-      stable_keys='coordinationId logicalEnvironment managementHost profile storageSize trafficClass workloadNamespace'
-      actual_keys=$(ENVIRONMENT="$environment" CELL="$cell" yq -r \
-        '.clusters[env(ENVIRONMENT)].workloadCells[env(CELL)] | keys | sort | join(" ")' "$baseline")
-      [[ "$actual_keys" == "$stable_keys" ]] || \
-        cell_error "$environment" "$cell" baselineKeys "allowed stable keys are: $stable_keys; got: $actual_keys"
-    done < <(ENVIRONMENT="$environment" yq -r '.clusters[env(ENVIRONMENT)].workloadCells | keys | .[]' "$baseline" 2>/dev/null || true)
-  fi
-
-  overrides_type=$(yq -r '.workloadCellOverrides | tag' "$topology_overlay")
-  [[ "$overrides_type" == '!!map' ]] || \
-    record_error "cluster $environment topology Workload Cell overrides must be a mapping keyed by workloadCellName"
-  while IFS= read -r cell; do
-    [[ -n "$cell" ]] || continue
-    override_keys='enabled features resources'
-    actual_keys=$(CELL="$cell" yq -r \
-      '.workloadCellOverrides[env(CELL)] | keys | sort | join(" ")' "$topology_overlay")
-    [[ "$actual_keys" == "$override_keys" ]] || \
-      cell_error "$environment" "$cell" topologyKeys "allowed environment keys are: $override_keys; got: $actual_keys"
-  done < <(yq -r '.workloadCellOverrides | keys | .[]' "$topology_overlay" 2>/dev/null || true)
-
-  if [[ ! -x "$composer" ]] || ! "$composer" --baseline "$baseline" --topology "$topology_overlay" --output "$topology"; then
-    record_error "cluster $environment effective topology failed to compose"
-    continue
-  fi
-  if [[ ! -f "$checked_topology" ]]; then
-    record_error "cluster $environment generated effective topology is missing: $checked_topology"
-  elif ! cmp -s "$topology" "$checked_topology"; then
-    record_error "cluster $environment generated effective topology is stale; run make -C gitops render-topology"
+  if yq -e 'has("brokerPairs")' "$topology" >/dev/null 2>&1; then
+    record_error "cluster $environment topology uses retired brokerPairs terminology; use workloadCells"
   fi
   [[ -f "$adapter/kustomization.yaml" ]] || {
     record_error "cluster $environment Kustomize adapter not found: $adapter/kustomization.yaml"
@@ -249,23 +195,6 @@ for environment in test nonprod prod; do
   fi
   cmp -s "$rendered" "$rendered_again" || record_error "cluster $environment composition is not deterministic"
   cluster_count=$((cluster_count + 1))
-
-  assert_equal "cluster $environment effective catalog schemaVersion" \
-    "$(yq -r '.schemaVersion // ""' "$topology")" topology.artemis.apache.org/v1
-  assert_equal "cluster $environment effective catalog root keys" \
-    "$(yq -r 'keys | sort | join(",")' "$topology")" \
-    'clusterName,environment,platformNamespace,schemaVersion,workloadCells'
-  assert_equal "cluster $environment effective catalog environment" \
-    "$(yq -r '.environment // ""' "$topology")" "$environment"
-  assert_equal "cluster $environment effective catalog platform namespace" \
-    "$(yq -r '.platformNamespace // ""' "$topology")" artemis-platform
-  for root_field in clusterName platformNamespace workloadCells; do
-    ROOT_FIELD="$root_field" yq -e 'has(strenv(ROOT_FIELD))' "$topology" >/dev/null || \
-      record_error "cluster $environment effective catalog field $root_field is required"
-  done
-  if yq -e 'has("brokerPairs")' "$topology" >/dev/null 2>&1; then
-    record_error "cluster $environment effective catalog uses retired brokerPairs terminology; use workloadCells"
-  fi
 
   document_count=$(yq ea -r '[.] | length' "$rendered")
   assert_equal "cluster $environment rendered resource count" "$document_count" 4
@@ -356,7 +285,7 @@ for environment in test nonprod prod; do
     ' "$rendered")" 0
   assert_equal "cluster $environment workloads catalog path" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.generators[0].matrix.generators[0].git.files[0].path')" \
-    "gitops/argocd/catalogs/$environment.yaml"
+    "gitops/argocd/topology/$environment.yaml"
   assert_equal "cluster $environment workloads catalog expansion" \
     "$(render_scalar "$rendered" ApplicationSet "$workloads" '.spec.generators[0].matrix.generators[1].list.elementsYaml')" \
     '{{ .workloadCells | toJson }}'
@@ -390,6 +319,12 @@ for environment in test nonprod prod; do
   assert_equal "cluster $environment standard expiry feature template" \
     "$(parameter_value "$rendered" "$workloads" brokerProperties.addressSettings.expiry.enabled)" \
     '{{ dig "expiryResources" "false" .features }}'
+  assert_equal "cluster $environment Workload Cell traffic class template" \
+    "$(parameter_value "$rendered" "$workloads" workloadCell.trafficClass)" \
+    '{{.trafficClass}}'
+  assert_equal "cluster $environment Workload Cell enablement template" \
+    "$(parameter_value "$rendered" "$workloads" workloadCell.enabled)" \
+    '{{.enabled}}'
   assert_sync_policy "$rendered" Application "$operator" .spec.syncPolicy "cluster $environment operator"
   assert_sync_policy "$rendered" Application "$zookeeper" .spec.syncPolicy "cluster $environment ZooKeeper" false
   assert_sync_policy "$rendered" ApplicationSet "$workloads" .spec.template.spec.syncPolicy "cluster $environment workloads"
@@ -489,17 +424,19 @@ for environment in test nonprod prod; do
     else
       while IFS= read -r leaf; do
         [[ -n "$leaf" ]] || continue
-        [[ "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. || "$leaf" =~ ^networkPolicy\.clientSources\. ]] || \
-          cell_error "$environment" "$cell" "workloadValues.$leaf" 'must be a pair-owned listener, identity Secret reference, destination, authorization rule, or client source'
+        [[ "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. || "$leaf" =~ ^networkPolicy\.(clientSources|clientCidrs)\. ]] || \
+          cell_error "$environment" "$cell" "workloadValues.$leaf" 'must be a pair-owned listener, external identity Secret reference, destination, external authorization rule, or client network source'
       done < <(yq -r '.. | select(tag != "!!map" and tag != "!!seq") | path | join(".")' "$workload_values")
 
       if [[ -f "$profile_dir/$profile/values.yaml" && -f "$environment_dir/$environment/artemis-values.yaml" ]]; then
-        if ! helm lint "$chart_dir" \
+        if ! helm template "$cell-artemis" "$chart_dir" \
           -f "$profile_dir/$profile/values.yaml" \
           -f "$environment_dir/$environment/artemis-values.yaml" \
           -f "$workload_values" \
           --set-string "ha.coordinationId=$coordination" \
           --set-string "zookeeper.connectString=$environment-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181" \
+          --set-string "workloadCell.trafficClass=$traffic" \
+          --set "workloadCell.enabled=$enabled" \
           >/dev/null 2>&1; then
           cell_error "$environment" "$cell" workloadValues 'effective Profile/environment/workload values fail chart schema or render validation'
         fi
@@ -520,7 +457,7 @@ for environment in test nonprod prod; do
   environment_values="$environment_dir/$environment/artemis-values.yaml"
   if [[ -f "$environment_values" ]]; then
     while IFS= read -r leaf; do
-      [[ "$leaf" =~ ^commonLabels\. || "$leaf" =~ ^broker\.(nodeSelector|tolerations|labels|annotations)\. || "$leaf" == persistence.storageClassName || "$leaf" == persistence.journalType || "$leaf" =~ ^keycloak\. || "$leaf" =~ ^vault\. || "$leaf" =~ ^console\.ingress\.(className|annotations)\. || "$leaf" =~ ^networkPolicy\.(clientSources|managementSources|monitoringSources|extraIngress|extraEgress)\. || "$leaf" =~ ^monitoring\.(serviceMonitor|prometheusRule)\.(namespace|labels) || "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. ]] || \
+      [[ "$leaf" =~ ^commonLabels\. || "$leaf" =~ ^broker\.(nodeSelector|tolerations|labels|annotations)\. || "$leaf" == persistence.storageClassName || "$leaf" == persistence.journalType || "$leaf" =~ ^keycloak\. || "$leaf" =~ ^vault\. || "$leaf" =~ ^console\.ingress\.(className|annotations)\. || "$leaf" =~ ^networkPolicy\.(clientSources|clientCidrs|managementSources|monitoringSources|extraIngress|extraEgress)\. || "$leaf" =~ ^monitoring\.(serviceMonitor|prometheusRule)\.(namespace|labels) || "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. ]] || \
         record_error "cluster $environment environment field $leaf violates cluster-integration ownership"
       for profile in $known_profiles; do
         if yq -r '.. | select(tag != "!!map" and tag != "!!seq") | path | join(".")' "$profile_dir/$profile/values.yaml" | grep -Fxq "$leaf"; then

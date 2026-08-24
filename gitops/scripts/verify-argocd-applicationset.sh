@@ -18,7 +18,7 @@ Usage: verify-argocd-applicationset.sh \
   [--controller-deployment NAME]
 
 Read-only desired-state check for the Argo CD ApplicationSet, ArkMQ operator,
-and every Workload Cell enabled in the selected local catalog. It compares
+and every Workload Cell enabled in the selected local topology file. It compares
 that local inventory with live cluster state. Run repository validation first.
 
 The reconciled Git revisions are reported for evidence. They are intentionally
@@ -57,7 +57,7 @@ for command_name in kubectl yq; do
   }
 done
 
-topology="$gitops_root/argocd/catalogs/$environment.yaml"
+topology="$gitops_root/argocd/topology/$environment.yaml"
 [[ -f "$topology" ]] || { printf 'effective topology file not found: %s\n' "$topology" >&2; exit 2; }
 
 applicationset="$environment-artemis-workloads"
@@ -161,7 +161,7 @@ enabled_cells=()
 while IFS= read -r enabled_cell; do
   enabled_cells[${#enabled_cells[@]}]=$enabled_cell
 done < <(yq -r '.workloadCells[] | select(.enabled == "true") | [.workloadCellName, .workloadNamespace] | @tsv' "$topology")
-[[ "${#enabled_cells[@]}" -gt 0 ]] || error "$environment catalog has no enabled Workload Cells"
+[[ "${#enabled_cells[@]}" -gt 0 ]] || error "$environment topology has no enabled Workload Cells"
 
 for enabled_cell in "${enabled_cells[@]}"; do
   IFS=$'\t' read -r workload_cell workload_namespace <<<"$enabled_cell"

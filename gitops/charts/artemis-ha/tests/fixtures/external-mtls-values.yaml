@@ -1,4 +1,12 @@
 acceptors:
+  amqp:
+    enabled: false
+  stomp:
+    enabled: false
+  mqtt:
+    enabled: false
+  websocket:
+    enabled: false
   partner-openwire:
     enabled: true
     port: 61617

@@ -1,10 +1,10 @@
 # Artemis HA chart
 
-This chart renders an operator-managed, authenticated, persistent
-competing-primary pair. Those deployment properties are chart invariants, not
-values: the `ActiveMQArtemis` resource always has two replicas, login required,
-persistence enabled, the embedded console on port `8161`, and an external
-ZooKeeper lock manager.
+This chart renders an operator-managed, persistent competing-primary pair. The
+`ActiveMQArtemis` resource always has two replicas, persistence enabled, the
+embedded console on port `8161`, and an external ZooKeeper lock manager.
+Internal messaging-client login is disabled; future external Workload Cells
+enable it from their catalog traffic class.
 
 The chart pins transactional and non-transactional journal sync, journal data
 sync, and large-message sync to `true`. Those keys and HA/replication identity
@@ -32,9 +32,9 @@ and client truststore. A separately managed PEM trust bundle can instead be
 referenced with `trustSecret`;
 their paths, passwords, private keys, and certificate contents never appear in
 chart values. The chart rejects TLS without an SSL Secret and rejects
-`needClientAuth` unless TLS is enabled. Client certificate or password identity
-is supplied through `authentication.jaasSecretName`, which must use the
-operator's `-jaas-config` suffix. See the
+`needClientAuth` unless TLS and broker authentication are enabled. External
+client identity is supplied through `authentication.jaasSecretName`, which
+must use the operator's `-jaas-config` suffix. See the
 [Classic external-security migration guide](../../docs/classic-external-security-migration.md)
 for the required Secret shapes and role mapping.
 
@@ -116,16 +116,26 @@ pod-local credential file; they do not make it the broker's effective
 administrative identity. Enable `vault.enabled` only after the environment
 provides and tests the approved Vault-to-Artemis bridge.
 
-## Client identity, authorization, and destination catalog
+## Internal network access and deferred external identity
 
-`authentication.jaasSecretName` stores only a Secret reference. The externally
-materialized Secret contains `login.config` and its user/DN/role property files.
-Its JAAS realm must retain the image's generated PropertiesLoginModule so the
-operator and readiness probe can continue to authenticate.
+Internal and batch messaging clients do not authenticate to Artemis. The
+ApplicationSet passes the catalog `trafficClass` and `enabled` fields to the
+chart, which derives `requireLogin` in one place. Approved network-admitted
+sources use typed `networkPolicy.clientCidrs` or in-cluster `clientSources`;
+both reach only the enabled acceptor ports. Management and monitoring sources
+remain separate.
 
-`authorization.rules` is the reviewed, non-secret permission interface. It
-renders role grants through `securityRoles` broker properties. Users, passwords,
-certificate DNs, and group membership are not accepted by this interface.
+External authentication remains supported but deferred. For an external cell,
+`authentication.jaasSecretName` stores only a Secret reference and
+`authorization.rules` renders reviewed role grants through `securityRoles`
+broker properties. Users, passwords, certificate DNs, and group membership are
+not accepted by this interface. A disabled external cell may carry this staged
+configuration for review. Before enablement, the chart requires JAAS,
+authorization, and at least one enabled TLS acceptor with `needClientAuth=true`;
+all non-peer listeners must use mTLS or be disabled. It also rejects the
+all-acceptor `clientCidrs` and `clientSources` interfaces so external exposure
+cannot bypass future per-listener source scoping. The required plaintext
+`artemis` acceptor remains reachable only through the peer NetworkPolicy rule.
 `destinations` is the permanent address and queue catalog and renders
 `addressConfigurations` broker properties. Direct `securityRoles` and
 `addressConfigurations` entries in `brokerProperties.extra` are rejected so
@@ -137,11 +147,9 @@ queue, and listener-port values fail rendering. The fixed per-cell file under
 `gitops/workloads/<environment>/<workloadCellName>` is the normal owner for
 pair-specific policy.
 
-The current rollout is internal-client mTLS only. Use the
-[internal mTLS onboarding guide](../../docs/runbooks/internal-mtls-onboarding.md)
-for enterprise CA trust, Vault/Secret ownership, certificate-DN mapping, and
-the separate locations for Kubernetes selectors and approved client CIDRs.
-External-client mTLS remains documented there as deferred work.
+Use the [internal CIDR onboarding guide](../../docs/runbooks/internal-cidr-onboarding.md)
+to select, configure, and verify approved ranges. External-client mTLS remains
+documented there as deferred work and stays covered by the sanitized fixture.
 
 OpenWire advisory support is explicit on each acceptor because the operator's
 default is not the compatibility contract. `supportAdvisory` is valid only on

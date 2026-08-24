@@ -1,32 +1,76 @@
-schemaVersion: topology.artemis.apache.org/v3
+schemaVersion: topology.artemis.apache.org/v2
 environment: nonprod
 clusterName: PLACEHOLDER_NONPROD_EKS_CLUSTER
 platformNamespace: artemis-platform
 
-# Environment-specific deployment state. Stable Workload Cell identity and
-# normal sizing live in ../workload-cell-baseline.yaml.
-workloadCellOverrides:
-  nonprod-smktest-eut:
+# This is the source of truth consumed directly by Argo CD. Edit Workload Cell
+# identity, sizing, features, and enablement here; no generation step is needed.
+workloadCells:
+  - workloadCellName: nonprod-smktest-eut
+    workloadNamespace: artemis-int-smktest-eut
+    coordinationId: np-eut-pair01
+    logicalEnvironment: SMKTEST-EUT
+    trafficClass: internal
+    managementHost: artemis-nonprod-smktest-eut.example.invalid
+    storageSize: 50Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
     features: {}
     enabled: "false"
-  nonprod-trn:
+  - workloadCellName: nonprod-trn
+    workloadNamespace: artemis-int-trn
+    coordinationId: np-trn-pair01
+    logicalEnvironment: TRN
+    trafficClass: internal
+    managementHost: artemis-nonprod-trn.example.invalid
+    storageSize: 50Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
     features: {}
     enabled: "false"
-  nonprod-trn2:
+  - workloadCellName: nonprod-trn2
+    workloadNamespace: artemis-int-trn2
+    coordinationId: np-trn2-pair01
+    logicalEnvironment: TRN2
+    trafficClass: internal
+    managementHost: artemis-nonprod-trn2.example.invalid
+    storageSize: 50Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
     features: {}
     enabled: "false"
-  nonprod-pt:
+  - workloadCellName: nonprod-pt
+    workloadNamespace: artemis-int-pt
+    coordinationId: np-pt-pair01
+    logicalEnvironment: PT
+    trafficClass: internal
+    managementHost: artemis-nonprod-pt.example.invalid
+    storageSize: 50Gi
+    profile: standard
     resources:
-      requests: {cpu: "1", memory: 4Gi}
-      limits: {cpu: "2", memory: 6Gi}
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 6Gi
     features: {}
     enabled: "false"

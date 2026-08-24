@@ -13,6 +13,7 @@ Run it once for each Chef environment JSON export from a secure workstation:
   --output-dir /tmp/artemis-chef-import/AWSPP \
   --ssl-secret-name approved-broker-tls \
   --trust-secret-name approved-client-ca \
+  --authenticated-broker legacy-external \
   --jaas-secret-name approved-clients-jaas-config
 ```
 
@@ -44,9 +45,9 @@ The importer carries forward only settings with an explicit typed mapping:
 | OpenWire on `61616` | Required `artemis` acceptor with `CORE,OPENWIRE` |
 | Other OpenWire, AMQP, STOMP, MQTT, WebSocket, and SSL transports | Named acceptors; TLS uses only supplied Kubernetes Secret references |
 | Queue list | Durable ANYCAST addresses and queues |
-| Exact topic authorization | MULTICAST address plus its authorization rule |
-| Classic read roles | `consume` and `browse` |
-| Classic write roles | `send` |
+| Exact topic authorization | MULTICAST address; authorization is emitted only for an explicitly authenticated external broker |
+| Classic read roles | External-only `consume` and `browse` candidate grants |
+| Classic write roles | External-only `send` candidate grants |
 | Classic `>` wildcard | Artemis `#` wildcard |
 
 Every generated listener, destination, and rule remains `candidate-review`
@@ -114,8 +115,16 @@ The importer reads the source locally but never emits password or token values,
 certificate subjects, certificate aliases, private keys, users, or rendered
 Secret data. The JSON report records sensitive key paths and counts only.
 
-TLS listeners are omitted unless `--ssl-secret-name` is supplied. Certificate
-users and groups must be reconciled into an externally materialized
-`*-jaas-config` Secret; only the name supplied through `--jaas-secret-name`
-enters the candidate. The source export and policy can contain sensitive
-inventory, so keep both outside Git unless they have been separately sanitized.
+TLS listeners are omitted unless `--ssl-secret-name` is supplied. Internal
+brokers do not emit JAAS or authorization values; their access is configured
+separately through `networkPolicy.clientCidrs`. For a deferred external broker,
+pair `--authenticated-broker NAME` with `--jaas-secret-name`. Certificate users
+and groups must be reconciled into that externally materialized Secret. The
+source export and policy can contain sensitive inventory, so keep both outside
+Git unless they have been separately sanitized.
+
+An authenticated external candidate disables the chart's standard plaintext
+AMQP, STOMP, MQTT, and WebSocket acceptors unless the imported broker replaces a
+same-named listener with an explicit mTLS configuration. The fixed `artemis`
+acceptor remains for operator-managed CORE peer traffic and is not an external
+client exposure path.

@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-11
-- Updated: 2026-08-14
+- Updated: 2026-08-24
 - Decision owners: Platform Engineering
 
 ## Context
@@ -28,14 +28,12 @@ the operator, ZooKeeper, ApplicationSet generator, and generated Workload Cell
 source. A temporary branch is therefore selected once per cluster during
 Release Promotion; `main` remains valid for every cluster.
 
-The Workload Cell baseline owns stable identity and normal configuration:
-namespace, coordination ID, logical environment, traffic class, management
-hostname, storage size, and Profile. Each cluster topology overlay owns only
-cluster identity, resource sizing, typed feature choices, and enablement. A
-deterministic composer merges those disjoint inputs into the effective
-`workloadCells` catalog consumed by the shared ApplicationSet. Validation
-regenerates that catalog and rejects missing overrides, unknown cells,
-ownership violations, or a stale committed result.
+Each environment topology file owns cluster identity and the complete
+`workloadCells` catalog: namespace, coordination ID, logical environment,
+traffic class, management hostname, storage and resource sizing, Profile,
+typed feature choices, and enablement. The shared ApplicationSet consumes that
+file directly. Validation checks the same file for schema, naming, uniqueness,
+ownership, and rendered-composition violations.
 
 Mechanical Application, broker, group, Curator-path, ZooKeeper-endpoint, and
 redirect-URI identities are derived by the shared ApplicationSet template.
@@ -54,12 +52,11 @@ coordination, durability, topology, or deletion-safety settings. Environment
 values are restricted to cluster integrations, and validation rejects owner
 collisions.
 
-Generated effective catalog YAML is committed because Argo's Git-files
-generator cannot execute the repository composer. It is a deployment artifact,
-not an authoring interface. Argo uses its Git-files and list generators against
-that artifact, while local validation composes it again, checks byte-for-byte
-drift, renders the same Kustomize adapter, and verifies externally observable
-composition behavior. No expanded Application YAML is committed.
+The topology file is deliberately both the authoring interface and the Argo
+Git-files generator input. No local generation command or second committed
+copy is required. Local validation renders the same Kustomize adapter and
+verifies externally observable composition behavior. No expanded Application
+YAML is committed.
 
 ## Consequences
 
@@ -67,10 +64,9 @@ composition behavior. No expanded Application YAML is committed.
   stable root paths.
 - A root revision cannot drift among child Git sources when the injection
   contract is followed.
-- Stable Workload Cell changes are localized in the shared baseline; runtime
-  sizing, features, and enablement are localized in one environment overlay.
-- Adding a Workload Cell requires one baseline entry, one matching environment
-  override, a generated effective catalog update, and its workload values file.
+- All Workload Cell topology changes are localized in one environment file.
+- Adding a Workload Cell requires one complete topology entry and its workload
+  values file.
 - The `artemis-*` destination grant relies on namespace naming governance as a
   security boundary and must not be widened to an unrestricted wildcard.
 - Static rendering verifies desired composition and ordering intent only. It

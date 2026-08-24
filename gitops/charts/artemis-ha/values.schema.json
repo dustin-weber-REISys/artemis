@@ -2,10 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["commonLabels", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "authentication", "destinations", "authorization", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
+  "required": ["workloadCell", "commonLabels", "ha", "zookeeper", "persistence", "broker", "security", "acceptors", "authentication", "destinations", "authorization", "console", "keycloak", "vault", "brokerProperties", "topology", "services", "networkPolicy", "monitoring"],
   "properties": {
     "nameOverride": {"type": "string", "maxLength": 63},
     "fullnameOverride": {"type": "string", "maxLength": 63},
+    "workloadCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trafficClass", "enabled"],
+      "properties": {
+        "trafficClass": {"enum": ["internal", "external", "batch"]},
+        "enabled": {"type": "boolean"}
+      }
+    },
     "commonLabels": {
       "type": "object",
       "required": ["app", "contact", "env", "fismaid"],
@@ -332,10 +341,18 @@
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "clientSources", "managementSources", "monitoringSources", "extraIngress", "extraEgress"],
+      "required": ["enabled", "clientSources", "clientCidrs", "managementSources", "monitoringSources", "extraIngress", "extraEgress"],
       "properties": {
         "enabled": {"type": "boolean"},
         "clientSources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+        "clientCidrs": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,62}$"},
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$"
+          }
+        },
         "managementSources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
         "monitoringSources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
         "extraIngress": {"type": "array", "items": {"type": "object"}},
