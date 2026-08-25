@@ -97,9 +97,10 @@ Complete these checks before changing Argo CD resources:
 
 ### Tools and artifact access
 
-The canonical local workflow is in the root [`README`](../README.md#validate),
-[`Makefile`](../Makefile), and [`scripts`](../scripts). Install the tools those
-files check. Argo CD must enable Kustomize Helm inflation. The operator base
+The canonical local workflow is in the root
+[`README`](../../README.md#validate-the-repository),
+[`Makefile`](../../Makefile), and [`scripts`](../../scripts). Install the tools
+those files check. Argo CD must enable Kustomize Helm inflation. The operator base
 currently pulls the pinned public OCI chart; before a restricted-environment
 promotion, confirm repo-server has the approved outbound path or change the
 base through review to an approved immutable internal OCI mirror.

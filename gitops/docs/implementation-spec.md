@@ -157,6 +157,15 @@ remain enabled only until runtime inventory and compatibility evidence approve
 their removal. The current listener set and ports are defined by chart values.
 No messaging listener is internet-facing by default.
 
+Out-of-cluster internal clients use the accepted
+[shared private NLB design](adr-shared-private-nlb.md) after its repository and
+runtime implementation gates are complete. A unique frontend listener port and
+dedicated target group identify each exposed Workload Cell acceptor; DNS names
+alone do not route raw TCP between Workload Cells. Only protocols classified by
+the [protocol acceptor inventory runbook](runbooks/protocol-acceptor-inventory.md)
+receive NLB listeners. Until that implementation exists, the active-only
+`ClusterIP` Services remain the complete messaging exposure claimed here.
+
 Permanent application addresses and queues are declared through the chart's
 typed `destinations` catalog in promoted environments. A client typo must not
 create a permanent destination. Dead-letter

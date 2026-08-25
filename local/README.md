@@ -6,7 +6,7 @@ EKS design: there is no operator, ZooKeeper, second broker, replication,
 failover, Vault, Keycloak, ingress, or production authorization.
 
 Use the canonical local commands in the root
-[`README`](../README.md#develop-locally). Docker Engine with Compose v2 is
+[`README`](../README.md#local-development). Docker Engine with Compose v2 is
 required. The Compose file is authoritative for the image, published ports,
 health check, volume, and smoke workflow; [`.env.example`](.env.example) is
 authoritative for local credentials and supported host-port overrides.

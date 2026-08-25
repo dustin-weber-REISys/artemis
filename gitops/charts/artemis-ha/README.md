@@ -150,6 +150,11 @@ pair-specific policy.
 Use the [internal CIDR onboarding guide](../../docs/runbooks/internal-cidr-onboarding.md)
 to select, configure, and verify approved ranges. External-client mTLS remains
 documented there as deferred work and stays covered by the sanitized fixture.
+The [shared private NLB ADR](../../docs/adr-shared-private-nlb.md) defines the
+future out-of-cluster TCP path, and the
+[protocol inventory runbook](../../docs/runbooks/protocol-acceptor-inventory.md)
+determines which acceptors may receive listeners. The chart does not currently
+claim that those NLB integration gates are implemented.
 
 OpenWire advisory support is explicit on each acceptor because the operator's
 default is not the compatibility contract. `supportAdvisory` is valid only on

@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-docs validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
 
 help:
 	@printf '%s\n' \
@@ -43,6 +43,7 @@ help:
 		'' \
 		'Repository:' \
 		'  validate          Run the complete validation suite' \
+		'  validate-docs     Check local documentation links and the GitOps catalog' \
 		'  validate-static   Check cross-area repository invariants' \
 		'  validate-compose  Validate the local Compose configuration'
 
@@ -140,6 +141,9 @@ test-chef-import:
 
 validate-static:
 	./scripts/validate-static.sh --report "$(REPORT_DIR)/static-validation.json"
+
+validate-docs:
+	./scripts/validate-docs.sh
 
 validate:
 	REPORT_DIR="$(REPORT_DIR)" ./scripts/validate-repository.sh

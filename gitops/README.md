@@ -11,7 +11,13 @@ This area is the deployable EKS baseline. It owns:
   values without image locations or release pins;
 - [`tests`](tests): chart, topology, compatibility, and EKS acceptance assets;
 - [`scripts`](scripts): rendering, schema, topology, and scenario validation;
-- [`docs`](docs): design decisions, environment import guidance, and runbooks.
+- [`docs`](docs): indexed design decisions, integration and migration guides,
+  runbooks, proposals, and non-authoritative research.
+
+Use the repository-wide
+[change-location guide](../docs/repository-guide.md) before editing a value
+layer. The [GitOps documentation index](docs/README.md) identifies which prose
+is authoritative and which material is only a proposal or research record.
 
 ## Deterministic validation
 

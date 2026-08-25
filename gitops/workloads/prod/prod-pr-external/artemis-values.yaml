@@ -1,2 +1,14 @@
 # Deferred external listeners, authentication, authorization, and network sources.
-{}
+# Replace this stable review ID and the example address/queue name when the
+# owning team supplies its approved external destination catalog.
+destinations:
+  external-team-placeholder:
+    address: EXTERNAL.TEAM.PLACEHOLDER
+    routingTypes:
+      - ANYCAST
+    queues:
+      - name: EXTERNAL.TEAM.PLACEHOLDER
+        routingType: ANYCAST
+        durable: true
+        maxConsumers: -1
+        purgeOnNoConsumers: false
