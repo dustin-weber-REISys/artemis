@@ -21,7 +21,7 @@ Client listeners are configured under `acceptors`. The required `artemis`
 acceptor on port `61616` carries both `CORE` operator peer traffic and legacy
 `OPENWIRE` client traffic; the chart rejects disabling it, removing `CORE`, or
 reusing an enabled listener port. Every enabled acceptor is
-rendered into the broker custom resource and gets a matching active-only
+rendered into the broker custom resource and gets a matching readiness-gated
 `ClusterIP` Service. When client NetworkPolicy sources are configured, their
 allowed ports are derived from that same enabled-acceptor set. Disabling an
 acceptor therefore removes it from all three surfaces.
@@ -53,13 +53,14 @@ MBean pattern instead of deriving the MBean name from the Kubernetes
 application name. The operand's broker name is image configuration (for
 example, `amq-broker`) and is not required to match the `ActiveMQArtemis`
 resource name. The local request includes the Origin header required by the
-default Jolokia CORS policy. Only the peer whose returned `Active` attribute
-is `true` becomes ready. In normal synchronized steady state, one broker pod is
-therefore Running and ready while the passive broker pod is Running but not
-ready. Startup and liveness prove that the passive process is alive; they do
-not prove that replication has connected or synchronized. A passive that
-remains at `awaiting connection to a primary to start replication` is a failed
-HA relationship even though its not-ready state alone is expected.
+default Jolokia CORS policy. A valid `Active:true` or `Active:false` response
+with Jolokia status `200` makes the pod ready, so a healthy active and standby
+both become ready. Startup and liveness continue to prove that the process is
+alive; readiness proves that its authenticated management endpoint can report
+the broker role. None of these probes proves that replication has connected or
+synchronized. A passive that remains at `awaiting connection to a primary to
+start replication` still requires replication evidence even though the pod is
+ready.
 
 The shared ZooKeeper deployment does not enable client SASL. The chart sets
 `zookeeper.sasl.client=false` on broker JVMs so the ZooKeeper client does not
@@ -72,7 +73,7 @@ do not remove this setting in isolation.
 Broker scheduling requires two eligible zone and host domains and injects an
 explicit anti-affinity selector for the pair. A separate metrics Service
 publishes both broker endpoints so Prometheus can scrape the passive peer even
-though client Services retain the active-only readiness gate. ZooKeeper's
+during brief readiness transitions. ZooKeeper's
 companion chart keeps its three voters on separate hosts and spreads them over
 the environment's available zone count.
 
@@ -80,7 +81,7 @@ Every environment overlay admits broker pods to its on-demand worker nodes with
 the exact `eid-platform/node-lifecycle=ondemand:NoSchedule` toleration. Keep
 this aligned with the environment node-pool taint. A synced workload with
 broker pods remaining unscheduled has no console Service endpoints, so the
-shared ALB correctly returns 503 until at least the active broker is ready.
+shared ALB correctly returns 503 until at least one broker is ready.
 
 The chart puts required enterprise labels on the `ActiveMQArtemis` resource and
 broker pod template, and uses the operator's unscoped `resourceTemplates`

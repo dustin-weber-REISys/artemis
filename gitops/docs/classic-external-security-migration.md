@@ -132,7 +132,7 @@ keys are for Git review only; the nested `address`, queue `name`, and rule
 
 ## What remains outside this chart
 
-The chart creates an active-only `ClusterIP` Service for each enabled acceptor
+The chart creates a readiness-gated `ClusterIP` Service for each enabled acceptor
 and keeps the broker non-public by default. A partner connection still needs an
 approved private TCP exposure path, DNS, firewall/security-group rules, and a
 corresponding `networkPolicy` source. Those are platform-owned decisions and

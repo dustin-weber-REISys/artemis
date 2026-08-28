@@ -126,11 +126,12 @@ the running broker.
    only that the declarative resources were applied. If no broker is scheduled,
    inspect pod events for an untolerated node taint before debugging ingress;
    the console Service will have no endpoint and the ALB will return 503 until
-   an active broker is ready. Every broker environment overlay and the shared
+   a broker is ready. Every broker environment overlay and the shared
    operator values intentionally tolerate only
    `eid-platform/node-lifecycle=ondemand:NoSchedule`.
-3. Check readiness exposes only the active broker. Passive operation must not
-   cause a liveness restart loop.
+3. Check both active and standby pods pass readiness after Jolokia can report
+   their roles. Passive operation must not cause readiness failures or a
+   liveness restart loop.
 4. Check exactly one broker is active, the peer is passive, replication is
    connected and synchronized, and ZooKeeper has three voting members with
    quorum.

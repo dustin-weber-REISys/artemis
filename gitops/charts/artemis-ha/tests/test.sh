@@ -214,16 +214,29 @@ if rg -q 'addressSettings\.#\.(expiryAddress|autoCreateExpiryResources|expiryQue
 fi
 rg -q 'console/jolokia/read/org\.apache\.activemq\.artemis:broker=\*/Active' "$rendered"
 rg -Fq 'Origin: http://localhost' "$rendered"
-rg -Fq "| grep -Eq '\"Active\"[[:space:]]*:[[:space:]]*true'" "$rendered"
+rg -Fq "grep -Eq '\"Active\"[[:space:]]*:[[:space:]]*(true|false)'" "$rendered"
+rg -Fq "grep -Eq '\"status\"[[:space:]]*:[[:space:]]*200'" "$rendered"
 if rg -q 'console/jolokia/read/.*APPLICATION_NAME' "$rendered"; then
   echo "readiness probe must not assume the broker MBean name equals APPLICATION_NAME" >&2
   exit 1
 fi
 active_pattern_response='{"value":{"org.apache.activemq.artemis:broker=\"amq-broker\"":{"Active":true}},"status":200}'
 passive_pattern_response='{"value":{"org.apache.activemq.artemis:broker=\"amq-broker\"":{"Active":false}},"status":200}'
-printf '%s\n' "$active_pattern_response" | grep -Eq '"Active"[[:space:]]*:[[:space:]]*true'
-if printf '%s\n' "$passive_pattern_response" | grep -Eq '"Active"[[:space:]]*:[[:space:]]*true'; then
-  echo "readiness response check accepted a passive broker" >&2
+error_pattern_response='{"error":"No matching MBean","status":404}'
+readiness_command=$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.readinessProbe.exec.command[2]' "$rendered")
+curl() {
+  printf '%s\n' "$MOCK_JOLOKIA_RESPONSE"
+}
+export -f curl
+for ready_response in "$active_pattern_response" "$passive_pattern_response"; do
+  AMQ_USER=test AMQ_PASSWORD=test HOSTNAME=standby \
+    MOCK_JOLOKIA_RESPONSE="$ready_response" \
+    bash -ec "$readiness_command"
+done
+if AMQ_USER=test AMQ_PASSWORD=test HOSTNAME=standby \
+  MOCK_JOLOKIA_RESPONSE="$error_pattern_response" \
+  bash -ec "$readiness_command"; then
+  echo "readiness response check accepted a Jolokia error" >&2
   exit 1
 fi
 if rg -q 'vault.hashicorp.com/' "$rendered"; then
@@ -250,6 +263,7 @@ if rg -q 'ingress-nginx' "$rendered"; then
   exit 1
 fi
 [[ "$(yq eval -r 'select(.kind == "PrometheusRule") | .spec.groups[].rules[] | select(.alert == "ArtemisBrokerMetricsUnavailable") | .expr' "$rendered")" == 'absent(up{namespace="example-messaging",service="artemis-artemis-ha-metrics"})' ]]
+[[ "$(yq eval -r 'select(.kind == "PrometheusRule") | .spec.groups[].rules[] | select(.alert == "ArtemisBrokerPodNotReady") | .expr' "$rendered")" == 'sum(kube_pod_status_ready{namespace="example-messaging",condition="true",pod=~"artemis-artemis-ha-ss-[01]"}) < 2' ]]
 [[ "$(yq eval -r 'select(.kind == "Ingress") | .spec.ingressClassName' "$rendered")" == "aws-lb-ingress" ]]
 [[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/group.name"' "$rendered")" == "shared-standard-group" ]]
 [[ "$(yq eval -r 'select(.kind == "Ingress") | .metadata.annotations."alb.ingress.kubernetes.io/group.order"' "$rendered")" == "100" ]]

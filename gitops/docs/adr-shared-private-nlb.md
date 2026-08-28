@@ -6,7 +6,7 @@
 
 ## Context
 
-Every enabled Artemis acceptor currently has an active-only Kubernetes
+Every enabled Artemis acceptor currently has a readiness-gated Kubernetes
 `ClusterIP` Service. Those Services give in-cluster clients stable discovery
 while allowing broker pod IPs to change, but they do not provide an endpoint
 for clients outside EKS. The shared Application Load Balancer serves only the
@@ -39,7 +39,7 @@ Each exposed Workload Cell acceptor receives:
 1. one unique NLB frontend listener port;
 2. one target group dedicated to that Workload Cell and acceptor;
 3. one namespaced `TargetGroupBinding` that associates the target group with
-   the existing active-only `ClusterIP` Service; and
+   the existing readiness-gated `ClusterIP` Service; and
 4. one friendly private DNS name for client configuration.
 
 The frontend listener port, not the DNS name, is the Workload Cell routing key.
@@ -155,4 +155,3 @@ remain authoritative and no out-of-cluster messaging exposure is claimed.
 - [AWS Load Balancer Controller TargetGroupBinding](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/targetgroupbinding/targetgroupbinding/)
 - [AWS Load Balancer Controller L4 Gateway behavior](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/gateway/l4gateway/)
 - [AWS NLB quotas](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-limits.html)
-

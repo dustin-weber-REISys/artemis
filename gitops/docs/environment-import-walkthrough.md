@@ -359,9 +359,10 @@ Stop promotion when any of the following remains unresolved:
   are incomplete;
 - validation execution, CloudWatch, backup/restore, KMS, or alert ownership is
   missing; or
-- real-cluster tests have not proven active-only routing, lock-manager
-  availability, replication, quorum safety, acknowledged-message accounting,
-  and the approved recovery target.
+- real-cluster tests have not proven safe client behavior through the
+  role-neutral readiness endpoints, lock-manager availability, replication,
+  quorum safety, acknowledged-message accounting, and the approved recovery
+  target.
 
 Dedicated ZooKeeper or broker placement may reduce a workload's coordination
 or capacity blast radius inside an EKS cluster. Separate-cluster isolation is

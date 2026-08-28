@@ -45,8 +45,7 @@ spec:
       protocol: TCP
 {{- if .Values.monitoring.enabled }}
 ---
-# Monitoring must see the passive peer even though client Services intentionally
-# use the active-only readiness gate.
+# Monitoring must retain both peers during brief readiness transitions.
 apiVersion: v1
 kind: Service
 metadata:

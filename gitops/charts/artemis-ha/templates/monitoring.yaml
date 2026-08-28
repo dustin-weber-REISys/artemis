@@ -92,13 +92,13 @@ spec:
             description: The configured pending-message threshold has been exceeded.
         - alert: ArtemisBrokerPodNotReady
           expr: >-
-            sum(kube_pod_status_ready{namespace={{ .Release.Namespace | quote }},condition="true",pod=~"{{ include "artemis-ha.fullname" . }}-ss-[01]"}) < 1
+            sum(kube_pod_status_ready{namespace={{ .Release.Namespace | quote }},condition="true",pod=~"{{ include "artemis-ha.fullname" . }}-ss-[01]"}) < 2
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: No Artemis pod is ready
-            description: The active-only readiness contract has no ready broker endpoint.
+            summary: An Artemis broker pod is not ready
+            description: Both the active and standby broker processes must pass their role-neutral readiness probes.
         {{- with .Values.monitoring.extraRules }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

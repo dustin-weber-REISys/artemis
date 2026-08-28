@@ -35,7 +35,7 @@ Broker enablement and NLB exposure are separate decisions:
 | State | Meaning |
 | --- | --- |
 | Disabled | The acceptor is absent from the broker custom resource, Service inventory, and client NetworkPolicy ports. |
-| Enabled, cluster-only | The acceptor has an active-only `ClusterIP` Service but no shared-NLB listener. |
+| Enabled, cluster-only | The acceptor has a readiness-gated `ClusterIP` Service but no shared-NLB listener. |
 | Enabled and privately exposed | A proven out-of-cluster client has a dedicated shared-NLB listener and target group. |
 
 Default to the narrowest state supported by evidence. Do not create an NLB
@@ -183,7 +183,7 @@ make validate-docs
 The rendered change must remove the acceptor from all of these surfaces:
 
 - `ActiveMQArtemis.spec.acceptors`;
-- its protocol-specific active-only Service;
+- its protocol-specific readiness-gated Service;
 - client NetworkPolicy allowed ports; and
 - any planned shared-NLB listener, target group, DNS documentation, and
   `TargetGroupBinding`.
@@ -247,4 +247,3 @@ Workload Cell.
 Close the change only after the inventory row records the final decision,
 runtime evidence, owner approval, and whether the protocol is disabled,
 cluster-only, or privately exposed.
-

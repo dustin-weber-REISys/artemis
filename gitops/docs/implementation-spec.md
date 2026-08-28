@@ -124,8 +124,9 @@ failback switch. Acceptance requires a recovered peer to rejoin passive and
 permits a controlled role reversal only after synchronization.
 
 The selected operator does not prove that its operand image contains the
-required lock-manager classes or that active-only readiness works on the
-mirrored artifact. Those are runtime promotion gates. See the
+required lock-manager classes or that both active and standby management
+endpoints satisfy role-neutral readiness on the mirrored artifact. Those are
+runtime promotion gates. See the
 [`operator HA ADR`](adr-operator-ha.md).
 
 ### Persistence and placement
@@ -163,7 +164,7 @@ runtime implementation gates are complete. A unique frontend listener port and
 dedicated target group identify each exposed Workload Cell acceptor; DNS names
 alone do not route raw TCP between Workload Cells. Only protocols classified by
 the [protocol acceptor inventory runbook](runbooks/protocol-acceptor-inventory.md)
-receive NLB listeners. Until that implementation exists, the active-only
+receive NLB listeners. Until that implementation exists, the readiness-gated
 `ClusterIP` Services remain the complete messaging exposure claimed here.
 
 Permanent application addresses and queues are declared through the chart's

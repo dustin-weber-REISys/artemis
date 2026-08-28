@@ -8,7 +8,7 @@
 ## Context
 
 The deployment needs two persistent Artemis peers with coordinated replication,
-ZooKeeper-backed activation locking, active-only client routing, and one
+ZooKeeper-backed activation locking, role-aware client failover, and one
 operator-managed lifecycle. Replication participation in a send response is
 not proof that the passive PVC completed an independent `fsync`; the
 acknowledged-send claim also depends on the active broker's explicitly pinned
@@ -27,9 +27,11 @@ connection while retaining separate volumes.
 
 The operator continues to own the generated StatefulSet, PVC lifecycle, and
 peer discovery. The chart owns stable protocol and management services,
-console ingress, security/policy resources, and a readiness check intended to
-select only the active broker. Startup and liveness do not
-treat normal passive state as failure.
+console ingress, security/policy resources, and a role-neutral readiness check.
+A broker is ready when authenticated Jolokia reports either the active or
+standby role successfully. Startup, readiness, and liveness therefore do not
+treat normal passive state as failure; activation and replication remain
+separate runtime health claims.
 
 This is the smallest operator-compatible customization. A repository-owned
 StatefulSet is a fallback only after evidence shows the operator cannot
@@ -78,8 +80,9 @@ Runtime acceptance on the exact mirrored artifacts must prove:
   properties;
 - exactly one peer becomes active through broker, pod, node, zone, replication,
   and ZooKeeper isolation cases;
-- the passive peer is excluded from client service while its process remains
-  healthy;
+- both peer processes become ready while exactly one is active, and every
+  supported client preserves successful service when the readiness-gated
+  Service addresses either peer;
 - acknowledged durable message accounting and the recovery target pass;
 - the recovered peer synchronizes before a controlled role reversal; and
 - the selected metrics and logs expose activation and replication evidence.

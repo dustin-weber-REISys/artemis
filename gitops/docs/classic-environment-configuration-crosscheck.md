@@ -25,7 +25,7 @@ and mTLS rows below are retained only for deferred external cells.
 | Keycloak/Hawtio realm, client, and redirect settings | Environment Keycloak baseline plus cell-derived redirect URI | Existing OIDC ConfigMap, ingress, and topology validation | Browser login and direct Jolokia authorization tests |
 | Read-only and read/write JMX roles | `mops.#` `view` and `edit` permissions with operator management RBAC | Sanitized fixture renders both role levels | Verify principal-class mapping and that no competing `management.xml` interceptor is active |
 | Remote JMX/RMI ports | No direct replacement; use Hawtio/Jolokia and metrics Services | NetworkPolicy and Services do not expose legacy RMI/JMX | Confirm no automation depends on remote JMX before retirement |
-| Jetty bind/listen settings | Operator-owned embedded console on fixed `8161`, active-only Service, and managed ingress | Fixed chart helper keeps probes, Service, ingress, and policy coherent | Shared ALB, DNS, TLS, and health evidence |
+| Jetty bind/listen settings | Operator-owned embedded console on fixed `8161`, role-neutral readiness-gated Service, and managed ingress | Fixed chart helper keeps probes, Service, ingress, and policy coherent | Shared ALB, DNS, TLS, and health evidence |
 | PostgreSQL broker store, pool sizing, and database lock timing | Replicated Artemis file journal on two retained persistent volumes with ZooKeeper activation lock | Protected HA and durability properties reject a JDBC override | Migration performance, failover, backup/restore, and acknowledged-message evidence |
 
 ## Configuration layering
