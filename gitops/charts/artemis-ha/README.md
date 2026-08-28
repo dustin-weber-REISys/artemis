@@ -107,10 +107,14 @@ listeners, IP targets, an HTTP backend, and the platform-standard health check
 range. HTTPS certificates, scheme, subnets, and security groups are owned by
 the shared ALB/IngressClass, so Artemis does not render a workload TLS Secret
 reference. The `aws-lb-ingress` IngressClass must be installed before an
-Application is synced. Because ALB traffic does not originate from an
-in-cluster ingress-controller pod, environments must allow their approved
-ALB/VPC sources on the console port through `networkPolicy.extraIngress` or an
-equivalent platform-owned policy.
+Application is synced. By default, `networkPolicy.allowConsoleFromAllSources`
+admits every routable source to the fixed console port because Kubernetes
+NetworkPolicy cannot identify an HTTP Ingress or distinguish URL paths.
+Keycloak/OIDC, the shared ALB, TLS, DNS, and platform security groups protect
+the Hawtio path. This rule does not admit any messaging acceptor; those remain
+restricted by `networkPolicy.clientSources` and `clientCidrs`. Environments may
+set the option to `false` and provide `managementSources` or `extraIngress` when
+a source-restricted console is required.
 
 Vault injection defaults off. The optional annotations only request a
 pod-local credential file; they do not make it the broker's effective

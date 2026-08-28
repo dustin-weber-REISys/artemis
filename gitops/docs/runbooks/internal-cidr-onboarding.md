@@ -73,8 +73,11 @@ networkPolicy:
 The map keys are stable review IDs, so environment and Workload Cell layers
 deep-merge without one list replacing another. The chart accepts IPv4 CIDR
 notation and derives the allowed ports from the enabled `acceptors` map.
-Console and monitoring sources continue to use `managementSources`,
-`monitoringSources`, or a reviewed purpose-specific `extraIngress` rule.
+These CIDRs never include the console port. By default, Hawtio is admitted on
+port `8161` without a NetworkPolicy source allowlist and remains protected by
+OIDC and the platform-owned ALB controls. Monitoring sources continue to use
+`monitoringSources`; environments that disable unrestricted console admission
+use `managementSources` or a reviewed purpose-specific `extraIngress` rule.
 
 ## Establish the effective source range
 

@@ -319,6 +319,11 @@ services:
 
 networkPolicy:
   enabled: true
+  # Hawtio is authenticated by Keycloak/OIDC at the HTTP application boundary.
+  # When true, Kubernetes NetworkPolicy admits every routable source to the
+  # console port without a CIDR allowlist. The shared ALB, DNS, TLS, and its
+  # security groups remain platform-owned. Messaging acceptors are unaffected.
+  allowConsoleFromAllSources: true
   # A list of namespace/pod selector pairs is required for application access.
   # Empty defaults keep this chart deny-by-default until an environment adds
   # its approved callers.
@@ -327,9 +332,8 @@ networkPolicy:
   # enabled messaging acceptors; console and metrics access remain separate.
   # Keep this empty in reusable defaults and supply approved ranges in overlays.
   clientCidrs: {}
-  # ALB traffic does not originate from an in-cluster ingress-controller pod.
-  # Environments must allow their approved ALB/VPC sources on the console port
-  # with extraIngress (or an equivalent platform-owned policy).
+  # Optional additional management sources remain useful when the public
+  # console ingress is disabled or allowConsoleFromAllSources is false.
   managementSources: []
   monitoringSources:
     - namespaceSelector:

@@ -341,9 +341,10 @@
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "clientSources", "clientCidrs", "managementSources", "monitoringSources", "extraIngress", "extraEgress"],
+      "required": ["enabled", "allowConsoleFromAllSources", "clientSources", "clientCidrs", "managementSources", "monitoringSources", "extraIngress", "extraEgress"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "allowConsoleFromAllSources": {"type": "boolean"},
         "clientSources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
         "clientCidrs": {
           "type": "object",

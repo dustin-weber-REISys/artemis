@@ -37,6 +37,14 @@ spec:
     - Ingress
     - Egress
   ingress:
+    {{- if and .Values.console.ingress.enabled .Values.networkPolicy.allowConsoleFromAllSources }}
+    # NetworkPolicy is an L3/L4 control and cannot distinguish HTTP paths.
+    # Admit the OIDC-protected Hawtio/Jolokia listener without a source CIDR;
+    # messaging acceptors remain governed by clientSources/clientCidrs below.
+    - ports:
+        - port: {{ $consolePort }}
+          protocol: TCP
+    {{- end }}
     # The operator's generated Services publish every peer before readiness,
     # but the pods still need JGroups discovery/failure detection before the
     # passive can find the active and start replication. CORE then carries the

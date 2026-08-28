@@ -8,6 +8,7 @@ rendered="$temp_dir/default.yaml"
 autocreate_rendered="$temp_dir/autocreate.yaml"
 expiry_rendered="$temp_dir/expiry.yaml"
 ports_rendered="$temp_dir/ports.yaml"
+console_restricted_rendered="$temp_dir/console-restricted.yaml"
 vault_rendered="$temp_dir/vault.yaml"
 external_rendered="$temp_dir/external.yaml"
 external_disabled_rendered="$temp_dir/external-disabled.yaml"
@@ -277,6 +278,10 @@ fi
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec | has("adminPassword")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan | has("image") or has("initImage")' "$rendered")" == "false" ]]
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-console") | .spec.ports[0].port' "$rendered")" == "8161" ]]
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-artemis-ha-allow") |
+  .spec.ingress[] |
+  select(has("from") | not) |
+  select(.ports[].port == 8161)' "$rendered" >/dev/null
 [[ "$(yq eval 'select(.kind == "Service" and .metadata.name == "artemis-artemis-ha-metrics") | .spec.publishNotReadyAddresses' "$rendered")" == "true" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.startupProbe.tcpSocket.port' "$rendered")" == "8161" ]]
 [[ "$(yq eval 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.livenessProbe.tcpSocket.port' "$rendered")" == "8161" ]]
@@ -304,6 +309,18 @@ for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered
     exit 1
   fi
 done
+
+helm template artemis-console-restricted "$chart_dir" --namespace example-messaging \
+  "${helm_args[@]}" \
+  --set 'networkPolicy.allowConsoleFromAllSources=false' \
+  > "$console_restricted_rendered"
+if yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "artemis-console-restricted-artemis-ha-allow") |
+  .spec.ingress[] |
+  select(has("from") | not) |
+  select(.ports[].port == 8161)' "$console_restricted_rendered" >/dev/null 2>&1; then
+  echo "source-unrestricted console rule rendered while disabled" >&2
+  exit 1
+fi
 
 custom_admin_rendered="$temp_dir/custom-admin.yaml"
 helm template artemis-custom-admin "$chart_dir" --namespace example-messaging \
