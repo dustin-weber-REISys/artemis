@@ -7,6 +7,9 @@
 {{- $javaArgsAppend := list "-Dzookeeper.sasl.client=false" -}}
 {{- if .Values.keycloak.enabled -}}
 {{- $javaArgsAppend = append $javaArgsAppend (printf "-Dhawtio.oidcConfig=/amq/extra/configmaps/%s-hawtio-oidc/hawtio-oidc.properties" $fullname) -}}
+{{/* Hawtio caches OIDC configuration; change the pod template when its data changes. */}}
+{{- $oidcConfig := include (print $.Template.BasePath "/hawtio-oidc-configmap.yaml") . | fromYaml -}}
+{{- $_ := set $podAnnotations "checksum/hawtio-oidc" ($oidcConfig.data | toJson | sha256sum) -}}
 {{- end -}}
 {{- if .Values.vault.enabled }}
 {{- $_ := set $podAnnotations "vault.hashicorp.com/agent-inject" "true" -}}

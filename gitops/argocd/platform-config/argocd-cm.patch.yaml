@@ -1,0 +1,10 @@
+# Merge into the platform-owned argocd-cm configuration; not a standalone resource.
+# Preserve existing build flags when adding --enable-helm.
+# Deliberately excluded from Artemis bootstrap: Argo CD is platform-owned.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  kustomize.buildOptions: --enable-helm

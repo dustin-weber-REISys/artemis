@@ -64,6 +64,41 @@ chart, applies common scheduling and admission policy, and then applies the
 environment label and private ECR image references. Argo CD must enable Helm
 inflation with `kustomize.buildOptions: --enable-helm`.
 
+### Operator comparison error: `must specify --enable-helm`
+
+This error occurs in Argo CD manifest generation, before the operator resources
+are applied. The existing broker operator may still be running. Reproducing
+with `kubectl kustomize gitops/kustomize/arkmq-operator/overlays/test` locally
+produces the same error; the supported renderer explicitly enables Helm.
+
+The platform team must merge
+[`platform-config/argocd-cm.patch.yaml`](platform-config/argocd-cm.patch.yaml)
+into the Git/Terraform configuration that owns Argo CD, preserving existing
+build options and other ConfigMap data. This fragment is not included in the
+Artemis bootstrap and must not be applied as a replacement ConfigMap.
+`toolchain.yaml` records the requirement but does not configure a live Argo CD
+installation. A custom Kustomize version may have separate build options that
+also need the flag. Follow the platform's configuration reload procedure, then
+hard-refresh `test-arkmq-operator` to regenerate its cached comparison result.
+Do not add an unsupported build-options field to the child Application.
+
+Read-only evidence from the work computer:
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n argocd get configmap argocd-cm -o json |
+  jq '.data | with_entries(select(.key | startswith("kustomize.buildOptions")))'
+kubectl --context "$KUBE_CONTEXT" -n argocd get application test-arkmq-operator -o json |
+  jq '{source: .spec.source, conditions: .status.conditions}'
+```
+
+Reference: [Argo CD Kustomize Helm configuration](https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/#kustomizing-helm-charts).
+
+A workload Application syncing a new Git SHA does not prove its Helm parameters
+were regenerated from topology. Inspect current `.spec.source.helm.parameters`
+and ApplicationSet ownership, not `.status.history[].source` (identified by
+history IDs, `initiatedBy`, and deployment timestamps). The operator comparison
+error alone does not prove why workload hostname parameters are stale.
+
 The `-v2` Deployment identity remains a declarative replacement for
 installations whose immutable selectors were rendered differently by earlier
 revisions. `PruneLast=true` keeps the old controller available until the

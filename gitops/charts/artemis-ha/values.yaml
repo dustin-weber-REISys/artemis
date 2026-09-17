@@ -213,6 +213,10 @@ console:
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
       alb.ingress.kubernetes.io/success-codes: 200-401
       alb.ingress.kubernetes.io/target-type: ip
+      # Hawtio's local login session belongs to one broker JVM. Keep browser
+      # requests on that target while both active and standby serve the console.
+      # This routing cookie does not extend Hawtio's authentication timeout.
+      alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=86400
 
 keycloak:
   enabled: true

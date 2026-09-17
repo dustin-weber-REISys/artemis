@@ -36,6 +36,29 @@ external_client_defaults_disabled_args=(
 
 helm lint "$chart_dir" "${helm_args[@]}" >/dev/null
 
+# Both peers serve the console, but a browser login session belongs to one JVM.
+assert_console_stickiness() {
+  yq eval -e 'select(.kind == "Ingress") |
+    .metadata.annotations."alb.ingress.kubernetes.io/target-type" == "ip" and
+    .metadata.annotations."alb.ingress.kubernetes.io/target-group-attributes" ==
+      "stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=86400"' "$1" >/dev/null
+}
+helm template artemis "$chart_dir" "${helm_args[@]}" > "$rendered"
+assert_console_stickiness "$rendered"
+
+# A cached Hawtio OIDC data change must reach the operator's pod template.
+oidc_checksum() {
+  helm template artemis "$chart_dir" "${helm_args[@]}" "$@" |
+    yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.deploymentPlan.annotations."checksum/hawtio-oidc"' -
+}
+base_checksum=$(oidc_checksum)
+[[ "$base_checksum" =~ ^[a-f0-9]{64}$ ]]
+[[ "$(oidc_checksum)" == "$base_checksum" ]]
+[[ "$(oidc_checksum --set-string keycloak.redirectUri=https://changed.example.invalid/console)" != "$base_checksum" ]]
+[[ "$(oidc_checksum --set-string keycloak.clientId=changed-client)" != "$base_checksum" ]]
+[[ "$(oidc_checksum --set-string commonLabels.contact=changed-team)" == "$base_checksum" ]]
+[[ "$(oidc_checksum --set keycloak.enabled=false)" == null ]]
+
 if helm template invalid "$chart_dir" \
   --set 'ha.coordinationId=' \
   --set 'zookeeper.connectString=' >/dev/null 2>&1; then
@@ -303,6 +326,7 @@ for environment in prod nonprod test; do
 done
 
 for environment_rendered in "$prod_rendered" "$nonprod_rendered" "$test_rendered"; do
+  assert_console_stickiness "$environment_rendered"
   [[ "$(yq eval -r 'select(.kind == "ActiveMQArtemis") | .spec.adminUser' "$environment_rendered")" == "PLACEHOLDER_ARTEMIS_ADMIN_USERNAME" ]]
   if rg -q '^kind: StorageClass$' "$environment_rendered"; then
     echo "Artemis chart unexpectedly rendered a platform-owned StorageClass: $environment_rendered" >&2

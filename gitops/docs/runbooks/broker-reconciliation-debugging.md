@@ -22,6 +22,100 @@ Argo CD and the operator prove different things:
 A Synced Argo CD Application therefore does not prove that the operator
 successfully reconciled the broker.
 
+## URL or readiness changes remain stale
+
+Workload Applications already enable automated sync and self-heal. For a console
+hostname change, edit the cell's `managementHost` in
+`gitops/argocd/topology/<environment>.yaml`. The ApplicationSet derives both
+`console.ingress.host` and `keycloak.redirectUri` from that field using Helm
+parameters, which override values files. Editing only the chart default or a
+values file can therefore leave the effective hostname unchanged. Promote the
+change to the repository and revision watched by the installed ApplicationSet.
+
+If `managementHost` was edited correctly but a deleted Ingress returns with the
+old hostname, inspect the Ingress **Desired Manifest** in Argo CD as well as the
+Live Manifest. A live-manifest screenshot alone cannot establish whether the
+ApplicationSet input, generated Application, or resource sync is stale. On the
+work computer, inspect the generated Application and its owning ApplicationSet:
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n argocd get application "$APP" -o json |
+  jq '{owners: .metadata.ownerReferences, source: .spec.source,
+       sync: .status.sync, conditions: .status.conditions}'
+# Set APPLICATIONSET to the ApplicationSet owner name from the preceding output.
+kubectl --context "$KUBE_CONTEXT" -n argocd \
+  get applicationset "$APPLICATIONSET" -o json |
+  jq '{generators: .spec.generators, policy: .spec.syncPolicy,
+       ignoredApplicationFields: .spec.ignoreApplicationDifferences,
+       templateSource: .spec.template.spec.source, conditions: .status.conditions}'
+```
+
+Check `console.ingress.host` and `keycloak.redirectUri` in the Application's
+Helm parameters. If they are old, deleting the Ingress cannot repair the input:
+verify that the topology commit is present in the generator's exact repository
+and revision, that its file path selects the edited environment, and that the
+ApplicationSet controller is successfully updating Applications. The generator
+revision and child chart revision are separate fields; a child Application's
+Synced status does not prove the generator consumed the updated topology.
+The root revision injection contract is documented in
+[`argocd/README.md`](../../argocd/README.md#root-revision-injection-contract).
+If the parameters and desired Ingress are new but the live Ingress is old,
+inspect the child Application's sync operation and conditions instead.
+
+The chart hashes the rendered Hawtio OIDC ConfigMap data into
+`spec.deploymentPlan.annotations.checksum/hawtio-oidc`. A data change now changes
+the operator's desired pod template, so cached OIDC settings receive a rollout.
+The first adoption of this annotation also changes the pod template. Metadata
+changes alone do not change this hash. This does not unblock an already stalled
+StatefulSet rollout or replace DNS, TLS, and identity-provider configuration.
+
+The readiness command is inline in `spec.deploymentPlan.readinessProbe`, not a
+separately mounted script. Trace the desired command through the custom
+resource, StatefulSet template, and actual pods before changing sync settings.
+Run these read-only commands on the authorized work computer (set the five
+variables to the installed context, Application, namespace, CR, and StatefulSet):
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n argocd get application "$APP" -o json |
+  jq '{source: .spec.source, syncPolicy: .spec.syncPolicy,
+       sync: .status.sync, health: .status.health,
+       operation: .status.operationState.phase, conditions: .status.conditions}'
+kubectl --context "$KUBE_CONTEXT" -n "$WORKLOAD_NAMESPACE" \
+  get activemqartemis "$BROKER_CR" -o json |
+  jq '{generation: .metadata.generation,
+       readiness: .spec.deploymentPlan.readinessProbe, status: .status}'
+kubectl --context "$KUBE_CONTEXT" -n "$WORKLOAD_NAMESPACE" \
+  get statefulset "$STATEFULSET" -o json |
+  jq '{generation: .metadata.generation, strategy: .spec.updateStrategy,
+       podManagementPolicy: .spec.podManagementPolicy, status: .status,
+       containers: [.spec.template.spec.containers[] | {name, readinessProbe}]}'
+kubectl --context "$KUBE_CONTEXT" -n "$WORKLOAD_NAMESPACE" \
+  get pods -l "ActiveMQArtemis=$BROKER_CR" -o json |
+  jq '[.items[] | {name: .metadata.name,
+       revision: .metadata.labels["controller-revision-hash"],
+       conditions: .status.conditions,
+       containers: [.spec.containers[] | {name, readinessProbe}]}]'
+kubectl --context "$KUBE_CONTEXT" -n "$WORKLOAD_NAMESPACE" \
+  get ingress "$BROKER_CR-console" -o json |
+  jq '{generation: .metadata.generation, rules: .spec.rules, status: .status}'
+```
+
+- Old desired hostname: inspect topology and effective Helm parameters first.
+- Old CR command: inspect the Application's source revision, sync result, and
+  conditions; the operator has not yet received the desired change.
+- New CR command but old StatefulSet template: inspect operator reconciliation
+  status and logs using the workflow below.
+- New StatefulSet template but old pod command: inspect update strategy,
+  partition, revisions, and Ready conditions. An `OnDelete` strategy requires
+  replacement; a partition can exclude pods from updates. An ordered rolling
+  update can also remain blocked on an unready pod after a template correction.
+  Deleting a pod can explain why the new command appeared without proving that
+  Argo CD failed to sync. Capture evidence and assess active/standby health before
+  any targeted recovery; do not automate pod deletion or bypass HA controls.
+
+References: [Argo CD Helm precedence](https://argo-cd.readthedocs.io/en/latest/user-guide/helm/)
+and [StatefulSet update and forced rollback behavior](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
+
 ## Standard workflow
 
 ### 1. Validate the repository copy
