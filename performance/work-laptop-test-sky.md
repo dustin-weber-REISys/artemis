@@ -1,104 +1,79 @@
-# Run the performance client against test-SKY
+# Run the performance and failover validations against test-SKY
 
-Run these commands only from the authorized work computer. This procedure uses
-the repository's serial validation client through a local port-forward. It is
-not the destructive failover test.
+Run these commands only from the authorized work computer. The procedure uses
+the repository's serial validation client and the supervised two-pod tunnel.
+The tunnel is local diagnostic plumbing: it does not expose a broker service
+and does not prove production NLB, Service routing, NetworkPolicy, ingress
+CIDR, cross-AZ network, or throughput behavior.
 
-## 1. Open the repository and set the target
+## 1. Select and verify the target
 
-Replace the first two values with the approved test-cluster identifiers.
+Replace every placeholder with the approved test-SKY value:
 
-```sh
+~~~sh
 cd /path/to/Artemis
 
 export ARTEMIS_CONTEXT='REPLACE_WITH_APPROVED_TEST_CONTEXT'
 export ARTEMIS_CLUSTER='REPLACE_WITH_APPROVED_TEST_EKS_CLUSTER'
 export ARTEMIS_NAMESPACE='artemis-int-sky'
 export ARTEMIS_BROKER_CR='test-sky-artemis-artemis-ha'
-export ARTEMIS_AMQP_SERVICE="${ARTEMIS_BROKER_CR}-amqp"
-export ARTEMIS_CREDENTIAL_SECRET="${ARTEMIS_BROKER_CR}-credentials-secret"
+export ARTEMIS_CREDENTIAL_SECRET="$ARTEMIS_BROKER_CR-credentials-secret"
+export ARTEMIS_BROKER_SELECTOR='app.kubernetes.io/component=broker'
 export PERF_DESTINATION='performance.validation'
-```
+~~~
 
-Authenticate with the approved company AWS/EKS workflow. Then verify that the
-context selects the intended cluster:
+Authenticate with the approved company AWS/EKS workflow, then stop unless
+both confirmations pass:
 
-```sh
-actual_cluster=$(
-  kubectl config view --minify --context "$ARTEMIS_CONTEXT" \
-    -o jsonpath='{.clusters[0].name}'
-)
+~~~sh
+actual_cluster=$(kubectl config view --minify --context "$ARTEMIS_CONTEXT" \
+  -o jsonpath='{.clusters[0].name}')
 
 printf 'context=%s\nexpected-cluster=%s\nactual-cluster=%s\n' \
   "$ARTEMIS_CONTEXT" "$ARTEMIS_CLUSTER" "$actual_cluster"
 
+test "$(kubectl config current-context)" = "$ARTEMIS_CONTEXT"
 test "$actual_cluster" = "$ARTEMIS_CLUSTER"
-```
+~~~
 
-Stop if the last command fails.
+## 2. Check tools, broker health, and the disposable queue
 
-## 2. Check prerequisites and test-SKY health
-
-```sh
+~~~sh
+command -v kubectl docker yq
 docker version
 kubectl version --client
 yq --version
-helm version
 
 kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
   get activemqartemis "$ARTEMIS_BROKER_CR"
 
 kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
-  get statefulset "${ARTEMIS_BROKER_CR}-ss"
+  get pods -l "$ARTEMIS_BROKER_SELECTOR" -o wide
+~~~
 
-kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
-  get service "$ARTEMIS_AMQP_SERVICE"
+Expect exactly two ready broker replicas. The tunnel selects those two pods
+and checks each pod UID before accepting a forward.
 
-kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
-  get endpointslice \
-  -l "kubernetes.io/service-name=$ARTEMIS_AMQP_SERVICE"
-```
+Confirm that the durable destination is already declared:
 
-Expect two ready broker replicas and a ready AMQP service endpoint.
-
-## 3. Confirm the disposable queue is declared
-
-```sh
+~~~sh
 kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
   get activemqartemis "$ARTEMIS_BROKER_CR" -o json |
   yq -e '
     .spec.brokerProperties[] |
     select(. == "addressConfigurations.\"performance.validation\".routingTypes=ANYCAST")
   '
-```
+~~~
 
-If that command fails, stop. Add this destination to
-`gitops/workloads/test/test-sky/artemis-values.yaml` through the normal reviewed
-GitOps process, allow Argo CD to reconcile it, and repeat the check:
+If this fails, stop. Add the destination through the normal reviewed GitOps
+process and repeat the check. Do not use an application-owned queue.
 
-```yaml
-destinations:
-  performance-validation:
-    address: performance.validation
-    routingTypes:
-      - ANYCAST
-    queues:
-      - name: performance.validation
-        routingType: ANYCAST
-        durable: true
-        maxConsumers: -1
-        purgeOnNoConsumers: false
-```
+## 3. Load credentials privately
 
-Do not use an application-owned queue.
+Use an approved validation identity from Vault when one exists. Do not enable
+shell tracing and do not print either value:
 
-## 4. Load the broker credentials
-
-Use an approved validation identity from Vault when one exists. For the initial
-operator-generated credential, use a private terminal and do not enable shell
-tracing:
-
-```sh
+~~~sh
 set +x
 
 PERF_USERNAME=$(
@@ -116,81 +91,153 @@ PERF_PASSWORD=$(
 )
 
 export PERF_USERNAME PERF_PASSWORD
-```
+~~~
 
-Do not print either value.
+## 4. Run a tunneled performance profile
 
-## 5. Start the tunnel
+Build or verify the local validation image before starting the run:
 
-```sh
-export PERF_PORT_FORWARD_LOG="${TMPDIR:-/tmp}/test-sky-amqp-port-forward.log"
-kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
-  port-forward "service/$ARTEMIS_AMQP_SERVICE" 25672:5672 \
-  >"$PERF_PORT_FORWARD_LOG" 2>&1 &
+~~~sh
+make -C performance build-local-image IMAGE=artemis-validation-client:local
+~~~
 
-export PERF_PORT_FORWARD_PID=$!
-trap 'kill "$PERF_PORT_FORWARD_PID" 2>/dev/null || true' EXIT INT TERM
-sleep 2
-kill -0 "$PERF_PORT_FORWARD_PID"
-nc -vz 127.0.0.1 25672
-```
+The runner creates two local listeners, 25672 and 25673 by default, and gives
+both the producer and consumer one provider-specific failover URL. It binds
+only 127.0.0.1, adds the Docker host-gateway mapping, restarts a forward after
+process death or pod replacement, and cleans up both forwards on exit.
 
-Stop and inspect `$PERF_PORT_FORWARD_LOG` if either check fails.
+Run the burst profile first:
 
-## 6. Run the client
+~~~sh
+export PERF_PROTOCOL=amqp
+export PERF_REPORT_ROOT="$PWD/reports/test-sky-$(date -u +%Y%m%dT%H%M%SZ)"
 
-```sh
-cd /path/to/Artemis
+./performance/run-profile.sh \
+  --target tunneled \
+  --context "$ARTEMIS_CONTEXT" \
+  --cluster "$ARTEMIS_CLUSTER" \
+  --namespace "$ARTEMIS_NAMESPACE" \
+  --broker-selector "$ARTEMIS_BROKER_SELECTOR" \
+  --profile burst \
+  --tunnel-port-a 25672 \
+  --tunnel-port-b 25673 \
+  --report-dir "$PERF_REPORT_ROOT"
+~~~
 
-export PERF_URL='amqp://host.docker.internal:25672'
-export PERF_PROTOCOL='amqp'
-export PERF_DESTINATION='performance.validation'
-export PERF_REPORT_ROOT="reports/test-sky-$(date -u +%Y%m%dT%H%M%SZ)"
+After burst passes, run sustained during the approved window with a new
+report directory:
 
-REPORT_DIR="$PERF_REPORT_ROOT" \
-  make performance-deployed PROFILE=burst
-```
+~~~sh
+export PERF_REPORT_ROOT="$PWD/reports/test-sky-sustained-$(date -u +%Y%m%dT%H%M%SZ)"
 
-After `burst` passes, run the same 100,000-message validation with the
-`sustained` report profile during the approved window:
+./performance/run-profile.sh \
+  --target tunneled \
+  --context "$ARTEMIS_CONTEXT" \
+  --cluster "$ARTEMIS_CLUSTER" \
+  --namespace "$ARTEMIS_NAMESPACE" \
+  --broker-selector "$ARTEMIS_BROKER_SELECTOR" \
+  --profile sustained \
+  --report-dir "$PERF_REPORT_ROOT"
+~~~
 
-```sh
-export PERF_REPORT_ROOT="reports/test-sky-$(date -u +%Y%m%dT%H%M%SZ)"
+For TLS, set PERF_TLS=true, PERF_TLS_HOSTNAME to the broker certificate
+hostname, and the trust-store variables before adding
+--tunnel-tls --tls-hostname to the command:
 
-REPORT_DIR="$PERF_REPORT_ROOT" \
-  make performance-deployed PROFILE=sustained
-```
+~~~sh
+export PERF_TLS=true
+export PERF_TLS_HOSTNAME='REPLACE_WITH_BROKER_CERTIFICATE_HOSTNAME'
+export PERF_TRUST_STORE_PATH='/private/path/to/truststore.p12'
+export PERF_TRUST_STORE_PASSWORD='REPLACE_WITH_TRUSTSTORE_PASSWORD'
+export PERF_TRUST_STORE_TYPE='PKCS12'
+~~~
 
-Do not run `two-million-capacity` against test-SKY. Its approximately 244 GiB
-payload exceeds the cell's 20 GiB storage allocation.
+The certificate hostname is used for SNI and hostname verification.
+host.docker.internal is only the Docker-to-host route and must not be used as
+the certificate name.
 
-## 7. Verify and clean up
+## 5. Plan and execute the destructive failover validation
 
-```sh
+The failure runner is plan-only until the exact context, cluster, and
+namespace are repeated as confirmation flags. Use a fresh report directory:
+
+~~~sh
+export FAILURE_REPORT_ROOT="$PWD/reports/test-sky-failure-$(date -u +%Y%m%dT%H%M%SZ)"
+
+./performance/run-failure-test.sh \
+  --context "$ARTEMIS_CONTEXT" \
+  --cluster "$ARTEMIS_CLUSTER" \
+  --namespace "$ARTEMIS_NAMESPACE" \
+  --profile sustained \
+  --fault process-kill \
+  --double-failover \
+  --tunnel \
+  --fault-after-acknowledged 1000 \
+  --repeat-interval-seconds 30 \
+  --report-dir "$FAILURE_REPORT_ROOT"
+~~~
+
+Review the plan. If a time-based trigger is required, use
+--fault-after-seconds N instead of --fault-after-acknowledged N; the modes are
+mutually exclusive. Then execute the approved run:
+
+~~~sh
+./performance/run-failure-test.sh \
+  --context "$ARTEMIS_CONTEXT" \
+  --cluster "$ARTEMIS_CLUSTER" \
+  --namespace "$ARTEMIS_NAMESPACE" \
+  --profile sustained \
+  --fault process-kill \
+  --double-failover \
+  --tunnel \
+  --fault-after-acknowledged 1000 \
+  --repeat-interval-seconds 30 \
+  --report-dir "$FAILURE_REPORT_ROOT" \
+  --execute \
+  --confirm-context "$ARTEMIS_CONTEXT" \
+  --confirm-cluster "$ARTEMIS_CLUSTER" \
+  --confirm-namespace "$ARTEMIS_NAMESPACE"
+~~~
+
+Use --fault pod-delete only when pod replacement, rather than broker-process
+restart, is the intended fault. The tunneled failure runner requires
+PERF_USERNAME and PERF_PASSWORD but does not require PERF_URL.
+
+## 6. Verify and preserve evidence
+
+~~~sh
+performance_report=$(find "$PERF_REPORT_ROOT" -name run.json -print -quit)
 yq -e '
-  .status == "PASS" and
-  .acknowledgedCount == .requestedCount and
-  .acknowledgementFailures == 0
-' "$PERF_REPORT_ROOT/performance/send.json"
+  .target == "tunneled" and
+  .tunnel.mode == "kubectl-port-forward"
+' "$performance_report"
 
+failure_report=$(find "$FAILURE_REPORT_ROOT" -name failure-run.json -print -quit)
 yq -e '
   .status == "PASS" and
   .rpoStatus == "PASS" and
-  .receivedCount == .expectedCount and
-  (.missingSequences | length) == 0 and
-  (.unexpectedSequences | length) == 0
-' "$PERF_REPORT_ROOT/performance/consume.json"
+  .connection.mode == "kubectl-port-forward" and
+  .clientRecovery.first.recoveredAt != null and
+  .clientRecovery.second.recoveredAt != null
+' "$failure_report"
 
-test "$(wc -l < "$PERF_REPORT_ROOT/performance/acknowledged.tsv" | tr -d ' ')" = 100000
+printf 'Performance evidence: %s\n' "$PERF_REPORT_ROOT"
+printf 'Failover evidence: %s\n' "$FAILURE_REPORT_ROOT"
+~~~
 
-printf 'Reports: %s/performance\n' "$PERF_REPORT_ROOT"
+Preserve the report directories. The tunnel evidence is under the run's
+tunnel directory: tunnel.env, tunnel-status.env, supervisor.log, and the
+per-pod port-forward logs. The failure report separates broker activation
+timing from the client recovery timing represented by the first acknowledged
+send after each fault.
 
-unset PERF_PASSWORD PERF_USERNAME PERF_URL
+## 7. Clean up local secrets
 
-kill "$PERF_PORT_FORWARD_PID"
-wait "$PERF_PORT_FORWARD_PID" 2>/dev/null || true
-trap - EXIT INT TERM
-unset PERF_PORT_FORWARD_PID PERF_PORT_FORWARD_LOG
-```
+The runners clean up their supervised forwards on normal completion and
+interrupt. After preserving the reports:
 
-Preserve the report directory as test evidence.
+~~~sh
+unset PERF_PASSWORD PERF_USERNAME PERF_URL PERF_TRUST_STORE_PASSWORD
+unset PERF_TLS PERF_TLS_HOSTNAME PERF_TRUST_STORE_PATH PERF_TRUST_STORE_TYPE
+unset PERF_REPORT_ROOT FAILURE_REPORT_ROOT
+~~~

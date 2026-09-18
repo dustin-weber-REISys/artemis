@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 REPORT_DIR ?= reports
 
-.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-docs validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed failure-deployed build-image
+.PHONY: help versions prepare-upgrade validate-release validate-toolchain release-gate test-upgrade-workflow test-chef-import test test-topology test-zookeeper-rollout-preflight test-diagnose-pod-startup test-argocd-ecr-credentials package validate validate-docs validate-static validate-scenarios validate-topology validate-charts validate-zookeeper-kustomize validate-operator-kustomize validate-operator-schema validate-compose local-up local-down local-reset local-logs local-status local-smoke performance-local performance-deployed performance-tunneled failure-deployed failure-tunneled build-image
 
 help:
 	@printf '%s\n' \
@@ -38,7 +38,9 @@ help:
 		'  package           Package the validation client' \
 		'  performance-local Run a load profile against the local broker' \
 		'  performance-deployed Run a load profile against PERF_URL' \
+		'  performance-tunneled Run a load profile through supervised kubectl tunnels' \
 		'  failure-deployed Run a destructive acknowledged-message failover test' \
+		'  failure-tunneled Run failover test through supervised kubectl tunnels' \
 		'  build-image       Build the version-tagged validation client image' \
 		'' \
 		'Repository:' \
@@ -62,8 +64,14 @@ performance-local:
 performance-deployed:
 	$(MAKE) -C performance run-deployed REPORT_DIR="$(abspath $(REPORT_DIR))/performance"
 
+performance-tunneled:
+	$(MAKE) -C performance run-tunneled REPORT_DIR="$(abspath $(REPORT_DIR))/performance"
+
 failure-deployed:
 	$(MAKE) -C performance failure-deployed REPORT_DIR="$(abspath $(REPORT_DIR))/failure"
+
+failure-tunneled:
+	$(MAKE) -C performance failure-tunneled REPORT_DIR="$(abspath $(REPORT_DIR))/failure"
 
 local-up:
 	$(MAKE) -C local up

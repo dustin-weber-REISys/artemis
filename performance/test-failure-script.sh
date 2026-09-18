@@ -68,6 +68,25 @@ expect_exit 2 "$runner" \
 grep -Fq 'must be less than profile message count 100000' "$temp_dir/stderr" ||
   fail 'invalid acknowledgement threshold was accepted'
 
+expect_exit 0 "$runner" \
+  --context test-context \
+  --cluster test-cluster \
+  --namespace test-namespace \
+  --profile burst \
+  --fault-after-seconds 5
+grep -Fq 'inject process-kill after 5 seconds of producer runtime' "$temp_dir/stdout" ||
+  fail 'elapsed fault trigger was omitted from the dry-run plan'
+
+expect_exit 2 "$runner" \
+  --context test-context \
+  --cluster test-cluster \
+  --namespace test-namespace \
+  --profile burst \
+  --fault-after-seconds 5 \
+  --fault-after-acknowledged 1
+grep -Fq 'cannot be combined' "$temp_dir/stderr" ||
+  fail 'mixed elapsed and acknowledgement triggers were accepted'
+
 fake_bin="$temp_dir/bin"
 mkdir -p "$fake_bin"
 state_file="$temp_dir/active-state"
@@ -86,6 +105,47 @@ case "$joined" in
     ;;
   *' get namespace test-namespace')
     printf '%s\n' test-namespace
+    ;;
+  *' port-forward --address 127.0.0.1 pod/broker-0 '*)
+    forward_count_file="${FAILURE_TEST_STATE}.broker-0-forward-count"
+    forward_count=0
+    [[ -f "$forward_count_file" ]] && forward_count=$(cat "$forward_count_file")
+    printf '%s\n' $((forward_count + 1)) > "$forward_count_file"
+    printf 'Forwarding from 127.0.0.1:25672 -> 5672\n'
+    if [[ "$forward_count" == 0 ]]; then
+      while [[ "$(cat "$FAILURE_TEST_STATE")" == before ]]; do
+        sleep 0.1
+      done
+      exit 137
+    fi
+    while [[ "$(cat "$FAILURE_TEST_STATE")" != after-second ]]; do
+      sleep 0.1
+    done
+    while :; do
+      sleep 0.1
+    done
+    ;;
+  *' port-forward --address 127.0.0.1 pod/broker-1 '*)
+    forward_count_file="${FAILURE_TEST_STATE}.broker-1-forward-count"
+    forward_count=0
+    [[ -f "$forward_count_file" ]] && forward_count=$(cat "$forward_count_file")
+    printf '%s\n' $((forward_count + 1)) > "$forward_count_file"
+    printf 'Forwarding from 127.0.0.1:25673 -> 5672\n'
+    if [[ "$forward_count" == 0 ]]; then
+      while [[ "$(cat "$FAILURE_TEST_STATE")" != after-second ]]; do
+        sleep 0.1
+      done
+      exit 137
+    fi
+    while :; do
+      sleep 0.1
+    done
+    ;;
+  *' get pod broker-0 '*'.metadata.uid'*)
+    printf 'broker-0-uid\tRunning'
+    ;;
+  *' get pod broker-1 '*'.metadata.uid'*)
+    printf 'broker-1-uid\tRunning'
     ;;
   *' get pods -l '*' -o json')
     printf '%s\n' '{"items":[
@@ -318,6 +378,53 @@ yq -e '
   {
     yq '.' "$failure_report" >&2
     fail 'executed failure harness report did not reconcile the acknowledged ledger'
+  }
+
+printf '%s\n' before > "$state_file"
+tunnel_execution_reports="$temp_dir/tunnel-execution-reports"
+expect_exit 0 env \
+  PATH="$fake_bin:$PATH" \
+  FAILURE_TEST_STATE="$state_file" \
+  FAILURE_TEST_DOUBLE=1 \
+  PERF_USERNAME=test-user \
+  PERF_PASSWORD=test-password \
+  IMAGE=test-image \
+  "$runner" \
+    --context test-context \
+    --cluster test-cluster \
+    --namespace test-namespace \
+    --profile sustained \
+    --fault process-kill \
+    --double-failover \
+    --tunnel \
+    --fault-after-acknowledged 1 \
+    --recovery-timeout-seconds 10 \
+    --test-timeout-seconds 20 \
+    --tunnel-startup-timeout-seconds 2 \
+    --tunnel-pod-wait-timeout-seconds 10 \
+    --report-dir "$tunnel_execution_reports" \
+    --execute \
+    --confirm-context test-context \
+    --confirm-cluster test-cluster \
+    --confirm-namespace test-namespace
+
+tunnel_failure_report=$(find "$tunnel_execution_reports" -name failure-run.json -print -quit)
+[[ -n "$tunnel_failure_report" ]] ||
+  fail 'tunneled failure harness did not write failure-run.json'
+yq -e '
+  .status == "PASS" and
+  .connection.mode == "kubectl-port-forward" and
+  .connection.podA == "broker-0" and
+  .connection.podB == "broker-1" and
+  .connection.restartsA >= 1 and
+  .connection.restartsB >= 1 and
+  .clientRecovery.first.recoveredAt != null and
+  .clientRecovery.second.recoveredAt != null and
+  .connection.supervisorState == "READY"
+' "$tunnel_failure_report" >/dev/null ||
+  {
+    yq '.' "$tunnel_failure_report" >&2
+    fail 'tunneled failure harness report omitted tunnel/client recovery evidence'
   }
 
 printf '%s\n' 'failure script tests: PASS'

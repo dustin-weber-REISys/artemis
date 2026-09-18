@@ -9,17 +9,39 @@ namespace=''
 profile=sustained
 fault=process-kill
 double_failover=0
+tunnel=0
 broker_selector='app.kubernetes.io/component=broker'
 broker_container=''
 fault_after_acknowledged=1000
+fault_after_acknowledged_set=0
+fault_after_seconds=''
+repeat_interval_seconds=''
+fault_trigger_mode=acknowledged
 recovery_timeout_seconds=180
 test_timeout_seconds=1200
+client_recovery_timeout_seconds=''
 report_root="$script_dir/../reports/failure"
 image=${IMAGE:-artemis-validation-client:local}
 execute=0
 confirm_context=''
 confirm_cluster=''
 confirm_namespace=''
+tunnel_port_a=${PERF_TUNNEL_PORT_A:-25672}
+tunnel_port_b=${PERF_TUNNEL_PORT_B:-25673}
+tunnel_max_restarts=${PERF_TUNNEL_MAX_RESTARTS:-5}
+tunnel_startup_timeout_seconds=${PERF_TUNNEL_STARTUP_TIMEOUT_SECONDS:-15}
+tunnel_pod_wait_timeout_seconds=${PERF_TUNNEL_POD_WAIT_TIMEOUT_SECONDS:-180}
+tunnel_retry_delay_seconds=${PERF_TUNNEL_RETRY_DELAY_SECONDS:-1}
+tunnel_poll_seconds=${PERF_TUNNEL_POLL_SECONDS:-1}
+tunnel_tls=0
+tunnel_tls_hostname=${PERF_TLS_HOSTNAME:-}
+tunnel_pid=''
+tunnel_env_file=''
+tunnel_status_file=''
+tunnel_restarts_at_first_fault_a=0
+tunnel_restarts_at_first_fault_b=0
+tunnel_restarts_at_second_fault_a=0
+tunnel_restarts_at_second_fault_b=0
 
 usage() {
   printf '%s\n' \
@@ -29,16 +51,21 @@ usage() {
     '  --execute --confirm-context CONTEXT --confirm-cluster CLUSTER --confirm-namespace NAMESPACE' \
     '' \
     'Runtime environment: PERF_URL, PERF_USERNAME, PERF_PASSWORD' \
-    'Optional environment: PERF_PROTOCOL, PERF_DESTINATION, IMAGE' \
+    'Tunneled mode uses PERF_USERNAME/PERF_PASSWORD and builds PERF_URL from two pod forwards.' \
+    'Optional environment: PERF_PROTOCOL, PERF_DESTINATION, PERF_TLS, PERF_TLS_HOSTNAME, IMAGE' \
     '' \
     'Options:' \
     '  --profile NAME                    Load profile (default: sustained)' \
     '  --fault process-kill|pod-delete   Fault to inject (default: process-kill)' \
     '  --double-failover                 Fail A, wait for synchronized rejoin, then fail B' \
+    '  --tunnel                          Use two supervised kubectl pod forwards' \
     '  --broker-selector SELECTOR        Select exactly two HA pods' \
     '  --broker-container NAME           Main broker container; auto-detected by port 61616' \
     '  --fault-after-acknowledged N      Inject after N durable send returns (default: 1000)' \
+    '  --fault-after-seconds N           Inject N seconds after producer start' \
+    '  --repeat-interval-seconds N       Minimum interval before the second fault' \
     '  --recovery-timeout-seconds N      Wait for peer activation (default: 180)' \
+    '  --client-recovery-timeout-seconds N  Bound first post-fault acknowledgement (default: recovery timeout)' \
     '  --test-timeout-seconds N          Bound the producer/fault phase (default: 1200)' \
     '  --report-dir DIRECTORY            Parent report directory'
 }
@@ -60,6 +87,12 @@ require_positive_integer() {
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || die "$option must be a positive integer"
 }
 
+require_non_negative_integer() {
+  local option=$1
+  local value=$2
+  [[ "$value" =~ ^[0-9][0-9]*$ ]] || die "$option must be a non-negative integer"
+}
+
 line_count() {
   sed '/^$/d' | wc -l | tr -d ' '
 }
@@ -72,16 +105,33 @@ while (($#)); do
     --profile) require_value "$1" "${2-}"; profile=$2; shift 2 ;;
     --fault) require_value "$1" "${2-}"; fault=$2; shift 2 ;;
     --double-failover) double_failover=1; shift ;;
+    --tunnel) tunnel=1; shift ;;
     --broker-selector) require_value "$1" "${2-}"; broker_selector=$2; shift 2 ;;
     --broker-container) require_value "$1" "${2-}"; broker_container=$2; shift 2 ;;
     --fault-after-acknowledged)
       require_value "$1" "${2-}"
       fault_after_acknowledged=$2
+      fault_after_acknowledged_set=1
+      shift 2
+      ;;
+    --fault-after-seconds)
+      require_value "$1" "${2-}"
+      fault_after_seconds=$2
+      shift 2
+      ;;
+    --repeat-interval-seconds)
+      require_value "$1" "${2-}"
+      repeat_interval_seconds=$2
       shift 2
       ;;
     --recovery-timeout-seconds)
       require_value "$1" "${2-}"
       recovery_timeout_seconds=$2
+      shift 2
+      ;;
+    --client-recovery-timeout-seconds)
+      require_value "$1" "${2-}"
+      client_recovery_timeout_seconds=$2
       shift 2
       ;;
     --test-timeout-seconds)
@@ -90,6 +140,19 @@ while (($#)); do
       shift 2
       ;;
     --report-dir) require_value "$1" "${2-}"; report_root=$2; shift 2 ;;
+    --tunnel-port-a) require_value "$1" "${2-}"; tunnel_port_a=$2; shift 2 ;;
+    --tunnel-port-b) require_value "$1" "${2-}"; tunnel_port_b=$2; shift 2 ;;
+    --tunnel-max-restarts) require_value "$1" "${2-}"; tunnel_max_restarts=$2; shift 2 ;;
+    --tunnel-startup-timeout-seconds)
+      require_value "$1" "${2-}"; tunnel_startup_timeout_seconds=$2; shift 2 ;;
+    --tunnel-pod-wait-timeout-seconds)
+      require_value "$1" "${2-}"; tunnel_pod_wait_timeout_seconds=$2; shift 2 ;;
+    --tunnel-retry-delay-seconds)
+      require_value "$1" "${2-}"; tunnel_retry_delay_seconds=$2; shift 2 ;;
+    --tunnel-poll-seconds)
+      require_value "$1" "${2-}"; tunnel_poll_seconds=$2; shift 2 ;;
+    --tunnel-tls) tunnel_tls=1; shift ;;
+    --tls-hostname) require_value "$1" "${2-}"; tunnel_tls_hostname=$2; shift 2 ;;
     --execute) execute=1; shift ;;
     --confirm-context) require_value "$1" "${2-}"; confirm_context=$2; shift 2 ;;
     --confirm-cluster) require_value "$1" "${2-}"; confirm_cluster=$2; shift 2 ;;
@@ -109,7 +172,22 @@ case "$fault" in
 esac
 require_positive_integer --fault-after-acknowledged "$fault_after_acknowledged"
 require_positive_integer --recovery-timeout-seconds "$recovery_timeout_seconds"
+if [[ -n "$client_recovery_timeout_seconds" ]]; then
+  require_positive_integer --client-recovery-timeout-seconds "$client_recovery_timeout_seconds"
+fi
 require_positive_integer --test-timeout-seconds "$test_timeout_seconds"
+if [[ -n "$fault_after_seconds" ]]; then
+  require_non_negative_integer --fault-after-seconds "$fault_after_seconds"
+  [[ "$fault_after_acknowledged_set" == 0 ]] ||
+    die '--fault-after-seconds cannot be combined with --fault-after-acknowledged'
+  fault_trigger_mode=elapsed
+fi
+if [[ -n "$repeat_interval_seconds" ]]; then
+  require_non_negative_integer --repeat-interval-seconds "$repeat_interval_seconds"
+  [[ "$double_failover" == 1 ]] ||
+    die '--repeat-interval-seconds requires --double-failover'
+fi
+client_recovery_timeout_seconds=${client_recovery_timeout_seconds:-$recovery_timeout_seconds}
 
 command -v yq >/dev/null 2>&1 || die 'yq 4.53.3 or newer is required'
 profile_count=$(PROFILE_NAME="$profile" yq -r \
@@ -133,8 +211,10 @@ consumer_concurrency=$(PROFILE_NAME="$profile" yq -r \
 recovery_target_seconds=$(yq -r '.acceptance.recoveryTargetSeconds' "$profile_catalog")
 protocol=${PERF_PROTOCOL:-$(yq -r '.defaults.protocol' "$profile_catalog")}
 destination=${PERF_DESTINATION:-"failure.$profile"}
-((fault_after_acknowledged < message_count)) ||
-  die "--fault-after-acknowledged must be less than profile message count $message_count"
+if [[ "$fault_trigger_mode" == acknowledged ]]; then
+  ((fault_after_acknowledged < message_count)) ||
+    die "--fault-after-acknowledged must be less than profile message count $message_count"
+fi
 case "$protocol" in
   amqp|openwire) ;;
   *) die "unsupported PERF_PROTOCOL: $protocol" ;;
@@ -143,12 +223,26 @@ esac
 if [[ "$execute" != 1 ]]; then
   printf '%s\n' \
     "PLAN: send $message_count persistent $protocol messages to $destination" \
-    "PLAN: use an exact $payload_bytes-byte UTF-8 body for every message" \
-    "PLAN: inject $fault after $fault_after_acknowledged recorded acknowledgements"
+    "PLAN: use an exact $payload_bytes-byte UTF-8 body for every message"
+  if [[ "$fault_trigger_mode" == acknowledged ]]; then
+    printf '%s\n' \
+      "PLAN: inject $fault after $fault_after_acknowledged recorded acknowledgements"
+  else
+    printf '%s\n' \
+      "PLAN: inject $fault after $fault_after_seconds seconds of producer runtime"
+  fi
+  if [[ "$tunnel" == 1 ]]; then
+    printf '%s\n' \
+      'PLAN: supervise two loopback kubectl pod forwards and use one provider failover URL for producer and consumer'
+  fi
   if [[ "$double_failover" == 1 ]]; then
     printf '%s\n' \
       'PLAN: wait for the original active pod to restart, return passive, and report ReplicaSync=true' \
       "PLAN: inject a second $fault into the new active and verify the original pod becomes active"
+    if [[ -n "$repeat_interval_seconds" ]]; then
+      printf 'PLAN: do not inject the second fault before %s seconds after the first fault\n' \
+        "$repeat_interval_seconds"
+    fi
   fi
   printf '%s\n' \
     'PLAN: consume after failover and reconcile only definitely acknowledged IDs' \
@@ -168,10 +262,21 @@ for required_command in docker kubectl yq; do
   command -v "$required_command" >/dev/null 2>&1 ||
     die "$required_command is required for execution"
 done
-broker_url=${PERF_URL:-}
-username=${PERF_USERNAME:-}
-password=${PERF_PASSWORD:-}
-[[ -n "$broker_url" ]] || die 'PERF_URL is required for execution'
+if [[ "$tunnel" == 1 ]]; then
+  broker_url=''
+  username=${PERF_USERNAME-}
+  password=${PERF_PASSWORD-}
+  case "${PERF_TLS-0}" in
+    ''|0|false|no) ;;
+    1|true|yes) tunnel_tls=1 ;;
+    *) die 'PERF_TLS must be true or false when --tunnel is used' ;;
+  esac
+else
+  broker_url=${PERF_URL:-}
+  username=${PERF_USERNAME:-}
+  password=${PERF_PASSWORD:-}
+  [[ -n "$broker_url" ]] || die 'PERF_URL is required for execution'
+fi
 [[ -n "$username" ]] || die 'PERF_USERNAME is required for execution'
 [[ -n "$password" ]] || die 'PERF_PASSWORD is required for execution'
 
@@ -350,7 +455,8 @@ target_rejoined_and_synchronized() {
   fi
   [[ "$restarted" == true && "$current_phase" == Running ]] || return 1
   broker_attribute_is "$target_pod" Active false || return 1
-  broker_attribute_is "$target_pod" ReplicaSync true
+  broker_attribute_is "$target_pod" ReplicaSync true || return 1
+  tunnel_ready_for_pod "$target_pod" "$current_uid" first
 }
 
 ZONES=$(IFS=,; printf '%s' "${zones[*]}") \
@@ -371,6 +477,139 @@ BROKER_CONTAINER=$broker_container \
     "storageClasses": (strenv(STORAGE_CLASSES) | split(","))
   }' > "$run_dir/preflight.json"
 
+cleanup_tunnel() {
+  if [[ -n "$tunnel_pid" ]] && kill -0 "$tunnel_pid" >/dev/null 2>&1; then
+    kill -TERM "$tunnel_pid" >/dev/null 2>&1 || true
+    wait "$tunnel_pid" >/dev/null 2>&1 || true
+  fi
+}
+
+tunnel_pid_alive() {
+  local process_state
+  [[ -n "$tunnel_pid" ]] || return 1
+  kill -0 "$tunnel_pid" >/dev/null 2>&1 || return 1
+  process_state=$(ps -o stat= -p "$tunnel_pid" 2>/dev/null || true)
+  [[ "$process_state" != *Z* ]]
+}
+
+ensure_tunnel_alive() {
+  if [[ -n "$tunnel_pid" ]] && ! tunnel_pid_alive; then
+    die "tunnel supervisor exited; see $run_dir/tunnel/supervisor.log"
+  fi
+}
+
+tunnel_ready_for_pod() {
+  local pod=$1
+  local uid=$2
+  local fault_sequence=${3:-first}
+  local status_pod_a=''
+  local status_pod_b=''
+  local status_uid_a=''
+  local status_uid_b=''
+  local status_ready_a=0
+  local status_ready_b=0
+  local status_restarts_a=0
+  local status_restarts_b=0
+  local minimum_restarts=0
+  [[ "$tunnel" == 1 ]] || return 0
+  [[ -s "$tunnel_status_file" ]] || return 1
+  . "$tunnel_status_file"
+  status_pod_a=${PERF_TUNNEL_POD_A-}
+  status_pod_b=${PERF_TUNNEL_POD_B-}
+  status_uid_a=${PERF_TUNNEL_UID_A-}
+  status_uid_b=${PERF_TUNNEL_UID_B-}
+  status_ready_a=${PERF_TUNNEL_SLOT_A_READY:-0}
+  status_ready_b=${PERF_TUNNEL_SLOT_B_READY:-0}
+  status_restarts_a=${PERF_TUNNEL_SLOT_A_RESTARTS:-0}
+  status_restarts_b=${PERF_TUNNEL_SLOT_B_RESTARTS:-0}
+  if [[ "$pod" == "$status_pod_a" ]]; then
+    if [[ "$fault_sequence" == second ]]; then
+      minimum_restarts=$tunnel_restarts_at_second_fault_a
+    else
+      minimum_restarts=$tunnel_restarts_at_first_fault_a
+    fi
+    [[ "$uid" == "$status_uid_a" &&
+       "$status_ready_a" == 1 &&
+       "$status_restarts_a" -gt "$minimum_restarts" ]]
+  elif [[ "$pod" == "$status_pod_b" ]]; then
+    if [[ "$fault_sequence" == second ]]; then
+      minimum_restarts=$tunnel_restarts_at_second_fault_b
+    else
+      minimum_restarts=$tunnel_restarts_at_first_fault_b
+    fi
+    [[ "$uid" == "$status_uid_b" &&
+       "$status_ready_b" == 1 &&
+       "$status_restarts_b" -gt "$minimum_restarts" ]]
+  else
+    return 1
+  fi
+}
+
+capture_tunnel_restart_baseline() {
+  local fault_sequence=$1
+  [[ "$tunnel" == 1 ]] || return 0
+  [[ -s "$tunnel_status_file" ]] || return 1
+  . "$tunnel_status_file"
+  if [[ "$fault_sequence" == second ]]; then
+    tunnel_restarts_at_second_fault_a=${PERF_TUNNEL_SLOT_A_RESTARTS:-0}
+    tunnel_restarts_at_second_fault_b=${PERF_TUNNEL_SLOT_B_RESTARTS:-0}
+  else
+    tunnel_restarts_at_first_fault_a=${PERF_TUNNEL_SLOT_A_RESTARTS:-0}
+    tunnel_restarts_at_first_fault_b=${PERF_TUNNEL_SLOT_B_RESTARTS:-0}
+  fi
+}
+
+if [[ "$tunnel" == 1 ]]; then
+  tunnel_dir="$run_dir/tunnel"
+  mkdir -p "$tunnel_dir"
+  tunnel_env_file="$tunnel_dir/tunnel.env"
+  tunnel_status_file="$tunnel_dir/tunnel-status.env"
+  tunnel_command=(
+    "$script_dir/kubectl-tunnel.sh"
+    --context "$context"
+    --namespace "$namespace"
+    --pod-a "${pods[0]}"
+    --pod-b "${pods[1]}"
+    --protocol "$protocol"
+    --local-port-a "$tunnel_port_a"
+    --local-port-b "$tunnel_port_b"
+    --max-restarts "$tunnel_max_restarts"
+    --startup-timeout-seconds "$tunnel_startup_timeout_seconds"
+    --pod-wait-timeout-seconds "$tunnel_pod_wait_timeout_seconds"
+    --retry-delay-seconds "$tunnel_retry_delay_seconds"
+    --poll-seconds "$tunnel_poll_seconds"
+    --env-file "$tunnel_env_file"
+    --status-file "$tunnel_status_file"
+    --log-dir "$tunnel_dir"
+  )
+  if ((tunnel_tls)); then
+    [[ -n "$tunnel_tls_hostname" ]] ||
+      die 'TLS tunneling requires --tls-hostname'
+    tunnel_command+=(--tls --tls-hostname "$tunnel_tls_hostname")
+  fi
+  trap cleanup_tunnel EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  "${tunnel_command[@]}" > "$tunnel_dir/supervisor.log" 2>&1 &
+  tunnel_pid=$!
+  tunnel_deadline=$((SECONDS + tunnel_startup_timeout_seconds + tunnel_pod_wait_timeout_seconds))
+  while [[ ! -s "$tunnel_env_file" ]]; do
+    if ! tunnel_pid_alive; then
+      set +e
+      wait "$tunnel_pid"
+      tunnel_exit=$?
+      set -e
+      die "tunnel supervisor exited with $tunnel_exit; see $tunnel_dir/supervisor.log"
+    fi
+    ((SECONDS < tunnel_deadline)) ||
+      die "tunnel supervisor did not become ready; see $tunnel_dir/supervisor.log"
+    sleep 1
+  done
+  . "$tunnel_env_file"
+  broker_url="$PERF_TUNNEL_URL"
+fi
+trap cleanup_tunnel EXIT
+
 acknowledgement_ledger="$run_dir/acknowledged.tsv"
 send_report="$run_dir/send.json"
 consume_report="$run_dir/consume.json"
@@ -380,10 +619,15 @@ cleanup_background() {
     kill "$producer_pid" >/dev/null 2>&1 || true
     wait "$producer_pid" >/dev/null 2>&1 || true
   fi
+  cleanup_tunnel
 }
 trap cleanup_background EXIT
 
 id_prefix="$run_id-"
+docker_network_args=(--add-host host.docker.internal:host-gateway)
+if [[ "$tunnel" == 1 && "$tunnel_tls" == 1 ]]; then
+  docker_network_args+=(--add-host "$PERF_TUNNEL_TLS_HOSTNAME:host-gateway")
+fi
 docker_env=(
   --env "PERF_PROTOCOL=$protocol"
   --env "PERF_URL=$broker_url"
@@ -395,10 +639,20 @@ docker_env=(
   --env "PERF_MESSAGE_COUNT=$message_count"
   --env "PERF_PAYLOAD_BYTES=$payload_bytes"
 )
+docker_run_args=(--rm "${docker_network_args[@]}")
+if [[ -n "${PERF_TRUST_STORE_PATH-}" ]]; then
+  [[ -f "$PERF_TRUST_STORE_PATH" ]] ||
+    die "trust store does not exist: $PERF_TRUST_STORE_PATH"
+  [[ -n "${PERF_TRUST_STORE_PASSWORD-}" ]] ||
+    die 'PERF_TRUST_STORE_PASSWORD is required with PERF_TRUST_STORE_PATH'
+  docker_run_args+=(--volume "$PERF_TRUST_STORE_PATH:/run/validation/truststore:ro")
+  docker_env+=(--env "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp -Djavax.net.ssl.trustStore=/run/validation/truststore -Djavax.net.ssl.trustStorePassword=$PERF_TRUST_STORE_PASSWORD -Djavax.net.ssl.trustStoreType=${PERF_TRUST_STORE_TYPE:-PKCS12}")
+fi
 
+ensure_tunnel_alive
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-docker run --rm \
-  --add-host host.docker.internal:host-gateway \
+producer_started_epoch=$(date -u +%s)
+docker run "${docker_run_args[@]}" \
   --volume "$run_dir:/reports" \
   "${docker_env[@]}" \
   --entrypoint /bin/sh \
@@ -422,22 +676,42 @@ producer_pid=$!
 
 phase_deadline=$((SECONDS + test_timeout_seconds))
 acknowledged_before_fault=0
-while ((SECONDS < phase_deadline)); do
+if [[ "$fault_trigger_mode" == acknowledged ]]; then
+  while ((SECONDS < phase_deadline)); do
+    ensure_tunnel_alive
+    if [[ -f "$acknowledgement_ledger" ]]; then
+      acknowledged_before_fault=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+    fi
+    ((acknowledged_before_fault >= fault_after_acknowledged)) && break
+    kill -0 "$producer_pid" >/dev/null 2>&1 ||
+      die "producer exited before the fault threshold; see $run_dir/producer.log"
+    sleep 1
+  done
+  ((acknowledged_before_fault >= fault_after_acknowledged)) ||
+    die "producer did not reach $fault_after_acknowledged acknowledgements before timeout"
+else
+  fault_deadline_epoch=$((producer_started_epoch + fault_after_seconds))
+  now_epoch=$(date -u +%s)
+  while ((SECONDS < phase_deadline && now_epoch < fault_deadline_epoch)); do
+    ensure_tunnel_alive
+    kill -0 "$producer_pid" >/dev/null 2>&1 ||
+      die "producer exited before the elapsed fault threshold; see $run_dir/producer.log"
+    sleep 1
+    now_epoch=$(date -u +%s)
+  done
+  ((now_epoch >= fault_deadline_epoch)) ||
+    die "producer did not run for $fault_after_seconds seconds before timeout"
   if [[ -f "$acknowledgement_ledger" ]]; then
     acknowledged_before_fault=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
   fi
-  ((acknowledged_before_fault >= fault_after_acknowledged)) && break
-  kill -0 "$producer_pid" >/dev/null 2>&1 ||
-    die "producer exited before the fault threshold; see $run_dir/producer.log"
-  sleep 1
-done
-((acknowledged_before_fault >= fault_after_acknowledged)) ||
-  die "producer did not reach $fault_after_acknowledged acknowledgements before timeout"
+fi
 
 fault_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 fault_epoch=$(date -u +%s)
 first_fault_log_name=fault.log
 [[ "$double_failover" != 1 ]] || first_fault_log_name=fault-1.log
+capture_tunnel_restart_baseline first ||
+  die 'could not capture the first tunnel restart baseline'
 fault_command_exit=$(inject_fault "$target_pod" "$run_dir/$first_fault_log_name")
 acknowledged_at_fault=$acknowledged_before_fault
 if [[ -f "$acknowledgement_ledger" ]]; then
@@ -448,10 +722,22 @@ max_active_count=0
 split_brain_observed=false
 replacement_active=''
 recovered_at=''
+client_recovered_at=''
+client_recovered_epoch=0
 recovery_deadline=$((SECONDS + recovery_timeout_seconds))
 while ((SECONDS < phase_deadline && SECONDS < recovery_deadline)); do
+  ensure_tunnel_alive
   current_active=$(active_pods)
   current_active_count=$(printf '%s\n' "$current_active" | line_count)
+  current_acknowledged=$acknowledged_at_fault
+  if [[ -f "$acknowledgement_ledger" ]]; then
+    current_acknowledged=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+  fi
+  if ((current_acknowledged > acknowledged_before_fault)) &&
+     [[ -z "$client_recovered_at" ]]; then
+    client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    client_recovered_epoch=$(date -u +%s)
+  fi
   ((current_active_count > max_active_count)) && max_active_count=$current_active_count
   if ((current_active_count > 1)); then
     split_brain_observed=true
@@ -479,14 +765,22 @@ second_acknowledged_at_fault=0
 second_replacement_active=''
 second_recovered_at=''
 second_recovery_duration_seconds=0
+second_client_recovered_at=''
+second_client_recovered_epoch=0
 if [[ "$double_failover" == 1 ]]; then
   rejoin_deadline=$((SECONDS + recovery_timeout_seconds))
   while ((SECONDS < phase_deadline && SECONDS < rejoin_deadline)); do
+    ensure_tunnel_alive
     current_active=$(active_pods)
     current_active_count=$(printf '%s\n' "$current_active" | line_count)
     current_acknowledged=$acknowledged_at_fault
     if [[ -f "$acknowledgement_ledger" ]]; then
       current_acknowledged=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+    fi
+    if ((current_acknowledged > acknowledged_before_fault)) &&
+       [[ -z "$client_recovered_at" ]]; then
+      client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      client_recovered_epoch=$(date -u +%s)
     fi
     ((current_active_count > max_active_count)) && max_active_count=$current_active_count
     if ((current_active_count > 1)); then
@@ -494,7 +788,7 @@ if [[ "$double_failover" == 1 ]]; then
     fi
     if [[ "$current_active_count" == 1 &&
           "$current_active" == "$replacement_active" ]] &&
-       ((current_acknowledged > acknowledged_at_fault)) &&
+       ((current_acknowledged > acknowledged_before_fault)) &&
        target_rejoined_and_synchronized; then
       original_rejoined_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
       break
@@ -506,6 +800,20 @@ if [[ "$double_failover" == 1 ]]; then
   [[ -n "$original_rejoined_at" ]] ||
     die "original broker $target_pod did not restart passive and synchronized while the replacement accepted a send within $recovery_timeout_seconds seconds"
 
+  if [[ -n "$repeat_interval_seconds" ]]; then
+    repeat_deadline_epoch=$((fault_epoch + repeat_interval_seconds))
+    now_epoch=$(date -u +%s)
+    while ((SECONDS < phase_deadline && now_epoch < repeat_deadline_epoch)); do
+      ensure_tunnel_alive
+      kill -0 "$producer_pid" >/dev/null 2>&1 ||
+        die "producer exited before the second fault interval; see $run_dir/producer.log"
+      sleep 1
+      now_epoch=$(date -u +%s)
+    done
+    ((now_epoch >= repeat_deadline_epoch)) ||
+      die "second fault interval of $repeat_interval_seconds seconds exceeded the test timeout"
+  fi
+
   kill -0 "$producer_pid" >/dev/null 2>&1 ||
     die "producer exited before the second fault; see $run_dir/producer.log"
   if [[ -f "$acknowledgement_ledger" ]]; then
@@ -513,6 +821,8 @@ if [[ "$double_failover" == 1 ]]; then
   fi
   second_fault_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   second_fault_epoch=$(date -u +%s)
+  capture_tunnel_restart_baseline second ||
+    die 'could not capture the second tunnel restart baseline'
   second_fault_command_exit=$(inject_fault "$replacement_active" "$run_dir/fault-2.log")
   second_acknowledged_at_fault=$second_acknowledged_before_fault
   if [[ -f "$acknowledgement_ledger" ]]; then
@@ -521,8 +831,18 @@ if [[ "$double_failover" == 1 ]]; then
 
   second_recovery_deadline=$((SECONDS + recovery_timeout_seconds))
   while ((SECONDS < phase_deadline && SECONDS < second_recovery_deadline)); do
+    ensure_tunnel_alive
     current_active=$(active_pods)
     current_active_count=$(printf '%s\n' "$current_active" | line_count)
+    current_acknowledged=$second_acknowledged_at_fault
+    if [[ -f "$acknowledgement_ledger" ]]; then
+      current_acknowledged=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+    fi
+    if ((current_acknowledged > second_acknowledged_before_fault)) &&
+       [[ -z "$second_client_recovered_at" ]]; then
+      second_client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      second_client_recovered_epoch=$(date -u +%s)
+    fi
     ((current_active_count > max_active_count)) && max_active_count=$current_active_count
     if ((current_active_count > 1)); then
       split_brain_observed=true
@@ -537,12 +857,46 @@ if [[ "$double_failover" == 1 ]]; then
   done
   [[ "$second_replacement_active" == "$target_pod" ]] ||
     die "original broker $target_pod did not become active after the second fault within $recovery_timeout_seconds seconds"
+  if [[ "$tunnel" == 1 ]]; then
+    second_tunnel_recovered=0
+    second_tunnel_deadline=$((SECONDS + recovery_timeout_seconds))
+    while ((SECONDS < phase_deadline && SECONDS < second_tunnel_deadline)); do
+      ensure_tunnel_alive
+      second_fault_identity=$("${kube[@]}" get pod "$replacement_active" \
+        -o jsonpath='{.metadata.uid}' 2>/dev/null || true)
+      second_fault_uid=${second_fault_identity%%$'\t'*}
+      if [[ -n "$second_fault_uid" ]] &&
+         tunnel_ready_for_pod "$replacement_active" "$second_fault_uid" second; then
+        second_tunnel_recovered=1
+        break
+      fi
+      sleep 1
+    done
+    ((second_tunnel_recovered == 1)) ||
+      die "tunnel for $replacement_active did not recover after the second fault within $recovery_timeout_seconds seconds"
+  fi
   second_recovery_duration_seconds=$((second_recovered_epoch - second_fault_epoch))
 fi
 
 while kill -0 "$producer_pid" >/dev/null 2>&1 && ((SECONDS < phase_deadline)); do
+  ensure_tunnel_alive
   current_active=$(active_pods)
   current_active_count=$(printf '%s\n' "$current_active" | line_count)
+  current_acknowledged=$acknowledged_at_fault
+  if [[ -f "$acknowledgement_ledger" ]]; then
+    current_acknowledged=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+  fi
+  if ((current_acknowledged > acknowledged_before_fault)) &&
+     [[ -z "$client_recovered_at" ]]; then
+    client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    client_recovered_epoch=$(date -u +%s)
+  fi
+  if [[ "$double_failover" == 1 ]] &&
+     ((current_acknowledged > second_acknowledged_before_fault)) &&
+     [[ -z "$second_client_recovered_at" ]]; then
+    second_client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    second_client_recovered_epoch=$(date -u +%s)
+  fi
   ((current_active_count > max_active_count)) && max_active_count=$current_active_count
   if ((current_active_count > 1)); then
     split_brain_observed=true
@@ -568,8 +922,8 @@ producer_pid=''
 max_messages=$((message_count * 2))
 consumer_exit=0
 set +e
-docker run --rm \
-  --add-host host.docker.internal:host-gateway \
+ensure_tunnel_alive
+docker run "${docker_run_args[@]}" \
   --volume "$run_dir:/reports" \
   "${docker_env[@]}" \
   --env "PERF_MAX_MESSAGES=$max_messages" \
@@ -597,6 +951,25 @@ set -e
   die "consumer did not write $consume_report"
 
 ledger_count=$(wc -l < "$acknowledgement_ledger" | tr -d ' ')
+if ((ledger_count > acknowledged_before_fault)) &&
+   [[ -z "$client_recovered_at" ]]; then
+  client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  client_recovered_epoch=$(date -u +%s)
+fi
+if [[ "$double_failover" == 1 ]] &&
+   ((ledger_count > second_acknowledged_before_fault)) &&
+   [[ -z "$second_client_recovered_at" ]]; then
+  second_client_recovered_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  second_client_recovered_epoch=$(date -u +%s)
+fi
+client_recovery_duration_seconds=0
+if ((client_recovered_epoch > 0)); then
+  client_recovery_duration_seconds=$((client_recovered_epoch - fault_epoch))
+fi
+second_client_recovery_duration_seconds=0
+if ((second_client_recovered_epoch > 0)); then
+  second_client_recovery_duration_seconds=$((second_client_recovered_epoch - second_fault_epoch))
+fi
 ledger_format_valid=true
 awk -F '\t' 'NF != 2 || $1 !~ /^[0-9]+$/ || $2 == "" { invalid = 1 } END { exit invalid }' \
   "$acknowledgement_ledger" || ledger_format_valid=false
@@ -605,12 +978,12 @@ ledger_sequences_json=$(LEDGER_SEQUENCES=$ledger_sequence_csv yq -n -o=json -I=0
   'strenv(LEDGER_SEQUENCES) | split(",") | map(tonumber)')
 unique_ledger_count=$(cut -f1 "$acknowledgement_ledger" | sort -u | line_count)
 reported_acknowledged=$(yq -r '.acknowledgedCount' "$send_report")
-post_fault_acknowledged=$((ledger_count - acknowledged_at_fault))
+post_fault_acknowledged=$((ledger_count - acknowledged_before_fault))
 first_post_fault_acknowledged=$post_fault_acknowledged
 second_post_fault_acknowledged=0
 if [[ "$double_failover" == 1 ]]; then
-  first_post_fault_acknowledged=$((second_acknowledged_before_fault - acknowledged_at_fault))
-  second_post_fault_acknowledged=$((ledger_count - second_acknowledged_at_fault))
+  first_post_fault_acknowledged=$((second_acknowledged_before_fault - acknowledged_before_fault))
+  second_post_fault_acknowledged=$((ledger_count - second_acknowledged_before_fault))
 fi
 ambiguous_send_count=$(yq -r '.unacknowledgedSequences | length' "$send_report")
 received_delivery_count=$(yq -r '.receivedCount' "$consume_report")
@@ -649,15 +1022,40 @@ fi
 if [[ "$ledger_consistent" != true || "$split_brain_observed" == true ]] ||
    ((unexpected_count > 0 || consumer_ack_failures > 0 ||
      recovery_duration_seconds > recovery_target_seconds ||
-     first_post_fault_acknowledged < 1)); then
+     first_post_fault_acknowledged < 1 ||
+     client_recovery_duration_seconds > client_recovery_timeout_seconds)) ||
+   [[ -z "$client_recovered_at" ]]; then
   status=FAIL
 fi
 if [[ "$double_failover" == 1 ]] &&
    ((second_recovery_duration_seconds > recovery_target_seconds ||
-     second_post_fault_acknowledged < 1)); then
+     second_post_fault_acknowledged < 1 ||
+     second_client_recovery_duration_seconds > client_recovery_timeout_seconds)) ||
+   [[ "$double_failover" == 1 && -z "$second_client_recovered_at" ]]; then
   status=FAIL
 fi
 completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+tunnel_pod_a=''
+tunnel_pod_b=''
+tunnel_uid_a=''
+tunnel_uid_b=''
+tunnel_port_a_report=''
+tunnel_port_b_report=''
+tunnel_restarts_a=''
+tunnel_restarts_b=''
+tunnel_status_state=''
+if [[ "$tunnel" == 1 && -s "$tunnel_status_file" ]]; then
+  . "$tunnel_status_file"
+  tunnel_pod_a=${PERF_TUNNEL_POD_A-}
+  tunnel_pod_b=${PERF_TUNNEL_POD_B-}
+  tunnel_uid_a=${PERF_TUNNEL_UID_A-}
+  tunnel_uid_b=${PERF_TUNNEL_UID_B-}
+  tunnel_port_a_report=${PERF_TUNNEL_PORT_A-}
+  tunnel_port_b_report=${PERF_TUNNEL_PORT_B-}
+  tunnel_restarts_a=${PERF_TUNNEL_SLOT_A_RESTARTS-}
+  tunnel_restarts_b=${PERF_TUNNEL_SLOT_B_RESTARTS-}
+  tunnel_status_state=${PERF_TUNNEL_STATE-}
+fi
 
 REPORT_STATUS=$status \
 REPORT_RPO_STATUS=$rpo_status \
@@ -671,6 +1069,25 @@ REPORT_RUN_ID=$run_id \
 REPORT_PAYLOAD_BYTES=$payload_bytes \
 REPORT_FAULT=$fault \
 REPORT_DOUBLE_FAILOVER=$double_failover \
+REPORT_TUNNEL=$tunnel \
+REPORT_TUNNEL_STATUS=$tunnel_status_state \
+REPORT_TUNNEL_POD_A=$tunnel_pod_a \
+REPORT_TUNNEL_POD_B=$tunnel_pod_b \
+REPORT_TUNNEL_UID_A=$tunnel_uid_a \
+REPORT_TUNNEL_UID_B=$tunnel_uid_b \
+REPORT_TUNNEL_PORT_A=$tunnel_port_a_report \
+REPORT_TUNNEL_PORT_B=$tunnel_port_b_report \
+REPORT_TUNNEL_RESTARTS_A=$tunnel_restarts_a \
+REPORT_TUNNEL_RESTARTS_B=$tunnel_restarts_b \
+REPORT_FAULT_TRIGGER_MODE=$fault_trigger_mode \
+REPORT_FAULT_AFTER_ACKNOWLEDGED=$fault_after_acknowledged \
+REPORT_FAULT_AFTER_SECONDS=$fault_after_seconds \
+REPORT_REPEAT_INTERVAL_SECONDS=$repeat_interval_seconds \
+REPORT_CLIENT_RECOVERY_TIMEOUT=$client_recovery_timeout_seconds \
+REPORT_CLIENT_RECOVERY_DURATION=$client_recovery_duration_seconds \
+REPORT_SECOND_CLIENT_RECOVERY_DURATION=$second_client_recovery_duration_seconds \
+REPORT_CLIENT_RECOVERED_AT=$client_recovered_at \
+REPORT_SECOND_CLIENT_RECOVERED_AT=$second_client_recovered_at \
 REPORT_TARGET_POD=$target_pod \
 REPORT_REPLACEMENT_ACTIVE=$replacement_active \
 REPORT_FAULT_COMMAND_EXIT=$fault_command_exit \
@@ -729,6 +1146,58 @@ REPORT_COMPLETED_AT=$completed_at \
         strenv(REPORT_DOUBLE_FAILOVER)
       ]
     ),
+    "faultTrigger": {
+      "mode": strenv(REPORT_FAULT_TRIGGER_MODE),
+      "acknowledgedThreshold": (
+        (strenv(REPORT_FAULT_AFTER_ACKNOWLEDGED) | select(strenv(REPORT_FAULT_TRIGGER_MODE) == "acknowledged") | tonumber) // null
+      ),
+      "elapsedSeconds": (
+        (strenv(REPORT_FAULT_AFTER_SECONDS) | select(. != "") | tonumber) // null
+      ),
+      "repeatIntervalSeconds": (
+        (strenv(REPORT_REPEAT_INTERVAL_SECONDS) | select(. != "") | tonumber) // null
+      )
+    },
+    "connection": ({
+      "0": {
+        "mode": "direct"
+      },
+      "1": {
+        "mode": "kubectl-port-forward",
+        "supervisorState": strenv(REPORT_TUNNEL_STATUS),
+        "podA": strenv(REPORT_TUNNEL_POD_A),
+        "podB": strenv(REPORT_TUNNEL_POD_B),
+        "uidA": strenv(REPORT_TUNNEL_UID_A),
+        "uidB": strenv(REPORT_TUNNEL_UID_B),
+        "portA": ((strenv(REPORT_TUNNEL_PORT_A) | select(. != "") | tonumber) // null),
+        "portB": ((strenv(REPORT_TUNNEL_PORT_B) | select(. != "") | tonumber) // null),
+        "restartsA": ((strenv(REPORT_TUNNEL_RESTARTS_A) | select(. != "") | tonumber) // null),
+        "restartsB": ((strenv(REPORT_TUNNEL_RESTARTS_B) | select(. != "") | tonumber) // null),
+        "envFile": "tunnel/tunnel.env",
+        "statusFile": "tunnel/tunnel-status.env",
+        "supervisorLog": "tunnel/supervisor.log"
+      }
+    }[strenv(REPORT_TUNNEL)]),
+    "clientRecovery": {
+      "timeoutSeconds": (strenv(REPORT_CLIENT_RECOVERY_TIMEOUT) | tonumber),
+      "first": {
+        "recoveredAt": (
+          (strenv(REPORT_CLIENT_RECOVERED_AT) | select(. != "")) // null
+        ),
+        "durationSeconds": (strenv(REPORT_CLIENT_RECOVERY_DURATION) | tonumber)
+      },
+      "second": ([
+        null,
+        {
+          "recoveredAt": (
+            (strenv(REPORT_SECOND_CLIENT_RECOVERED_AT) | select(. != "")) // null
+          ),
+          "durationSeconds": (strenv(REPORT_SECOND_CLIENT_RECOVERY_DURATION) | tonumber)
+        }
+      ][{"true": 1, "false": 0}[
+        (strenv(REPORT_DOUBLE_FAILOVER) == "1") | tostring
+      ]])
+    },
     "fault": {
       "type": strenv(REPORT_FAULT),
       "targetPod": strenv(REPORT_TARGET_POD),
@@ -801,6 +1270,9 @@ REPORT_COMPLETED_AT=$completed_at \
       "startedAt": strenv(REPORT_STARTED_AT),
       "faultInjectedAt": strenv(REPORT_FAULT_AT),
       "replacementActiveAt": strenv(REPORT_RECOVERED_AT),
+      "clientReconnectedAt": (
+        (strenv(REPORT_CLIENT_RECOVERED_AT) | select(. != "")) // null
+      ),
       "originalBrokerRejoinedAt": (
         [null, strenv(REPORT_ORIGINAL_REJOINED_AT)][
           strenv(REPORT_DOUBLE_FAILOVER) | tonumber
@@ -816,6 +1288,12 @@ REPORT_COMPLETED_AT=$completed_at \
           strenv(REPORT_DOUBLE_FAILOVER) | tonumber
         ]
       ),
+      "clientReconnectedAfterSecondFaultAt": ([
+        null,
+        ((strenv(REPORT_SECOND_CLIENT_RECOVERED_AT) | select(. != "")) // null)
+      ][{"true": 1, "false": 0}[
+        (strenv(REPORT_DOUBLE_FAILOVER) == "1") | tostring
+      ]]),
       "completedAt": strenv(REPORT_COMPLETED_AT)
     },
     "evidence": {

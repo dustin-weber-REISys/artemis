@@ -2,7 +2,8 @@
 
 This area owns the deterministic JMS validation client and reusable load
 profiles. The same client can run against the standalone broker under
-[`local`](../local) or an explicitly supplied deployed endpoint.
+[`local`](../local), an explicitly supplied deployed endpoint, or two
+supervised pod-local forwards on an authorized work computer.
 
 The current runner sends a deterministic persistent backlog with the profile's
 exact UTF-8 `payloadBytes`, then consumes it while recording timing and
@@ -63,6 +64,75 @@ Reports are written under `reports/performance` by default:
 - `consume.json`: missing, duplicate, reordered, and redelivery findings;
 - `run.json`: non-secret target and profile metadata.
 
+## Supervised two-pod tunnel
+
+Use `tunneled` when the validation client must reach the two HA broker pods
+from a work laptop without exposing a broker service publicly. The supervisor
+selects exactly two pods, binds two local loopback ports, and gives both the
+producer and consumer one provider-specific failover URL:
+
+- AMQP uses `amqp://host.docker.internal:25672` and `:25673`;
+- OpenWire uses `tcp://host.docker.internal:25672` and `:25673`;
+- reconnect attempts are unbounded for the run, with short initial and
+  bounded retry delays; and
+- a child `kubectl port-forward` is restarted only after the pod is Running
+  again and its UID is checked.
+
+Run these checks and the non-destructive plan on the authorized work
+computer. Replace every placeholder before continuing:
+
+```sh
+export ARTEMIS_CONTEXT='REPLACE_WITH_APPROVED_TEST_CONTEXT'
+export ARTEMIS_CLUSTER='REPLACE_WITH_APPROVED_TEST_EKS_CLUSTER'
+export ARTEMIS_NAMESPACE='REPLACE_WITH_BROKER_NAMESPACE'
+export ARTEMIS_BROKER_SELECTOR='app.kubernetes.io/component=broker'
+
+test "$(kubectl config current-context)" = "$ARTEMIS_CONTEXT"
+test "$(kubectl config view --minify --context "$ARTEMIS_CONTEXT" \
+  -o jsonpath='{.clusters[0].name}')" = "$ARTEMIS_CLUSTER"
+
+kubectl --context "$ARTEMIS_CONTEXT" -n "$ARTEMIS_NAMESPACE" \
+  get pods -l "$ARTEMIS_BROKER_SELECTOR" -o wide
+
+./performance/run-profile.sh \
+  --target tunneled \
+  --context "$ARTEMIS_CONTEXT" \
+  --cluster "$ARTEMIS_CLUSTER" \
+  --namespace "$ARTEMIS_NAMESPACE" \
+  --broker-selector "$ARTEMIS_BROKER_SELECTOR" \
+  --profile burst \
+  --report-dir "$PWD/reports/tunneled-$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+The tunneled target requires `PERF_USERNAME` and `PERF_PASSWORD`. Set
+`PERF_PROTOCOL=amqp` or `openwire` when overriding the profile default. Use
+`--tunnel-port-a` and `--tunnel-port-b` to choose different unused local
+ports. Docker receives the `host.docker.internal` host-gateway mapping
+automatically.
+
+For TLS, provide the broker certificate hostname and a trust store that the
+client container can mount:
+
+```sh
+export PERF_TLS=true
+export PERF_TLS_HOSTNAME='REPLACE_WITH_BROKER_CERTIFICATE_HOSTNAME'
+export PERF_TRUST_STORE_PATH='/private/path/to/truststore.p12'
+export PERF_TRUST_STORE_PASSWORD='REPLACE_WITH_TRUSTSTORE_PASSWORD'
+export PERF_TRUST_STORE_TYPE='PKCS12'
+```
+
+Then add `--tunnel-tls --tls-hostname "$PERF_TLS_HOSTNAME"` to the runner
+command. The TLS endpoint uses the certificate hostname for SNI and hostname
+verification; `host.docker.internal` is only the Docker-to-host route and
+must not be used as the certificate name.
+
+The tunnel is intentionally local diagnostic plumbing. It does not exercise a
+production NLB, Service routing, NetworkPolicy, ingress CIDR, cross-AZ network
+path, or production throughput. Each run records `tunnel/tunnel.env`,
+`tunnel/tunnel-status.env`, `tunnel/supervisor.log`, and per-pod
+`kubectl port-forward` logs under the report directory. The supervisor shuts
+down both forwards when the runner exits.
+
 ## Destructive failover test
 
 `run-failure-test.sh` reuses the same profile catalog and validation client
@@ -89,7 +159,48 @@ original broker becomes active, and requires another successful send before
 message reconciliation.
 
 The script is plan-only unless all three cluster identifiers are repeated as
-destructive confirmations:
+destructive confirmations. Plan the exact run first:
+
+```sh
+./performance/run-failure-test.sh \
+  --context example-eks \
+  --cluster example-eks-cluster \
+  --namespace example-messaging \
+  --profile sustained \
+  --fault process-kill \
+  --double-failover \
+  --tunnel \
+  --fault-after-acknowledged 1000 \
+  --repeat-interval-seconds 30
+```
+
+Then execute it with the same identifiers repeated as confirmations:
+
+```sh
+PERF_USERNAME="$ARTEMIS_TEST_USER" \
+PERF_PASSWORD="$ARTEMIS_TEST_PASSWORD" \
+  make -C performance failure-tunneled \
+    CONTEXT=example-eks \
+    CLUSTER=example-eks-cluster \
+    NAMESPACE=example-messaging \
+    PROFILE=sustained \
+    FAILURE_ARGS='--fault process-kill --double-failover --fault-after-acknowledged 1000 --repeat-interval-seconds 30 --execute --confirm-context example-eks --confirm-cluster example-eks-cluster --confirm-namespace example-messaging'
+```
+
+Use `--fault-after-seconds N` instead of
+`--fault-after-acknowledged N` when a time-based trigger is required; the two
+trigger modes are mutually exclusive. `--repeat-interval-seconds N` applies
+only to double failover and prevents the second destructive action until the
+specified interval has elapsed. Use `--fault pod-delete` only when pod
+replacement, rather than broker-process restart, is the behavior under test.
+
+The tunneled failure command requires `PERF_USERNAME` and `PERF_PASSWORD`, but
+does not require `PERF_URL`. `PERF_TLS=true` plus `PERF_TLS_HOSTNAME` selects the
+TLS tunnel; add a trust-store path and password when the client image does
+not already trust the broker CA.
+
+The direct deployed form remains available when a separately approved
+endpoint is the subject of the test:
 
 ```sh
 PERF_URL='failover:(amqps://broker.example.invalid:5671)?failover.maxReconnectAttempts=-1' \
@@ -121,7 +232,16 @@ Each execution gets its own directory under `reports/failure` with:
 - `acknowledged.tsv`: the external producer acknowledgement ledger;
 - `send.json` and `consume.json`: raw validation-client reports;
 - `preflight.json`: pod, zone, PVC, and StorageClass evidence; and
-- producer, consumer, and fault logs.
+- producer, consumer, and fault logs. Tunneling runs also include the
+  supervisor environment/status files, supervisor log, and per-pod
+  port-forward logs.
+
+The report keeps broker activation timing separate from client recovery:
+`activation.recoveryDurationSeconds` measures the observed broker leader
+transition, while `clientRecovery.first` and (for double failover)
+`clientRecovery.second` measure the first post-fault acknowledged send.
+`connection.mode`, `faultTrigger`, and the `connection` tunnel fields record
+whether the run used direct connectivity or supervised local forwards.
 
 A PASS means this run had no missing definitely acknowledged ID, no observed
 split brain, consistent ledger/report counts, and recovery within the profile
