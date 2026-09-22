@@ -18,7 +18,7 @@ spec:
         - name: zookeeper
           env:
             - name: JVMFLAGS
-              value: -Xms512m -Xmx1Gi
+              value: -Xms512m -Xmx1g
           resources:
             requests:
               cpu: 500m

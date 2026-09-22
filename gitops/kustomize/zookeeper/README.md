@@ -77,3 +77,10 @@ or Argo CD rollout.
 
 Run `./tests/test.sh` for deterministic rendering, contract assertions, and
 Kubernetes resource validation.
+
+Java heap flags in `JVMFLAGS` use Java units: nonprod and prod set
+`-Xms512m -Xmx1g` within a `2Gi` container memory limit. Kubernetes resource
+quantities keep their `Mi`/`Gi` units; do not copy those units into Java flags.
+`Invalid maximum heap size: -Xmx1Gi` means Java exits before ZooKeeper starts.
+Correct the environment overlay and sync the corrected revision through the
+normal Argo rollout process. The render tests reject invalid Java heap units.

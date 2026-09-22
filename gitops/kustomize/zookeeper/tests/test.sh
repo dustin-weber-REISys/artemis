@@ -44,6 +44,21 @@ for environment in test nonprod prod; do
     exit 1
   }
   kubectl kustomize "$overlay" > "$rendered"
+  # JVM heap sizes use Java units, not Kubernetes quantities such as Gi/Mi.
+  jvm_flags=$(yq -er 'select(.kind == "StatefulSet") |
+    .spec.template.spec.containers[] | select(.name == "zookeeper") |
+    .env[] | select(.name == "JVMFLAGS") | .value' "$rendered")
+  read -r -a jvm_args <<< "$jvm_flags"
+  for jvm_arg in "${jvm_args[@]}"; do
+    case "$jvm_arg" in
+      -Xms*|-Xmx*)
+        if [[ ! "$jvm_arg" =~ ^-Xm[sx][1-9][0-9]*[kKmMgG]?$ ]]; then
+          printf 'ZooKeeper %s has invalid Java heap size: %s\n' "$environment" "$jvm_arg" >&2
+          exit 1
+        fi
+        ;;
+    esac
+  done
   kubectl kustomize "$overlay" > "$rendered_again"
   cmp -s "$rendered" "$rendered_again" || {
     printf 'ZooKeeper %s overlay is not deterministic\n' "$environment" >&2
@@ -53,7 +68,7 @@ for environment in test nonprod prod; do
   expected_ecr=PLACEHOLDER_NONPROD_ECR_REPOSITORY
   expected_storage=PLACEHOLDER_NONPROD_GP3_STORAGE_CLASS
   expected_memory=2Gi
-  expected_heap='-Xms512m -Xmx1Gi'
+  expected_heap='-Xms512m -Xmx1g'
   expected_zone_domains=3
   expected_zone_schedule=DoNotSchedule
   expected_size=20Gi

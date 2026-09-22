@@ -45,6 +45,7 @@ the conflict rather than choosing whichever version is convenient.
 - [Install verification](runbooks/install-verification.md)
 - [Incident triage](runbooks/incident-triage.md)
 - [Hawtio access diagnosis](runbooks/hawtio-access-diagnosis.md)
+- [Keycloak + Hawtio work-computer checklist](runbooks/keycloak-hawtio-work-computer-checklist.md)
 - [Broker reconciliation debugging](runbooks/broker-reconciliation-debugging.md)
 - [Failover and failback](runbooks/failover-failback.md)
 - [Upgrade and rollback](runbooks/upgrade-rollback.md)
