@@ -198,7 +198,8 @@
       "additionalProperties": false,
       "required": ["internalTrafficPolicy"],
       "properties": {
-        "internalTrafficPolicy": {"enum": ["Cluster", "Local"]}
+        "internalTrafficPolicy": {"enum": ["Cluster", "Local"]},
+        "brokerAlias": {"type": "string", "maxLength": 63, "pattern": "^$|^[a-z]([-a-z0-9]*[a-z0-9])?$"}
       }
     },
     "networkPolicy": {"$ref": "#/$defs/networkPolicy"},

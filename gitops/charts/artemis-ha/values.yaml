@@ -320,6 +320,8 @@ topology:
 
 services:
   internalTrafficPolicy: Cluster
+  # Optional namespace-local DNS alias for the required CORE/OpenWire Service.
+  brokerAlias: ""
 
 networkPolicy:
   enabled: true

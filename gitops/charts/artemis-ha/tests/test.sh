@@ -46,6 +46,27 @@ assert_console_stickiness() {
 helm template artemis "$chart_dir" "${helm_args[@]}" > "$rendered"
 assert_console_stickiness "$rendered"
 
+# SKY's short DNS name resolves to the existing messaging Service without
+# renaming the broker resource or changing peer selection.
+alias_rendered="$temp_dir/broker-alias.yaml"
+helm template test-sky-artemis "$chart_dir" "${helm_args[@]}" \
+  --namespace artemis-int-sky \
+  -f "$gitops_dir/workloads/test/test-sky/artemis-values.yaml" > "$alias_rendered"
+yq eval -e 'select(.kind == "Service" and .metadata.name == "broker") |
+  .spec.type == "ExternalName" and
+  .spec.externalName == "test-sky-artemis-artemis-ha-artemis.artemis-int-sky.svc.cluster.local" and
+  .spec.ports[0].port == 61616' "$alias_rendered" >/dev/null
+yq eval -e 'select(.kind == "Service" and .metadata.name == "test-sky-artemis-artemis-ha-artemis") |
+  .spec.type == "ClusterIP"' "$alias_rendered" >/dev/null
+[[ "$(yq eval 'select(.kind == "Service" and .spec.type == "ExternalName") | .metadata.name' "$rendered")" == "" ]]
+for invalid_alias in 'Invalid_Name' 'artemis-artemis-ha-artemis' 'artemis-artemis-ha-console'; do
+  if helm template artemis "$chart_dir" "${helm_args[@]}" \
+    --set-string "services.brokerAlias=$invalid_alias" >/dev/null 2>&1; then
+    echo "expected invalid or colliding broker alias to fail: $invalid_alias" >&2
+    exit 1
+  fi
+done
+
 # A cached Hawtio OIDC data change must reach the operator's pod template.
 oidc_checksum() {
   helm template artemis "$chart_dir" "${helm_args[@]}" "$@" |

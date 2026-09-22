@@ -79,17 +79,41 @@ Artemis bootstrap and must not be applied as a replacement ConfigMap.
 `toolchain.yaml` records the requirement but does not configure a live Argo CD
 installation. A custom Kustomize version may have separate build options that
 also need the flag. Follow the platform's configuration reload procedure, then
-hard-refresh `test-arkmq-operator` to regenerate its cached comparison result.
+hard-refresh the affected environment's operator Application to regenerate its
+cached comparison result.
 Do not add an unsupported build-options field to the child Application.
 
-Read-only evidence from the work computer:
+If Terraform has already applied the setting, the values file alone does not
+prove the affected Argo CD instance received it. Check the live ConfigMap in
+the same cluster and namespace as the failing Application. An error marked
+`Manifest generation error (cached)` can still describe a build from before
+the change; it does not establish that the current setting is wrong.
+
+Read-only evidence from the work computer (select the affected context and
+environment; the example below is nonprod):
 
 ```sh
-kubectl --context "$KUBE_CONTEXT" -n argocd get configmap argocd-cm -o json |
+export KUBE_CONTEXT='<affected-cluster-context>'
+export ARGOCD_NAMESPACE=argocd
+export ENVIRONMENT=nonprod
+kubectl --context "$KUBE_CONTEXT" -n "$ARGOCD_NAMESPACE" get configmap argocd-cm -o json |
   jq '.data | with_entries(select(.key | startswith("kustomize.buildOptions")))'
-kubectl --context "$KUBE_CONTEXT" -n argocd get application test-arkmq-operator -o json |
-  jq '{source: .spec.source, conditions: .status.conditions}'
+kubectl --context "$KUBE_CONTEXT" -n "$ARGOCD_NAMESPACE" get application "$ENVIRONMENT-arkmq-operator" -o json |
+  jq '{source: .spec.source, reconciledAt: .status.reconciledAt, conditions: .status.conditions}'
+kubectl --context "$KUBE_CONTEXT" -n "$ARGOCD_NAMESPACE" get pods \
+  -l app.kubernetes.io/name=argocd-repo-server \
+  -o custom-columns='NAME:.metadata.name,STARTED:.status.startTime,IMAGES:.spec.containers[*].image,READY:.status.containerStatuses[*].ready'
 ```
+
+If the live flag is missing, correct the platform-owned Terraform/Helm values
+for that instance; repeating an Artemis sync cannot supply the flag. If it is
+present, use the Argo CD UI's **Hard Refresh** on the affected operator
+Application. If a fresh comparison still omits the flag, have the platform
+owner follow its Argo CD reload/restart procedure, including repo-server, then
+hard-refresh again. Argo CD documents that build-option changes may require a
+restart. Check any selected `.spec.source.kustomize.version` against the
+corresponding version-specific build options as well. Collect the new error:
+a chart-download or rendering error after this step is a different blocker.
 
 Reference: [Argo CD Kustomize Helm configuration](https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/#kustomizing-helm-charts).
 

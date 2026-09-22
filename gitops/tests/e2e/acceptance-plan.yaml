@@ -15,6 +15,7 @@ requiredCoverage:
   - chart-lint-render
   - clean-install
   - openwire-compatibility
+  - internal-service-endpoint-failover
   - amqp-compatibility
   - durable-sequenced-backlog
   - active-broker-process-kill
@@ -92,6 +93,26 @@ cases:
     verification:
       - send acknowledgement count equals requested count
       - consume report has no missing or unexpected sequence numbers
+  - id: internal-service-endpoint-failover
+    claim: liveness
+    destructive: true
+    eksRequired: true
+    execution:
+      kind: manual-procedure
+    action: >-
+      Run an admitted in-cluster OpenWire client through the short broker DNS
+      alias and its actual ClusterIP Service; exercise fresh connections and
+      persistent traffic across approved A-to-B and B-to-A failovers.
+    verification:
+      - record the deployed artifacts, client library version, exact failover URI options, and Service session affinity
+      - DNS resolves the alias to the intended messaging Service, never the console or another Workload Cell
+      - approved client namespace and pod labels pass NetworkPolicy admission
+      - repeated fresh connections succeed within the agreed deadline while either peer is passive
+      - client reconnects without restart after each active broker failure and after a peer rejoins passive
+      - exactly one broker is active and the recovered passive is synchronized before the second fault
+      - every broker-acknowledged durable ID is consumed; ambiguous sends and redeliveries are recorded separately
+      - recovery duration is measured against claims.liveness.initialRecoveryTargetSeconds
+      - pod or Service port-forward and the two-pod tunnel are not accepted as evidence for this routing path
   - id: durable-sequenced-backlog
     claim: safety
     destructive: false

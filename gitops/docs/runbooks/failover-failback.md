@@ -4,6 +4,61 @@ The competing-primary pair fails over automatically. The chart exposes no
 separate automatic-failback switch: a recovered peer must rejoin passive, and
 operators may reverse roles only after synchronization and change approval.
 
+## Internal Service endpoint acceptance
+
+INT SKY's optional `broker` Service is an `ExternalName` alias to
+`test-sky-artemis-artemis-ha-artemis.artemis-int-sky.svc.cluster.local`.
+It shortens DNS only. Both healthy peers pass the current readiness probe, so
+the target ClusterIP Service can route a connection attempt to either peer.
+The passive broker is not a usable messaging endpoint; ActiveMQ Classic
+Java/JMS clients must retain the failover transport:
+
+```text
+failover:(tcp://broker.artemis-int-sky.svc.cluster.local:61616)?maxReconnectAttempts=-1&startupMaxReconnectAttempts=-1
+```
+
+This is a retry-based connection contract, not active-only routing. Unlimited
+retries do not guarantee a maximum recovery time. Application transaction
+rollback/redelivery handling and measured timeout behavior remain part of
+acceptance. Other client libraries require their own reconnect syntax.
+See the [documentation and source assessment](../internal-broker-failover-research.md).
+
+On the authorized work computer, collect the deployed Service configuration
+and endpoint membership with these read-only commands. This offline checkout
+must not run them against a cluster:
+
+```sh
+export ARTEMIS_CONTEXT='REPLACE_WITH_APPROVED_TEST_CONTEXT'
+kubectl --context "$ARTEMIS_CONTEXT" -n artemis-int-sky \
+  get service broker test-sky-artemis-artemis-ha-artemis -o yaml
+kubectl --context "$ARTEMIS_CONTEXT" -n artemis-int-sky \
+  get endpointslices \
+  -l kubernetes.io/service-name=test-sky-artemis-artemis-ha-artemis -o yaml
+kubectl --context "$ARTEMIS_CONTEXT" -n artemis-int-sky \
+  get pods -l ActiveMQArtemis=test-sky-artemis-artemis-ha -o wide
+```
+
+The alias should name the target above, with port `61616`. The target must
+use `ClusterIP`, `internalTrafficPolicy: Cluster`, and no `ClientIP` session
+affinity. Kubernetes defaults omitted `sessionAffinity` to `None`. Affinity
+can repeatedly send a retrying client to the same passive endpoint. Record
+any cluster-specific traffic-distribution behavior as part of the evidence.
+Readiness and EndpointSlices alone do not establish broker role or replica
+synchronization.
+
+Before developer handoff, run `internal-service-endpoint-failover` from the
+[acceptance plan](../../tests/e2e/acceptance-plan.yaml) using a client inside
+the cluster with the actual application NetworkPolicy identity. Test fresh
+connections with each peer active, then an existing connection across both
+directions of an approved failover, checking durable-message acknowledgements
+and recovery time. Do not execute disruptive steps outside an approved test
+window. The existing harness below supplies ledger and fault-test procedures,
+but a laptop Docker client cannot normally resolve cluster-local DNS; arrange
+an authorized client execution environment that really traverses the Service.
+Neither a pod tunnel nor `kubectl port-forward service/...` validates
+ClusterIP endpoint selection. Keep this case NOT_RUN until that evidence
+exists; local render tests cannot certify live failover.
+
 ## Planned failover test
 
 Use the verdict-producing performance harness for the active-process and

@@ -26,6 +26,29 @@ rendered into the broker custom resource and gets a matching readiness-gated
 allowed ports are derived from that same enabled-acceptor set. Disabling an
 acceptor therefore removes it from all three surfaces.
 
+Set `services.brokerAlias` to create an additional namespace-local DNS alias
+for the required CORE/OpenWire Service. It preserves existing Service and
+broker names and inherits the existing Service's endpoint routing. Choose a
+name unused by other Services in that namespace. INT SKY sets this to `broker`,
+so after sync, in-cluster ActiveMQ Classic Java/JMS clients can use:
+
+```text
+failover:(tcp://broker.artemis-int-sky.svc.cluster.local:61616)?maxReconnectAttempts=-1&startupMaxReconnectAttempts=-1
+```
+
+Clients in `artemis-int-sky` can shorten the hostname to `broker`. This DNS
+alias does not expose messaging outside the cluster or change HA behavior.
+Both healthy peers can be ready under the current probes. The Service can
+therefore choose the passive broker, and the client must retry even during
+initial connection. Neither the alias nor Kubernetes checks the Artemis
+`Active` attribute. Keep the failover transport enabled; the alias alone is
+not a failover mechanism or a guarantee of recovery within a deadline.
+Validate the actual Service path using the
+[failover runbook](../../docs/runbooks/failover-failback.md#internal-service-endpoint-acceptance).
+See the [source-backed routing assessment](../../docs/internal-broker-failover-research.md)
+before changing readiness or adding active-only routing. For TLS listeners,
+the certificate must cover the hostname clients use.
+
 A TLS acceptor references one externally materialized operator SSL Secret with
 `sslSecret`. In the legacy JKS form that Secret owns both the server keystore
 and client truststore. A separately managed PEM trust bundle can instead be

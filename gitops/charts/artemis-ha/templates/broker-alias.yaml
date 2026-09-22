@@ -1,0 +1,23 @@
+{{- if .Values.services.brokerAlias }}
+{{- $fullname := include "artemis-ha.crName" . }}
+{{- $reserved := list (printf "%s-console" $fullname | trunc 63 | trimSuffix "-") (printf "%s-metrics" $fullname | trunc 63 | trimSuffix "-") }}
+{{- range $name, $_ := .Values.acceptors }}
+{{- $reserved = append $reserved (printf "%s-%s" $fullname $name | trunc 63 | trimSuffix "-") }}
+{{- end }}
+{{- if has .Values.services.brokerAlias $reserved }}
+{{- fail "services.brokerAlias must not collide with a generated Service name" }}
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.services.brokerAlias }}
+  labels:
+    {{- include "artemis-ha.labels" . | nindent 4 }}
+spec:
+  type: ExternalName
+  externalName: {{ printf "%s-artemis" $fullname | trunc 63 | trimSuffix "-" }}.{{ .Release.Namespace }}.svc.cluster.local
+  ports:
+    - name: artemis
+      port: {{ .Values.acceptors.artemis.port }}
+      protocol: TCP
+{{- end }}

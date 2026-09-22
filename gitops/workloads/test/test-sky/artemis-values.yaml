@@ -1,2 +1,3 @@
 # Pair-owned listeners, destinations, and internal client network sources.
-{}
+services:
+  brokerAlias: broker
