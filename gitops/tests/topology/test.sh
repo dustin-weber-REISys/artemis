@@ -306,8 +306,8 @@ helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
   --set-string broker.resources.limits.memory=3Gi \
   --set brokerProperties.maxDiskUsage=90 \
   --set brokerProperties.addressSettings.expiry.enabled=false \
-  --set console.ingress.host=artemis-test-sky.example.invalid \
-  --set keycloak.redirectUri=https://artemis-test-sky.example.invalid/console \
+  --set console.ingress.host=artemis-int-sky.placeholder-test-domain.example.invalid \
+  --set keycloak.redirectUri=https://artemis-int-sky.placeholder-test-domain.example.invalid/console \
   > "$temp_dir/test-sky.yaml"
 asserted_broker_name=$(yq ea -r 'select(.kind == "ActiveMQArtemis") | .metadata.name' "$temp_dir/test-sky.yaml")
 [[ "$asserted_broker_name" == test-sky-artemis-artemis-ha ]] || {
@@ -332,8 +332,8 @@ helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
   --set zookeeper.serviceNamespace=artemis-platform \
   --set zookeeper.curatorNamespace=artemis/test/test-sky \
   --set persistence.size=20Gi \
-  --set console.ingress.host=artemis-test-sky.example.invalid \
-  --set keycloak.redirectUri=https://artemis-test-sky.example.invalid/console \
+  --set console.ingress.host=artemis-int-sky.placeholder-test-domain.example.invalid \
+  --set keycloak.redirectUri=https://artemis-int-sky.placeholder-test-domain.example.invalid/console \
   > "$temp_dir/test-sky-legacy.yaml"
 cmp -s "$temp_dir/test-sky.yaml" "$temp_dir/test-sky-legacy.yaml" || {
   printf '%s\n' 'standard Profile changed the current test Workload Cell render' >&2

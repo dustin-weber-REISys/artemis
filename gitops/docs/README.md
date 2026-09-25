@@ -46,6 +46,7 @@ the conflict rather than choosing whichever version is convenient.
 - [Incident triage](runbooks/incident-triage.md)
 - [Hawtio access diagnosis](runbooks/hawtio-access-diagnosis.md)
 - [Keycloak + Hawtio work-computer checklist](runbooks/keycloak-hawtio-work-computer-checklist.md)
+- [Hawtio redirect inventory for every workload cell](runbooks/hawtio-redirect-inventory.md)
 - [Broker reconciliation debugging](runbooks/broker-reconciliation-debugging.md)
 - [Failover and failback](runbooks/failover-failback.md)
 - [Upgrade and rollback](runbooks/upgrade-rollback.md)
@@ -70,12 +71,17 @@ decision history.
 
 ## Research and decision history
 
+- [Profiles and future Workload Cell architectures](workload-cell-evolution-discussion.md)
+  — discussion recorded on 2026-09-25, with current boundaries, multiple-active
+  options, and codebase change diagrams; not an accepted architecture change.
+
 The `research/` directory and `research-*.md` files contain dated decision
 inputs. They are non-authoritative and may age as upstream projects change:
 
 - [ArkMQ Helm and Kustomize research](research/arkmq-operator-helm-kustomize.md)
 - [ZooKeeper chart options](research-zookeeper-chart-options.md)
 - [Strimzi, Kafka, and ZooKeeper](research-kafka-strimzi-zookeeper.md)
+- [Internal broker Service and failover evidence](internal-broker-failover-research.md)
 
 Current implementation choices belong in the ADRs and module READMEs, not in a
 research note. Verify upstream facts again before using research in a new

@@ -5,13 +5,15 @@ platformNamespace: artemis-platform
 
 # This is the source of truth consumed directly by Argo CD. Edit Workload Cell
 # identity, sizing, features, and enablement here; no generation step is needed.
+# Replace placeholder-test-domain.example.invalid with the full cluster domain
+# on the work computer; retain the workloadNamespace subdomain.
 workloadCells:
   - workloadCellName: test-sky
     workloadNamespace: artemis-int-sky
     coordinationId: test-sky-01
     logicalEnvironment: SKY
     trafficClass: internal
-    managementHost: artemis-test-sky.example.invalid
+    managementHost: artemis-int-sky.placeholder-test-domain.example.invalid
     storageSize: 20Gi
     profile: standard
     resources:
@@ -28,7 +30,7 @@ workloadCells:
     coordinationId: test-sky2-01
     logicalEnvironment: SKY2
     trafficClass: internal
-    managementHost: artemis-test-sky2.example.invalid
+    managementHost: artemis-int-sky2.placeholder-test-domain.example.invalid
     storageSize: 20Gi
     profile: standard
     resources:

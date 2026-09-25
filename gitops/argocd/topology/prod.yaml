@@ -5,13 +5,15 @@ platformNamespace: artemis-platform
 
 # This is the source of truth consumed directly by Argo CD. Edit Workload Cell
 # identity, sizing, features, and enablement here; no generation step is needed.
+# Replace placeholder-prod-domain.example.invalid with the full cluster domain
+# on the work computer; retain the workloadNamespace subdomain.
 workloadCells:
   - workloadCellName: prod-pe
     workloadNamespace: artemis-int-pe
     coordinationId: prod-pe-pair01
     logicalEnvironment: PE
     trafficClass: internal
-    managementHost: artemis-pe-internal.example.invalid
+    managementHost: artemis-int-pe.placeholder-prod-domain.example.invalid
     storageSize: 100Gi
     profile: standard
     resources:
@@ -29,7 +31,7 @@ workloadCells:
     coordinationId: prod-pp-pair01
     logicalEnvironment: PP
     trafficClass: internal
-    managementHost: artemis-pp-internal.example.invalid
+    managementHost: artemis-int-pp.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:
@@ -47,7 +49,7 @@ workloadCells:
     coordinationId: prod-pp-ext01
     logicalEnvironment: PP
     trafficClass: external
-    managementHost: artemis-pp-external.example.invalid
+    managementHost: artemis-ext-pp.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:
@@ -65,7 +67,7 @@ workloadCells:
     coordinationId: prod-pp-batch01
     logicalEnvironment: PP
     trafficClass: batch
-    managementHost: artemis-pp-batch.example.invalid
+    managementHost: artemis-batch-pp.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:
@@ -83,7 +85,7 @@ workloadCells:
     coordinationId: prod-dm-pair01
     logicalEnvironment: DM
     trafficClass: internal
-    managementHost: artemis-dm-internal.example.invalid
+    managementHost: artemis-int-dm.placeholder-prod-domain.example.invalid
     storageSize: 100Gi
     profile: standard
     resources:
@@ -101,7 +103,7 @@ workloadCells:
     coordinationId: prod-pr-pair01
     logicalEnvironment: PR
     trafficClass: internal
-    managementHost: artemis-pr-internal.example.invalid
+    managementHost: artemis-int-pr.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:
@@ -119,7 +121,7 @@ workloadCells:
     coordinationId: prod-pr-ext01
     logicalEnvironment: PR
     trafficClass: external
-    managementHost: artemis-pr-external.example.invalid
+    managementHost: artemis-ext-pr.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:
@@ -137,7 +139,7 @@ workloadCells:
     coordinationId: prod-pr-batch01
     logicalEnvironment: PR
     trafficClass: batch
-    managementHost: artemis-pr-batch.example.invalid
+    managementHost: artemis-batch-pr.placeholder-prod-domain.example.invalid
     storageSize: 500Gi
     profile: standard
     resources:

@@ -80,6 +80,7 @@ test-verify-applicationset:
 
 test-topology:
 	./tests/topology/test.sh
+	python3 -B ./tests/topology/test-hawtio-redirects.py
 
 test-argocd-ecr-credentials:
 	./tests/argocd/test-ecr-credential-refresh.sh

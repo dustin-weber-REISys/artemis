@@ -28,6 +28,10 @@ namespace. ApplicationSets continue to derive each client's exact redirect URI
 from its catalog `managementHost`; every rendered URI must already be allowed
 by the reused client. These overlays do not provision or modify Keycloak.
 
+The [Keycloak configuration toolkit](../../tools/keycloak/README.md) provides a
+work-laptop Docker build for exporting realm configuration and applying reviewed
+JSON/YAML through the Admin API. It is separate from these Artemis overlays.
+
 Local Docker Compose is the developer sandbox. There is no Kubernetes
 ZooKeeper sandbox overlay or disabled-chart composition.
 

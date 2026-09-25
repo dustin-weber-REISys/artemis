@@ -1,0 +1,4 @@
+/exports/
+/secrets/
+/.env*
+!/.env.example

@@ -5,13 +5,15 @@ platformNamespace: artemis-platform
 
 # This is the source of truth consumed directly by Argo CD. Edit Workload Cell
 # identity, sizing, features, and enablement here; no generation step is needed.
+# Replace placeholder-nonprod-domain.example.invalid with the full cluster domain
+# on the work computer; retain the workloadNamespace subdomain.
 workloadCells:
   - workloadCellName: nonprod-smktest-eut
     workloadNamespace: artemis-int-smktest-eut
     coordinationId: np-eut-pair01
     logicalEnvironment: SMKTEST-EUT
     trafficClass: internal
-    managementHost: artemis-nonprod-smktest-eut.example.invalid
+    managementHost: artemis-int-smktest-eut.placeholder-nonprod-domain.example.invalid
     storageSize: 50Gi
     profile: standard
     resources:
@@ -21,6 +23,21 @@ workloadCells:
       limits:
         cpu: "2"
         memory: 6Gi
+    # Dev teams can override these two standard Profile features per cell.
+    # Keep {} for defaults, or replace it with either/both example settings:
+    # features:
+    #   expiryResources: true
+    #   diskGuardrail: conservative
+    # expiryResources: false (default) or true to configure expiry routing and
+    #   automatically create expiry resources for expired messages. This does
+    #   not set a message TTL.
+    # diskGuardrail: standard (default, 90%) or conservative (80%) sets the
+    #   broker's maximum disk-usage threshold.
+    # These are the only supported feature keys; submit changes through GitOps.
+    # Messaging permissions (send/consume/browse) are configured separately in
+    # gitops/workloads/<environment>/<workloadCellName>/artemis-values.yaml
+    # under authorization.rules for future external cells. Internal cells like
+    # this one use networkPolicy.clientCidrs/clientSources for client access.
     features: {}
     enabled: "false"
   - workloadCellName: nonprod-trn
@@ -28,7 +45,7 @@ workloadCells:
     coordinationId: np-trn-pair01
     logicalEnvironment: TRN
     trafficClass: internal
-    managementHost: artemis-nonprod-trn.example.invalid
+    managementHost: artemis-int-trn.placeholder-nonprod-domain.example.invalid
     storageSize: 50Gi
     profile: standard
     resources:
@@ -45,7 +62,7 @@ workloadCells:
     coordinationId: np-trn2-pair01
     logicalEnvironment: TRN2
     trafficClass: internal
-    managementHost: artemis-nonprod-trn2.example.invalid
+    managementHost: artemis-int-trn2.placeholder-nonprod-domain.example.invalid
     storageSize: 50Gi
     profile: standard
     resources:
@@ -62,7 +79,7 @@ workloadCells:
     coordinationId: np-pt-pair01
     logicalEnvironment: PT
     trafficClass: internal
-    managementHost: artemis-nonprod-pt.example.invalid
+    managementHost: artemis-int-pt.placeholder-nonprod-domain.example.invalid
     storageSize: 50Gi
     profile: standard
     resources:
