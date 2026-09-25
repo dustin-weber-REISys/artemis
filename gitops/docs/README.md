@@ -29,6 +29,9 @@ the conflict rather than choosing whichever version is convenient.
 
 ## Integration and migration guides
 
+- [Application messaging policies](team-messaging-policies.md) — Profile defaults,
+  destination overrides, and the staged test-sky2 example.
+
 - [Environment import and deployment](environment-import-walkthrough.md) —
   current integration workflow and promotion gates.
 - [Chef ActiveMQ import](chef-activemq-import.md) — supported, review-only

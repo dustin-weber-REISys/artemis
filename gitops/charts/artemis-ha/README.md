@@ -139,6 +139,16 @@ restricted by `networkPolicy.clientSources` and `clientCidrs`. Environments may
 set the option to `false` and provide `managementSources` or `extraIngress` when
 a source-restricted console is required.
 
+Keycloak authentication uses `keycloak.issuerUrl` for discovery and token
+validation. `keycloak.allowInClusterEgress` defaults to `true` and controls only
+the NetworkPolicy rule selecting `keycloak.namespace` and `podSelector` on
+`keycloak.port`. For Keycloak in another cluster, set it to `false`, keep
+`keycloak.enabled: true`, and configure approved endpoint CIDRs on TCP/443 in
+`networkPolicy.extraEgress`. The namespace fields do not locate a remote
+cluster; their chart defaults are unused when this rule is disabled. See the
+[work-computer checklist](../../docs/runbooks/keycloak-hawtio-work-computer-checklist.md#cross-cluster-keycloak-network-access)
+for URL meanings and network verification.
+
 Vault injection defaults off. The optional annotations only request a
 pod-local credential file; they do not make it the broker's effective
 administrative identity. Enable `vault.enabled` only after the environment
@@ -234,3 +244,12 @@ The environment-local ApplicationSet overrides `console.ingress.host`,
 exact OIDC redirect URI, and explicit storage allocation. The host, redirect
 URI, shared-ALB certificate coverage, DNS record, and Keycloak client
 registration must agree before enabling a Workload Cell.
+
+## Destination messaging policies
+
+`messagingPolicies` is a Profile-owned map of defaults and override allowlists.
+A destination may select `messagingPolicy` and supply bounded `policyOverrides`.
+The chart renders exact-address retry/expiry settings and rejects unknown policy
+names, forbidden overrides, and unsafe queue durability/purge choices. Direct
+`addressSettings` entries in `brokerProperties.extra` are rejected. See the
+[team guide](../../docs/team-messaging-policies.md) for ownership and examples.

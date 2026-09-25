@@ -1,2 +1,28 @@
-# Pair-owned listeners, destinations, and internal client network sources.
-{}
+# Staged example; test-sky2 remains disabled in the test topology.
+# Policy defaults/allowlists come from the application-messaging Profile.
+destinations:
+  example-orders:
+    address: EXAMPLE.ORDERS
+    routingTypes: [ANYCAST]
+    messagingPolicy: reliable-work
+    policyOverrides:
+      maxDeliveryAttempts: 8
+      redeliveryDelay: 10000
+    queues:
+      - name: EXAMPLE.ORDERS
+        routingType: ANYCAST
+        durable: true
+        maxConsumers: 10
+        purgeOnNoConsumers: false
+  example-notifications:
+    address: EXAMPLE.NOTIFICATIONS
+    routingTypes: [ANYCAST]
+    messagingPolicy: time-sensitive
+    policyOverrides:
+      expiryDelay: 60000
+    queues:
+      - name: EXAMPLE.NOTIFICATIONS
+        routingType: ANYCAST
+        durable: true
+        maxConsumers: 5
+        purgeOnNoConsumers: false

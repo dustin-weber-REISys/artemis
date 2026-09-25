@@ -32,7 +32,8 @@ workloadCells:
     trafficClass: internal
     managementHost: artemis-int-sky2.placeholder-test-domain.example.invalid
     storageSize: 20Gi
-    profile: standard
+    # Example destination policies: see ../../docs/team-messaging-policies.md
+    profile: application-messaging
     resources:
       requests:
         cpu: 500m

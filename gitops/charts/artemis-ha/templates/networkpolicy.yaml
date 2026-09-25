@@ -157,7 +157,7 @@ spec:
         - port: {{ .Values.vault.port }}
           protocol: TCP
     {{- end }}
-    {{- if .Values.keycloak.enabled }}
+    {{- if and .Values.keycloak.enabled .Values.keycloak.allowInClusterEgress }}
     - to:
         - namespaceSelector:
             matchLabels:

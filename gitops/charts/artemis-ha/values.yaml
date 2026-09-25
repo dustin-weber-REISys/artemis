@@ -169,6 +169,8 @@ authentication:
 # Permanent application addresses and queues are rendered as broker properties.
 # Defaults remain empty so every promoted Workload Cell must explicitly import
 # its owned destination catalog.
+# Profile-owned, named address policies. Workloads select these on destinations.
+messagingPolicies: {}
 destinations: {}
 # example-request:
 #   address: EXAMPLE.REQUEST
@@ -220,6 +222,10 @@ console:
 
 keycloak:
   enabled: true
+  # Only controls the namespace/pod egress rule, not OIDC authentication.
+  # For a different cluster, set false and supply approved HTTPS destination
+  # CIDRs through networkPolicy.extraEgress. issuerUrl owns the actual endpoint.
+  allowInClusterEgress: true
   displayName: Example Keycloak
   issuerUrl: https://keycloak.example.invalid/realms/example
   clientId: example-artemis-console

@@ -24,3 +24,10 @@ External cells may use only references to externally materialized SSL and
 For legacy Chef environment JSON, generate and review candidates with the
 [`Chef ActiveMQ import workflow`](../docs/chef-activemq-import.md); never use a
 generated candidate as this file without resolving its disposition report.
+
+## Destination messaging behavior
+
+Select a Profile-owned `messagingPolicy` on a declared destination and use
+`policyOverrides` for its permitted retry and expiry settings. See the
+[team guide and test example](../docs/team-messaging-policies.md). Policies are
+scoped to exact addresses; arbitrary broker settings are not workload overrides.

@@ -124,6 +124,73 @@ Record whether:
 Review JVM arguments for sensitive values before sharing them. If the ConfigMap
 is missing, record that error and continue.
 
+### Cross-cluster Keycloak network access
+
+Both preprod and production Keycloak are hosted in production EKS. Test and
+nonprod Artemis reach preprod Keycloak through its HTTPS hostname. Their
+environment values disable `keycloak.allowInClusterEgress`; OIDC remains enabled.
+Kubernetes namespace/pod selectors only select destinations in the local
+cluster. They cannot grant access to the production cluster's Keycloak pods.
+
+On the work computer, merge this pattern into each affected environment's
+existing egress rules, replacing the placeholder with a platform-approved
+destination CIDR (repeat the peer for additional approved ranges):
+
+```yaml
+keycloak:
+  enabled: true
+  allowInClusterEgress: false
+networkPolicy:
+  extraEgress:
+    - to:
+        - ipBlock:
+            cidr: <APPROVED_KEYCLOAK_ENDPOINT_DESTINATION_CIDR>
+      ports:
+        - protocol: TCP
+          port: 443
+```
+
+This is a template, not deployable values. Standard NetworkPolicy does not
+accept a DNS hostname as an `ipBlock`. Obtain maintained destination ranges
+from the platform team; do not assume a load balancer's current IPs are stable.
+Retain unrelated `extraEgress` entries because Helm replaces lists. If a
+platform-managed egress policy or proxy provides access instead, record that
+mechanism. NetworkPolicy allowances do not create VPC routes or security-group
+permissions. Same-cluster production also needs its actual issuer route checked
+if the hostname reaches a load balancer rather than the selected pods directly.
+
+Record DNS resolution, routing/security-group approval, and TLS trust from the
+Artemis pod network. From an existing approved diagnostic environment sharing
+that network and applicable policy, run this read-only request on the work
+computer (do not disable certificate verification):
+
+```sh
+export KEYCLOAK_ISSUER='https://<keycloak-host>/realms/<realm-name>'
+curl --fail --silent --show-error --max-time 15 \
+  "$KEYCLOAK_ISSUER/.well-known/openid-configuration"
+```
+
+Record `issuer`, `jwks_uri`, and any DNS/TLS/timeout error. The discovery `issuer`
+must exactly match `keycloak.issuerUrl`; successful desktop browser access does
+not establish broker connectivity. Verify the broker JVM trusts the issuing CA
+and can reach the advertised JWKS endpoint as well.
+
+URL meanings:
+
+- `keycloak.issuerUrl`: Keycloak realm issuer, without `/protocol/...` or the
+  discovery suffix. Use the realm name, not its display name.
+- `keycloak.redirectUri`: generated as `https://<managementHost>/console` by
+  the ApplicationSet; register every required callback in Valid redirect URIs.
+- Web origins: `https://<managementHost>`, without the console path.
+- Realm Frontend URL: a Keycloak URL override, not an Artemis console URL.
+
+Do not copy other applications' client IDs, secrets, client-credentials grants,
+or TLS-verification bypass settings. This chart uses a public Hawtio client with
+authorization-code flow and S256 PKCE; confirm Client authentication is off and
+Standard flow is on. Preserve the legitimate callbacks of the shared legacy
+client; follow the [redirect inventory](hawtio-redirect-inventory.md) before
+removing broad wildcards.
+
 ## 6. Record the Keycloak client settings
 
 Open the approved Keycloak administration console. Select the realm and client

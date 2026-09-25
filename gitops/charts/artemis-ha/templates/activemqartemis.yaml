@@ -77,6 +77,38 @@
 {{- fail (printf "destinations contains duplicate address %q" $destination.address) }}
 {{- end }}
 {{- $_ := set $seenAddresses $destination.address true }}
+{{- if and (hasKey $destination "policyOverrides") (not (hasKey $destination "messagingPolicy")) }}
+{{- fail "destination policyOverrides requires messagingPolicy" }}
+{{- end }}
+{{- if hasKey $destination "messagingPolicy" }}
+{{- if not (hasKey $.Values.messagingPolicies $destination.messagingPolicy) }}
+{{- fail (printf "unknown messagingPolicy %q" $destination.messagingPolicy) }}
+{{- end }}
+{{- $policy := index $.Values.messagingPolicies $destination.messagingPolicy }}
+{{- $settings := deepCopy $policy.settings }}
+{{- range $key, $value := default dict $destination.policyOverrides }}
+{{- if not (has $key $policy.allowedOverrides) }}
+{{- fail (printf "messagingPolicy %s does not permit override %s" $destination.messagingPolicy $key) }}
+{{- end }}
+{{- $_ := set $settings $key $value }}
+{{- end }}
+{{- if or (eq $destination.address $settings.deadLetterAddress) (eq $destination.address $settings.expiryAddress) }}
+{{- fail "messagingPolicy recovery addresses must differ from the source address" }}
+{{- end }}
+{{- $policyPrefix := printf "addressSettings.\"%s\"" $destination.address }}
+{{- range $key, $value := $settings }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.%s=%v" $policyPrefix $key $value) }}
+{{- end }}
+{{/* Preserve failed/expired messages and keep application queues declarative. */}}
+{{- range $key, $value := dict "autoCreateDeadLetterResources" true "autoCreateExpiryResources" true "autoCreateQueues" false "autoCreateAddresses" false "autoDeleteQueues" false "autoDeleteAddresses" false "autoDeleteCreatedQueues" false "defaultPurgeOnNoConsumers" false }}
+{{- $brokerProperties = append $brokerProperties (printf "%s.%s=%t" $policyPrefix $key $value) }}
+{{- end }}
+{{- range $queue := $destination.queues }}
+{{- if or (not $queue.durable) $queue.purgeOnNoConsumers }}
+{{- fail "messagingPolicy queues must be durable and must not purgeOnNoConsumers" }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- $addressKey := printf "\"%s\"" $destination.address }}
 {{- $brokerProperties = append $brokerProperties (printf "addressConfigurations.%s.routingTypes=%s" $addressKey (join "," $destination.routingTypes)) }}
 {{- range $queue := $destination.queues }}
@@ -143,7 +175,7 @@
 {{- range .Values.brokerProperties.extra }}
 {{- $extraKey := regexFind "^[^=]+" . | lower }}
 {{- $normalizedExtraKey := regexReplaceAll "[-_.[:space:]]" $extraKey "" }}
-{{- if regexMatch "^(hapolicyconfiguration|journalsynctransactional$|journalsyncnontransactional$|journaldatasync$|largemessagesync$|persistenceenabled$|journaltype$|clusterconfigurations|brokerconnections|addressconfigurations|securityroles|idcachesize$|persistidcache$)" $normalizedExtraKey }}
+{{- if regexMatch "^(hapolicyconfiguration|journalsynctransactional$|journalsyncnontransactional$|journaldatasync$|largemessagesync$|persistenceenabled$|journaltype$|clusterconfigurations|brokerconnections|addressconfigurations|addresssettings|securityroles|idcachesize$|persistidcache$)" $normalizedExtraKey }}
 {{- fail (printf "brokerProperties.extra cannot override protected HA, durability, destination, or authorization property %q" $extraKey) }}
 {{- end }}
 {{- $brokerProperties = append $brokerProperties . }}

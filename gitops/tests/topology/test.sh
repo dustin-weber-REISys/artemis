@@ -215,7 +215,8 @@ growth_workloads="$temp_dir/growth-workloads"
 cp -R "$topology_dir" "$growth_topology"
 cp -R "$workload_dir" "$growth_workloads"
 mkdir -p "$growth_workloads/test/test-extra"
-cp "$workload_dir/test/test-sky2/artemis-values.yaml" "$growth_workloads/test/test-extra/artemis-values.yaml"
+# Keep the growth fixture independent of the staged application-policy example.
+printf '{}\n' > "$growth_workloads/test/test-extra/artemis-values.yaml"
 yq -i '
   .workloadCells += [{
     "workloadCellName": "test-extra",
@@ -326,6 +327,7 @@ yq -i '
 helm template test-sky-artemis "$repo_root/charts/artemis-ha" \
   --namespace artemis-int-sky \
   -f "$legacy_values" \
+  -f "$workload_dir/test/test-sky/artemis-values.yaml" \
   --set ha.coordinationId=test-sky-01 \
   --set ha.groupName=test-sky-group \
   --set zookeeper.connectString=test-shared-zookeeper-zookeeper-client.artemis-platform.svc.cluster.local:2181 \
@@ -350,5 +352,17 @@ done
 
 grep -Fq "value: '{{.trafficClass}}'" "$bootstrap_dir/base/artemis-workloads-applicationset.yaml"
 grep -Fq "value: '{{.enabled}}'" "$bootstrap_dir/base/artemis-workloads-applicationset.yaml"
+
+
+# Profile policy definitions cannot be redefined by a workload or environment.
+assert_workload_rejected policy-ownership test/test-sky2/artemis-values.yaml \
+  '.messagingPolicies.reliable-work.settings.maxDeliveryAttempts = 19' \
+  'workloadValues.messagingPolicies.reliable-work.settings.maxDeliveryAttempts'
+assert_workload_rejected policy-forbidden-override test/test-sky2/artemis-values.yaml \
+  '.destinations.example-orders.policyOverrides.expiryDelay = 10000' \
+  'effective Profile/environment/workload values fail chart schema or render validation'
+assert_environment_rejected policy-environment-ownership test \
+  '.messagingPolicies.reliable-work.settings.maxDeliveryAttempts = 19' \
+  'environment field messagingPolicies.reliable-work.settings.maxDeliveryAttempts violates cluster-integration ownership'
 
 printf '%s\n' 'rendered topology validation tests passed'

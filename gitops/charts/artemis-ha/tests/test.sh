@@ -34,6 +34,9 @@ external_client_defaults_disabled_args=(
   --set 'acceptors.websocket.enabled=false'
 )
 
+bash "$chart_dir/tests/test-messaging-policies.sh"
+bash "$chart_dir/tests/test-keycloak-egress.sh"
+
 helm lint "$chart_dir" "${helm_args[@]}" >/dev/null
 
 # Both peers serve the console, but a browser login session belongs to one JVM.

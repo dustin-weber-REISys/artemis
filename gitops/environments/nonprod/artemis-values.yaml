@@ -20,6 +20,9 @@ persistence:
 # Keycloak. Redirect URIs remain Workload Cell-specific parameters.
 keycloak:
   enabled: true
+  # Preprod Keycloak runs in production EKS, outside this cluster.
+  # Supply approved endpoint CIDRs on TCP/443 via networkPolicy.extraEgress.
+  allowInClusterEgress: false
   displayName: Legacy Hawtio Preprod
   issuerUrl: https://keycloak-preprod.example.invalid/realms/PLACEHOLDER_LEGACY_HAWTIO_REALM
   clientId: PLACEHOLDER_PREPROD_LEGACY_HAWTIO_CLIENT_ID
@@ -27,7 +30,3 @@ keycloak:
   rolesPath: realm_access.roles
   viewerRole: PLACEHOLDER_LEGACY_HAWTIO_VIEWER_ROLE
   administratorRole: PLACEHOLDER_LEGACY_HAWTIO_ADMINISTRATOR_ROLE
-  namespace: PLACEHOLDER_PREPROD_KEYCLOAK_NAMESPACE
-  podSelector:
-    app.kubernetes.io/name: keycloak
-  port: 8443

@@ -1,0 +1,22 @@
+schemaVersion: profiles.artemis.apache.org/v1
+name: application-messaging
+description: Declarative application queues with bounded destination retry and expiry overrides.
+featureOverrides:
+  expiryResources:
+    type: boolean
+    default: false
+    helmPath: brokerProperties.addressSettings.expiry.enabled
+  diskGuardrail:
+    type: enum
+    default: standard
+    values:
+      - standard
+      - conservative
+    helmPath: brokerProperties.maxDiskUsage
+protectedPaths:
+  - broker.version
+  - ha
+  - zookeeper
+  - brokerProperties.durability
+  - persistence.size
+  - topology

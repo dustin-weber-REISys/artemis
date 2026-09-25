@@ -58,6 +58,15 @@ copy is required. Local validation renders the same Kustomize adapter and
 verifies externally observable composition behavior. No expanded Application
 YAML is committed.
 
+## Destination policy extension
+
+Profiles may also define named `messagingPolicies` with bounded retry/expiry
+settings and explicit override allowlists. Workload-owned destinations select a
+policy and supply only permitted `policyOverrides`. These render exact-address
+settings, leaving the shared baseline intact for other destinations. Recovery
+naming stays Profile-owned; application queues remain declarative and durable.
+The [team guide](team-messaging-policies.md) records the interface and example.
+
 ## Consequences
 
 - Composition policy changes are implemented once and verified for all three

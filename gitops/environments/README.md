@@ -37,10 +37,20 @@ ZooKeeper sandbox overlay or disabled-chart composition.
 
 Before use, replace the `PLACEHOLDER_*` values through the environment or Argo
 CD deployment configuration. Do not commit credentials, account IDs, real
-cluster names, domains, or secret contents. If the legacy Keycloak issuer is
-external to the cluster, also supply its approved TCP/443 CIDR through
-`networkPolicy.extraEgress`; the `keycloak.namespace` and `podSelector` values
-only authorize direct access to an in-cluster Keycloak pod.
+cluster names, domains, or secret contents.
+
+Both Keycloak installations are hosted in production EKS. Test and nonprod
+therefore set `keycloak.allowInClusterEgress: false` while keeping
+`keycloak.enabled: true`. Supply the approved HTTPS endpoint destination CIDRs
+through `networkPolicy.extraEgress` in each environment on the work computer.
+No destination ranges are assumed in this offline copy. See the
+[cross-cluster checklist](../docs/runbooks/keycloak-hawtio-work-computer-checklist.md#cross-cluster-keycloak-network-access).
+
+`keycloak.namespace`, `podSelector`, and `port` only authorize direct access to
+pods inside the Artemis cluster, and are ignored by the policy when
+`allowInClusterEgress` is false. Production retains the same-cluster rule;
+if its issuer hostname routes through a load balancer, verify that route's
+egress separately even though Keycloak pods share its cluster.
 
 Approved internal client CIDRs that apply to every Artemis Workload Cell in an
 environment belong under `networkPolicy.clientCidrs` in that environment's

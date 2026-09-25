@@ -96,6 +96,82 @@
         }
       }
     },
+    "messagingPolicies": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,62}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "allowedOverrides",
+          "settings"
+        ],
+        "properties": {
+          "allowedOverrides": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "maxDeliveryAttempts",
+                "redeliveryDelay",
+                "expiryDelay"
+              ]
+            }
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "maxDeliveryAttempts",
+              "redeliveryDelay",
+              "expiryDelay",
+              "deadLetterAddress",
+              "deadLetterQueuePrefix",
+              "expiryAddress",
+              "expiryQueuePrefix"
+            ],
+            "properties": {
+              "maxDeliveryAttempts": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "redeliveryDelay": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 300000
+              },
+              "expiryDelay": {
+                "type": "integer",
+                "anyOf": [
+                  {
+                    "const": -1
+                  },
+                  {
+                    "minimum": 1000,
+                    "maximum": 604800000
+                  }
+                ]
+              },
+              "deadLetterAddress": {
+                "$ref": "#/$defs/destinationName"
+              },
+              "deadLetterQueuePrefix": {
+                "$ref": "#/$defs/destinationName"
+              },
+              "expiryAddress": {
+                "$ref": "#/$defs/destinationName"
+              },
+              "expiryQueuePrefix": {
+                "$ref": "#/$defs/destinationName"
+              }
+            }
+          }
+        }
+      }
+    },
     "destinations": {
       "type": "object",
       "propertyNames": {"pattern": "^[a-z][a-z0-9-]{0,62}$"},
@@ -127,6 +203,7 @@
       "required": ["enabled", "displayName", "issuerUrl", "clientId", "scopes", "redirectUri", "rolesPath", "viewerRole", "administratorRole", "namespace", "podSelector", "port", "extraEnv"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "allowInClusterEgress": {"type": "boolean"},
         "displayName": {"type": "string", "minLength": 1},
         "issuerUrl": {"type": "string", "format": "uri"},
         "clientId": {"type": "string", "minLength": 1},
@@ -277,6 +354,35 @@
       "additionalProperties": false,
       "required": ["address", "routingTypes", "queues"],
       "properties": {
+        "messagingPolicy": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+        "policyOverrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxDeliveryAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "redeliveryDelay": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 300000
+            },
+            "expiryDelay": {
+              "type": "integer",
+              "anyOf": [
+                {
+                  "const": -1
+                },
+                {
+                  "minimum": 1000,
+                  "maximum": 604800000
+                }
+              ]
+            }
+          }
+        },
         "address": {"$ref": "#/$defs/destinationName"},
         "routingTypes": {
           "type": "array",

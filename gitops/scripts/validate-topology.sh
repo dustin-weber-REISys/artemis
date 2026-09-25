@@ -424,7 +424,7 @@ for environment in test nonprod prod; do
     else
       while IFS= read -r leaf; do
         [[ -n "$leaf" ]] || continue
-        [[ "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. || "$leaf" =~ ^networkPolicy\.(clientSources|clientCidrs)\. ]] || \
+        [[ "$leaf" == services.brokerAlias || "$leaf" =~ ^acceptors\. || "$leaf" == authentication.jaasSecretName || "$leaf" =~ ^destinations\. || "$leaf" =~ ^authorization\.rules\. || "$leaf" =~ ^networkPolicy\.(clientSources|clientCidrs)\. ]] || \
           cell_error "$environment" "$cell" "workloadValues.$leaf" 'must be a pair-owned listener, external identity Secret reference, destination, external authorization rule, or client network source'
       done < <(yq -r '.. | select(tag != "!!map" and tag != "!!seq") | path | join(".")' "$workload_values")
 
